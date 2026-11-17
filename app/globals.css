@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/* 키보드 초점 표시를 흑백으로 맞춘다 (브라우저 기본 초점 색 대신) */
+:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+}
+
+/* 글자를 끌어 선택했을 때의 강조색도 브라우저 기본(파랑) 대신 무채색으로 맞춘다 */
+::selection {
+  background-color: #d4d4d4;
+  color: #000;
+}
