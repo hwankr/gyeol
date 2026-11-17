@@ -35,7 +35,7 @@ npm run check:mock   # 가짜 데이터 검사 (모든 quote 가 해당 항목 t
 
 ```text
 app/
-  layout.tsx              공통 레이아웃 (와이어프레임 띠, lang="ko", 문서 제목)
+  layout.tsx              공통 레이아웃 (lang="ko", 문서 제목, 화면 높이 고정)
   page.tsx                업로드 화면 연결부 (useUpload → UploadScreen)
   result/page.tsx         결과 화면 연결부 (useStoredResult, useResultView → ResultScreen)
   api/analyze/route.ts    POST /api/analyze (가짜 지연 후 파이프라인 호출)
@@ -48,7 +48,7 @@ hooks/                    화면 상태
   useStoredResult.ts      sessionStorage 의 결과 읽기 (hydration 안전)
   useResultView.ts        현재 탭, 선택한 근거, 원문 단 스크롤
 lib/
-  constants.ts            역량 목록, 항목명 목록, 서비스명, 띠 문구, sessionStorage 키
+  constants.ts            역량 목록, 항목명 목록, 서비스명, sessionStorage 키
   resultView.ts           역량별 개수, 원문을 일반/밑줄/강조 구간으로 나누기, 화면용 값 만들기
   validateResult.ts       결과 모양 검사, 가짜 데이터 내용 검사
   resultStorage.ts        sessionStorage 저장·불러오기

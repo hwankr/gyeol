@@ -7,9 +7,6 @@ import type { Competency } from "@/types/analysis";
 /** 서비스 이름. 아직 정해지지 않았다. */
 export const SERVICE_NAME = "서비스명(미정)";
 
-/** 모든 화면 맨 위에 고정하는 띠 문구 */
-export const WIREFRAME_BANNER = "와이어프레임 (기능 확인용) · 디자인 미적용";
-
 /** 분석 결과를 저장하는 sessionStorage 키 */
 export const RESULT_STORAGE_KEY = "gyeol.analysisResult";
 
