@@ -10,9 +10,12 @@ Node 24 이상, npm 을 쓴다.
 
 ```text
 npm install
-npm run dev -- -p 3100      # 개발 서버 (http://localhost:3100)
-npm run build && npm run start -- -p 3100
+npx next dev -p 3100        # 개발 서버 (http://localhost:3100)
+npm run build               # 프로덕션 빌드
+npx next start -p 3100      # 빌드한 것을 실행 (http://localhost:3100)
 ```
+
+포트를 줄 때는 `npx next …` 를 직접 쓴다. Windows PowerShell 에서는 `npm run dev -- -p 3100` 의 `--` 가 사라져 포트가 전달되지 않고, `&&` 로 명령을 잇는 것도 PowerShell 5.1 에서는 되지 않는다.
 
 - `/` 업로드 화면: PDF 를 고르고 "분석 시작"(PDF 를 파싱하고 임시 근거를 붙여 결과를 돌려준다. 읽지 못하면 오류 문구를 그대로 보여 준다), 또는 "샘플 데이터로 보기"(API 를 부르지 않고 가상 학생부 샘플을 바로 연다)
 - `/result` 분석 결과 화면: 왼쪽 학생부 원문, 오른쪽 역량별 근거. 결과는 브라우저 sessionStorage 에 저장된다.
@@ -26,7 +29,7 @@ npm run build && npm run start -- -p 3100
 npm run build        # 빌드 + 타입 검사
 npx tsc --noEmit     # 타입 검사
 npm run lint         # ESLint
-npm run check:mock   # 샘플 데이터 검사 (모든 quote 가 해당 항목 text 안에 글자 그대로 있는지 등)
+npm run check:mock   # 샘플 데이터 검사 (필드 형식, 모든 quote 가 해당 항목 text 안에 글자 그대로 있는지 등)
 npx tsx scripts/check-parse.ts   # 가상 학생부 PDF 파싱 검사 (다른 PDF 는 경로를 인자로 준다)
 ```
 
