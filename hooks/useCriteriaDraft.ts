@@ -151,6 +151,18 @@ export function useCriteriaDraft() {
   }
 
   /**
+   * 예시의 학과 이름과 문장을 입력란에 넣는다(이미 적은 값은 바뀐다). 기준을 만드는 중에는 넣지 않는다.
+   * 이미 만든 초안은 그대로 두고(다시 "기준 만들기"를 누르면 새 결과로 바뀐다) 안내·오류 문구는 지운다.
+   */
+  function applyExample(department: string, text: string) {
+    if (isGenerating) return;
+    setDepartmentName(department);
+    setSourceText(text);
+    setGenerateError(null);
+    setConfirmError(null);
+  }
+
+  /**
    * 초안을 확정할 학과 기준으로 만든다. 확정할 수 없으면(학과 이름 없음, 기준 0개, 이름·설명이 빈 기준) 이유를 문구로 세우고
    * null 을 돌려준다. 입력값과 초안은 그대로 둔다(저장이 끝나면 호출한 쪽이 clear 를 부른다).
    * 새 DepartmentCriteria: 새 id, 학과 이름은 입력란 값의 앞뒤 공백 제거, sourceText 는 이 초안을 만들 때 보낸 문장,
@@ -209,6 +221,7 @@ export function useCriteriaDraft() {
     confirmError,
     changeDepartmentName,
     changeSourceText: setSourceText,
+    applyExample,
     generate,
     changeItemName,
     changeItemDescription,

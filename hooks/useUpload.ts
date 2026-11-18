@@ -5,6 +5,7 @@ import { useSavedDepartments } from "@/hooks/useSavedDepartments";
 import { RequestCanceledError } from "@/lib/apiClient";
 import { requestAnalysis, type AnalysisCriteria } from "@/lib/analyzeClient";
 import { DEPARTMENT_CRITERIA_LIST, findDepartmentCriteria } from "@/lib/criteria";
+import { CRITERIA_EXAMPLES, type CriteriaExample } from "@/lib/criteria/examples";
 import { addSavedDepartment, loadSavedDepartments, removeSavedDepartment } from "@/lib/criteriaStorage";
 import { sampleResult } from "@/lib/mock/sampleResult";
 import { PDF_TOO_LARGE_ERROR, isPdfFile, isPdfTooLarge } from "@/lib/pdf";
@@ -31,7 +32,7 @@ const NEW_DEPARTMENT_LABEL = "새 학과 기준 만들기";
 
 /**
  * 업로드 화면 상태: 학과 선택(코드에 적힌 학과 → 저장한 학과 → 새 학과 기준 만들기), 저장한 학과 삭제,
- * 새 학과 기준 만들기(useCriteriaDraft), 파일 선택, 분석 요청, 결과 저장 후 결과 화면으로 이동.
+ * 새 학과 기준 만들기(useCriteriaDraft)와 예시 넣기, 파일 선택, 분석 요청, 결과 저장 후 결과 화면으로 이동.
  */
 export function useUpload() {
   const router = useRouter();
@@ -126,6 +127,13 @@ export function useUpload() {
   function startCriteriaGeneration() {
     if (isAnalyzing) return;
     void criteriaDraft.generate();
+  }
+
+  /** 예시를 넣는다: "새 학과 기준 만들기"를 고르고 학과 이름과 문장을 채운다. 기준 만들기는 사용자가 직접 누른다. */
+  function fillExample(example: CriteriaExample) {
+    if (isAnalyzing || criteriaDraft.isGenerating) return;
+    selectDepartment(NEW_DEPARTMENT_VALUE);
+    criteriaDraft.applyExample(example.department, example.sourceText);
   }
 
   /**
@@ -268,6 +276,7 @@ export function useUpload() {
       onAddItem: criteriaDraft.addItem,
       onConfirm: confirmDraft,
     },
+    examples: CRITERIA_EXAMPLES,
     fileName,
     fileError,
     requestError,
@@ -277,6 +286,7 @@ export function useUpload() {
     startBlockedReason: isNewDepartment ? NOT_CONFIRMED_REASON : null,
     onSelectCriteria: selectDepartment,
     onDeleteDepartment: deleteSelectedDepartment,
+    onUseExample: fillExample,
     onSelectFile: selectFile,
     onStart: startAnalysis,
     onViewSample: viewSample,
