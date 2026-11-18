@@ -54,6 +54,8 @@ export type ResultView = {
   /** 학과 이름 */
   department: string;
   tabs: CriterionTab[];
+  /** 현재 탭 기준의 설명(description). 기준이 하나도 없거나 현재 탭의 기준을 찾지 못하면 null */
+  activeDescription: string | null;
   sections: SourceSectionView[];
   cards: EvidenceCardView[];
 };
@@ -111,7 +113,7 @@ export function segmentText(text: string, marks: readonly QuoteMark[]): TextSegm
 
 /**
  * 현재 탭과 선택한 근거를 반영해 결과 화면 전체에 그릴 값을 만든다.
- * 탭은 result.criteria.criteria 순서대로 만든다. 기준이 하나도 없으면(activeCriterionId 가 null) 근거 카드도 없다.
+ * 탭은 result.criteria.criteria 순서대로 만든다. 기준이 하나도 없으면(activeCriterionId 가 null) 근거 카드도, 기준 설명도 없다.
  */
 export function buildResultView(
   result: AnalysisResult,
@@ -159,5 +161,13 @@ export function buildResultView(
     };
   });
 
-  return { department: result.criteria.department, tabs, sections, cards };
+  const activeCriterion = result.criteria.criteria.find((criterion) => criterion.id === activeCriterionId);
+
+  return {
+    department: result.criteria.department,
+    tabs,
+    activeDescription: activeCriterion?.description ?? null,
+    sections,
+    cards,
+  };
 }

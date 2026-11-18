@@ -12,7 +12,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import type { AnalysisResult, Evidence } from "@/types/analysis";
 import { findDepartmentCriteria } from "../lib/criteria/index.ts";
 import { blind } from "../lib/pipeline/blind.ts";
-import { EvidenceExtractionError, extractEvidence } from "../lib/pipeline/extractEvidence.ts";
+import { AiCallError } from "../lib/pipeline/claude.ts";
+import { extractEvidence } from "../lib/pipeline/extractEvidence.ts";
 import { parsePdf } from "../lib/pipeline/parsePdf.ts";
 import { summarizeResult, validateResult } from "../lib/validateResult.ts";
 
@@ -61,7 +62,7 @@ async function main(): Promise<number> {
     // 통과·버림 개수와 AI 호출 시간은 extractEvidence 가 한 줄로 출력한다.
     evidences = await extractEvidence(sections, criteria);
   } catch (error) {
-    if (error instanceof EvidenceExtractionError) {
+    if (error instanceof AiCallError) {
       console.error(`근거 추출 실패: ${error.message}`);
       return 1;
     }

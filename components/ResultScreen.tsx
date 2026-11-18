@@ -13,6 +13,8 @@ type ResultScreenProps = {
   /** 학과 이름 */
   department: string;
   tabs: CriterionTab[];
+  /** 현재 탭 기준의 설명. 없으면 null(아무것도 보여 주지 않는다) */
+  activeDescription: string | null;
   sections: SourceSectionView[];
   cards: EvidenceCardView[];
   /** 원문 단(스크롤 영역) */
@@ -29,6 +31,7 @@ type ResultScreenProps = {
 export function ResultScreen({
   department,
   tabs,
+  activeDescription,
   sections,
   cards,
   sourceScrollRef,
@@ -40,18 +43,19 @@ export function ResultScreen({
   return (
     <main className="flex h-full flex-col gap-3 p-3">
       <Area name="상단">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex min-w-0 items-center gap-6">
             <h1 className="text-lg font-bold">{SERVICE_NAME}</h1>
-            <p>학과: {department}</p>
+            <p className="min-w-0 [overflow-wrap:anywhere]">학과: {department}</p>
           </div>
-          <Link href="/" className="underline">
+          <Link href="/" className="shrink-0 underline">
             다른 학생부 업로드
           </Link>
         </div>
       </Area>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[3fr_2fr] gap-3">
+      {/* 두 단 폭 3:2 를 내용 길이와 상관없이 지킨다(minmax(0, …): 긴 기준 이름·글자가 단 폭을 넓히지 못하게). */}
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3">
         <Area name="학생부 원문" className="flex min-h-0 flex-col">
           <div ref={sourceScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-2">
             {sections.map((section) => (
@@ -71,8 +75,10 @@ export function ResultScreen({
           </div>
         </Area>
 
-        <Area name="기준별 근거" className="flex min-h-0 flex-col">
-          <div role="tablist" className="mb-3 flex gap-2">
+        {/* 탭 줄·기준 설명이 길어 카드 목록의 최소 높이까지 담을 수 없으면 이 단 전체가 세로로 스크롤된다. */}
+        <Area name="기준별 근거" className="flex min-h-0 flex-col overflow-y-auto">
+          {/* 탭은 자리가 모자라면 다음 줄로 넘기고, 공백 없는 긴 이름은 탭 안에서 줄을 바꾼다. */}
+          <div role="tablist" className="mb-3 flex flex-wrap gap-2">
             {tabs.map((tab) => (
               <button
                 key={tab.criterionId}
@@ -81,8 +87,8 @@ export function ResultScreen({
                 aria-selected={tab.isActive}
                 className={
                   tab.isActive
-                    ? "border-2 border-black px-3 py-1 font-bold"
-                    : "border-2 border-neutral-300 px-3 py-1"
+                    ? "max-w-full border-2 border-black px-3 py-1 font-bold [overflow-wrap:anywhere]"
+                    : "max-w-full border-2 border-neutral-300 px-3 py-1 [overflow-wrap:anywhere]"
                 }
                 onClick={() => onSelectTab(tab.criterionId)}
               >
@@ -91,14 +97,19 @@ export function ResultScreen({
             ))}
           </div>
 
-          <ul role="tabpanel" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-2">
+          {activeDescription !== null && (
+            <p className="mb-3 [overflow-wrap:anywhere]">기준 설명: {activeDescription}</p>
+          )}
+
+          {/* 카드 목록은 남은 높이를 다 쓰고 그 안에서 스크롤된다. 남은 높이가 모자라도 최소 8rem 은 보이게 한다. */}
+          <ul role="tabpanel" className="flex min-h-[8rem] flex-1 flex-col gap-2 overflow-y-auto pr-2">
             {cards.length === 0 && <li className="text-neutral-500">이 기준의 근거가 없습니다.</li>}
             {cards.map((card) => (
               <li key={card.id}>
                 <button
                   type="button"
                   aria-pressed={card.isSelected}
-                  className={`flex w-full flex-col gap-1 text-left ${
+                  className={`flex w-full flex-col gap-1 text-left [overflow-wrap:anywhere] ${
                     card.isSelected
                       ? "border-[3px] border-black p-[10px]"
                       : "border border-neutral-400 p-3"

@@ -7,3 +7,6 @@ export const SERVICE_NAME = "GYEOL";
 
 /** 분석 결과를 저장하는 sessionStorage 키 */
 export const RESULT_STORAGE_KEY = "gyeol.analysisResult";
+
+/** 확정한 학과 기준(DepartmentCriteria[])을 저장하는 localStorage 키 */
+export const DEPARTMENT_CRITERIA_STORAGE_KEY = "gyeol.departmentCriteria";
