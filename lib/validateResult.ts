@@ -4,22 +4,29 @@ import { countByCriterion } from "./resultView.ts";
 /**
  * 값이 AnalysisResult 모양(필드 이름과 타입)을 갖췄는지 확인한다.
  * sessionStorage 나 API 응답처럼 밖에서 들어온 값을 화면에 넘기기 전에 쓴다.
+ * masks 가 없는 값은 블라인드 처리를 거치지 않은 예전 결과이므로 받아들이지 않는다
+ * ("블라인드 처리됨" 화면에 가리지 않은 원문을 그리지 않게).
  */
 export function isAnalysisResult(value: unknown): value is AnalysisResult {
   if (!isRecord(value)) return false;
-  const { criteria, sections, evidences } = value;
+  const { criteria, sections, evidences, masks } = value;
   return (
     isDepartmentCriteria(criteria) &&
     Array.isArray(sections) &&
     sections.every(isSection) &&
     Array.isArray(evidences) &&
-    evidences.every(isEvidence)
+    evidences.every(isEvidence) &&
+    Array.isArray(masks) &&
+    masks.every(isMask)
   );
 }
 
 /**
  * AnalysisResult 의 내용이 서로 맞는지 검사하고, 어긋난 점을 문장 목록으로 돌려준다.
  * 빈 배열이면 문제가 없다는 뜻이다.
+ * 문장에는 id(기준·항목·근거), 블라인드 처리 내역의 종류 이름·순번·개수만 넣고 항목 원문·인용 구절·이유는 넣지 않는다.
+ * 스크립트가 이 문장을 출력하므로, 가리기 전 원문(이름·학교명 등)이 터미널·로그에 남지 않게 하기 위해서다.
+ * 위치는 근거 id 와 항목 id 로 찾는다.
  * 같은 구절이 원문에 여러 번 나오거나 인용 구절끼리 겹치는 것은 문제로 보지 않는다.
  * (실제 AI 결과에서는 같은 구절이 두 기준의 근거가 될 수 있고, 화면의 segmentText 는 이 경우에도 예외 없이 동작한다.)
  */
@@ -66,9 +73,22 @@ export function validateResult(result: AnalysisResult): string[] {
     }
 
     if (!section.text.includes(evidence.quote)) {
-      problems.push(
-        `근거 ${evidence.id}: 인용 구절이 항목 ${section.id} 원문에 글자 그대로 없음 — "${evidence.quote}"`,
-      );
+      problems.push(`근거 ${evidence.id}: 인용 구절이 항목 ${section.id} 원문에 글자 그대로 없음`);
+    }
+  }
+
+  // 블라인드 처리 내역: 종류 이름이 있고, 가린 곳 수가 1 이상의 정수이고, 종류가 겹치지 않아야 한다.
+  const maskTypes = new Set<string>();
+  for (const [index, mask] of result.masks.entries()) {
+    const label = `블라인드 처리 내역 ${index + 1}번째`;
+    if (mask.type.trim().length === 0) {
+      problems.push(`${label}: 종류 이름이 비어 있음`);
+    } else if (maskTypes.has(mask.type)) {
+      problems.push(`블라인드 처리 내역 종류 중복: ${mask.type}`);
+    }
+    maskTypes.add(mask.type);
+    if (!Number.isInteger(mask.count) || mask.count < 1) {
+      problems.push(`${label}: 가린 곳 수가 1 이상의 정수가 아님 — ${mask.count}`);
     }
   }
 
@@ -119,6 +139,11 @@ function isSection(value: unknown): value is Section {
     (value.fieldId === undefined || typeof value.fieldId === "string") &&
     (value.hours === undefined || typeof value.hours === "number")
   );
+}
+
+function isMask(value: unknown): value is AnalysisResult["masks"][number] {
+  if (!isRecord(value)) return false;
+  return typeof value.type === "string" && typeof value.count === "number";
 }
 
 function isEvidence(value: unknown): value is Evidence {

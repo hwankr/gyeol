@@ -8,7 +8,7 @@ import { isAnalysisResult, summarizeResult, validateResult } from "../lib/valida
 //    형식이 틀린 데이터는 앱이 받아들이지 않으므로 내용 검사보다 먼저 본다.
 const sample: unknown = sampleResult;
 if (!isAnalysisResult(sample)) {
-  console.error("샘플 데이터 검사 실패: 필드 형식이 AnalysisResult 와 맞지 않음 (기준·항목·근거에 빠졌거나 타입이 다른 필드가 있음)");
+  console.error("샘플 데이터 검사 실패: 필드 형식이 AnalysisResult 와 맞지 않음 (기준·항목·근거·블라인드 처리 내역(masks)에 빠졌거나 타입이 다른 필드가 있음)");
   process.exit(1);
 }
 

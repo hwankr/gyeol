@@ -11,7 +11,7 @@ import { parsePdf } from "@/lib/pipeline/parsePdf";
 /** 로그 줄 앞에 붙는 이름 */
 const LOG_TAG = "api/analyze";
 
-/** 근거 추출에서 예상하지 못한 오류가 났을 때 보여 주는 문구 */
+/** 블라인드 처리·근거 추출에서 예상하지 못한 오류가 났을 때 보여 주는 문구 */
 const UNEXPECTED_ERROR = "분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
 
 /** 학과 기준 확인 실패 문구 */
@@ -34,7 +34,10 @@ const CRITERIA_ERRORS = {
  *    criteria 가 문자열이 아님·20,000자 초과·JSON 아님·형식이 틀림·기준 0개
  *    criteria 는 기준 생성과 같은 검증(normalizeCriteria: 1~6개, 이름 30자·설명 300자, id c1…)으로 정리해 쓴다.
  * 4. PDF 파싱 실패 → 400 (한국어 문구. 파서의 한국어 안내는 그대로, PDF 라이브러리의 영어 오류는 한국어로 바꿈)
- * 5. blind → 근거 추출. 근거 추출 실패 → 502
+ * 5. 블라인드 처리(blind: 이름·학교명 등 식별 정보 가리기) → 근거 추출. 근거 추출 실패 → 502,
+ *    블라인드 처리·근거 추출 중 예상하지 못한 오류 → 502(일반 문구)
+ * 근거 추출과 응답에는 가려진 항목만 쓴다. 가리기 전 항목은 응답·로그·오류 문구·AI 요청에 넣지 않는다.
+ * 응답은 { criteria, sections(가려진 항목), evidences, masks(블라인드 처리 내역) } 이다.
  * 근거 추출은 받은 기준을 그대로 쓴다. 기준을 다시 만들지 않고(generateCriteria 를 부르지 않는다) sourceText 를 AI 에 보내지 않는다.
  */
 export async function POST(request: Request) {
@@ -64,9 +67,10 @@ export async function POST(request: Request) {
 
   // 파싱 오류는 한국어 문구로 업로드 화면에 보여 준다. 파서의 한국어 안내(예: 글자가 없는 이미지 PDF)는 그대로,
   // PDF 라이브러리의 영어 오류(손상된 PDF, 암호가 걸린 PDF 등)는 한국어 문구로 바꾼다.
-  let sections: Section[];
+  // 가리기 전 항목은 blind 에 넘기는 데만 쓴다. 이름·학교명이 응답·로그·AI 요청에 실리지 않게 이 변수는 아래 blind 호출 말고는 쓰지 않는다.
+  let unmaskedSections: Section[];
   try {
-    sections = await parsePdf(await file.arrayBuffer());
+    unmaskedSections = await parsePdf(await file.arrayBuffer());
   } catch (error) {
     const message = describePdfParseError(error);
     // 문구를 바꿨다면 원래 원인(오류 종류와 라이브러리의 문구)은 서버 로그에 남긴다.
@@ -79,16 +83,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    const blindedSections = await blind(sections);
-    const evidences = await extractEvidence(blindedSections, criteria);
-    const result: AnalysisResult = { criteria, sections: blindedSections, evidences };
+    // 이 아래(근거 추출·응답)에서는 blind 가 돌려준 가려진 항목만 쓴다.
+    const { sections, masks } = blind(unmaskedSections);
+    const evidences = await extractEvidence(sections, criteria);
+    const result: AnalysisResult = { criteria, sections, evidences, masks };
     return Response.json(result);
   } catch (error) {
     if (error instanceof AiCallError) {
       return errorResponse(502, error.message);
     }
     // 원인은 서버 로그에만 남기고 화면에는 일반 문구를 보여 준다.
-    console.error(`[${LOG_TAG}] 근거 추출 중 예상하지 못한 오류`, error);
+    console.error(`[${LOG_TAG}] 블라인드 처리·근거 추출 중 예상하지 못한 오류`, error);
     return errorResponse(502, UNEXPECTED_ERROR);
   }
 }

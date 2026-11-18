@@ -3,6 +3,8 @@
 //
 // 가상 학생부 PDF(samples/virtual-student-record.pdf)를 경영학과 기준으로 실제 파이프라인
 // (parsePdf → blind → extractEvidence)에 한 번 돌려 lib/mock/sample-result.json 에 AnalysisResult 로 저장한다.
+// 저장하는 결과의 sections 는 blind 로 가린 항목이고, masks 는 blind 가 돌려준 블라인드 처리 내역이다.
+// 가리기 전 항목은 blind 에 넘기는 데만 쓰고 근거 추출·저장에는 쓰지 않는다.
 // Claude API 를 한 번 부르므로 비용이 든다. 저장 전에 validateResult 로 검사하고, 문제가 있으면 저장하지 않는다.
 //
 // AI_API_KEY 가 프로세스 환경에 없으면 저장소 루트의 .env.local 을 읽어 온다(이미 있는 환경 변수는 덮어쓰지 않는다).
@@ -54,7 +56,7 @@ async function main(): Promise<number> {
     return 1;
   }
 
-  const sections = await blind(await parsePdf(data));
+  const { sections, masks } = blind(await parsePdf(data));
   console.log(`파싱: 항목 ${sections.length}개 (${PDF_PATH}), 기준: ${criteria.department}`);
 
   let evidences: Evidence[];
@@ -69,7 +71,7 @@ async function main(): Promise<number> {
     throw error;
   }
 
-  const result: AnalysisResult = { criteria, sections, evidences };
+  const result: AnalysisResult = { criteria, sections, evidences, masks };
   const problems = validateResult(result);
   if (problems.length > 0) {
     console.error(`결과 검사 실패: 문제 ${problems.length}건. ${OUTPUT_PATH} 에 저장하지 않았습니다.`);

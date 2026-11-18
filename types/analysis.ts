@@ -34,6 +34,7 @@ export type Evidence = {
 
 export type AnalysisResult = {
   criteria: DepartmentCriteria;
-  sections: Section[];
+  sections: Section[];   // 블라인드 처리(lib/pipeline/blind.ts)를 거친 항목. 가리기 전 원문은 들어 있지 않다
   evidences: Evidence[];
+  masks: { type: string; count: number }[]; // 블라인드 처리 내역: 가린 정보 종류(예: "학교명")와 가린 곳 수. 가린 것이 없으면 빈 배열
 };
