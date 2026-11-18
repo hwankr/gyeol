@@ -59,7 +59,8 @@ export function validateResult(result: AnalysisResult): string[] {
       continue;
     }
 
-    if (evidence.quote.length === 0) {
+    // 공백만 있는 인용도 빈 것으로 본다(공백 한 글자는 어느 원문에나 들어 있어 아래 검사를 그냥 통과한다).
+    if (evidence.quote.trim().length === 0) {
       problems.push(`근거 ${evidence.id}: 인용 구절이 비어 있음`);
       continue;
     }

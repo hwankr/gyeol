@@ -1,13 +1,10 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { AnalysisResult, Section } from "@/types/analysis";
 import { findDepartmentCriteria } from "@/lib/criteria";
-import { PDF_TOO_LARGE_ERROR, isPdfFile, isPdfTooLarge } from "@/lib/pdf";
+import { PDF_TOO_LARGE_ERROR, describePdfParseError, isPdfFile, isPdfTooLarge } from "@/lib/pdf";
 import { blind } from "@/lib/pipeline/blind";
 import { EvidenceExtractionError, extractEvidence } from "@/lib/pipeline/extractEvidence";
 import { parsePdf } from "@/lib/pipeline/parsePdf";
-
-/** 파서가 던진 오류에 쓸 만한 문구가 없을 때 보여 주는 문구 */
-const PARSE_ERROR = "PDF 를 읽지 못했습니다.";
 
 /** 근거 추출에서 예상하지 못한 오류가 났을 때 보여 주는 문구 */
 const UNEXPECTED_ERROR = "분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
@@ -21,7 +18,7 @@ const UNEXPECTED_ERROR = "분석 중 오류가 발생했습니다. 잠시 후 �
  * 2. 접속 코드: 서버에 ACCESS_CODE 가 없음 → 500, 보낸 코드가 없거나 다름 → 401 (파일 처리·AI 호출보다 먼저)
  * 3. 파일: 없음·PDF 아님 → 400, 10MB 초과 → 413
  * 4. 학과 기준(criteriaId)이 없거나 목록에 없음 → 400
- * 5. PDF 파싱 실패 → 400 (파서의 문구 그대로)
+ * 5. PDF 파싱 실패 → 400 (한국어 문구. 파서의 한국어 안내는 그대로, PDF 라이브러리의 영어 오류는 한국어로 바꿈)
  * 6. blind → 근거 추출. 근거 추출 실패 → 502
  */
 export async function POST(request: Request) {
@@ -60,12 +57,20 @@ export async function POST(request: Request) {
     return errorResponse(400, "학과를 선택해 주세요.");
   }
 
-  // 파싱 오류(예: 글자가 없는 이미지 PDF)는 파서의 문구를 그대로 업로드 화면에 보여 준다.
+  // 파싱 오류는 한국어 문구로 업로드 화면에 보여 준다. 파서의 한국어 안내(예: 글자가 없는 이미지 PDF)는 그대로,
+  // PDF 라이브러리의 영어 오류(손상된 PDF, 암호가 걸린 PDF 등)는 한국어 문구로 바꾼다.
   let sections: Section[];
   try {
     sections = await parsePdf(await file.arrayBuffer());
   } catch (error) {
-    return errorResponse(400, error instanceof Error && error.message !== "" ? error.message : PARSE_ERROR);
+    const message = describePdfParseError(error);
+    // 문구를 바꿨다면 원래 원인(오류 종류와 라이브러리의 문구)은 서버 로그에 남긴다.
+    if (!(error instanceof Error) || error.message !== message) {
+      console.error(
+        `[api/analyze] PDF 파싱 실패 (${error instanceof Error ? `${error.name}: ${error.message}` : typeof error})`,
+      );
+    }
+    return errorResponse(400, message);
   }
 
   try {

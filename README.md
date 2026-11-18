@@ -52,7 +52,7 @@ npx next start -p 3100      # 빌드한 것을 실행 (http://localhost:3100)
   | 400 | 파일이 없음, PDF 가 아님 |
   | 413 | 파일이 10MB 를 넘음 |
   | 400 | `criteriaId` 가 없거나 목록에 없음 (`학과를 선택해 주세요.`) |
-  | 400 | PDF 파싱 실패 (파서의 문구 그대로) |
+  | 400 | PDF 파싱 실패 (한국어 문구. 파서의 한국어 안내는 그대로, 손상된 PDF·암호가 걸린 PDF 처럼 PDF 라이브러리가 영어로 알리는 오류는 한국어 문구로 바꿔 돌려주고 원래 원인은 서버 로그에 남긴다) |
   | 502 | 근거 추출 실패: `AI_API_KEY` 없음, AI 호출 실패, 60초 초과, AI 거절, 잘린 응답, 응답 해석 실패 |
 
   10MB 는 앱의 제한이다. Vercel 에 배포하면 플랫폼의 요청 본문 한도(4.5MB, multipart 포함)가 먼저 적용되어, 그보다 큰 PDF 는 앱에 닿기 전에 413 으로 막힌다.
@@ -119,7 +119,7 @@ lib/
   validateResult.ts       결과 모양 검사, 결과 내용 검사 (근거 quote 가 원문에 글자 그대로 있는지 등)
   resultStorage.ts        sessionStorage 저장·불러오기
   analyzeClient.ts        POST /api/analyze 호출 (file, criteriaId, accessCode)
-  pdf.ts                  PDF 파일인지 확인 (이름·형식만), 최대 크기(10MB)
+  pdf.ts                  PDF 파일인지 확인 (이름·형식만), 최대 크기(10MB), 파싱 오류를 한국어 문구로 바꾸기
   mock/
     sample-result.json    가상 학생부를 경영학과 기준으로 실제 파이프라인에 돌린 결과 (npm run make:sample)
     sampleResult.ts       "샘플 데이터로 보기" 결과 (위 파일 그대로)
