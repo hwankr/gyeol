@@ -13,9 +13,6 @@ type CriteriaExamplesProps = {
 export function CriteriaExamples({ examples, disabled, onUse }: CriteriaExamplesProps) {
   return (
     <Area name="기준 문장 예시" className="min-w-0 flex-1">
-      <p className="mb-3">
-        예시를 넣으면 “새 학과 기준 만들기”의 학과 이름과 문장에 채워집니다. 고쳐 쓴 뒤 “기준 만들기”를 누르세요.
-      </p>
       <ul className="flex flex-col">
         {examples.map((example) => (
           <li
