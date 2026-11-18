@@ -1,0 +1,171 @@
+import { PREP_CRITERIA_STORAGE_KEY, PREP_HISTORY_STORAGE_KEY } from "../constants.ts";
+import { parsePrepCriteria, type PrepCriteria } from "./criteria.ts";
+import { DEFAULT_PREP_CRITERIA } from "./defaultCriteria.ts";
+import { NO_HISTORY, arrangeHistory, parsePrepHistory, type PrepHistoryEntry } from "./history.ts";
+
+// 전형 준비의 평가 기준과 기준 변경 기록을 브라우저 localStorage 에 JSON 으로 저장하고 불러온다. 브라우저에서만 호출한다.
+//
+// 읽기와 쓰기는 모두 try/catch 로 감싼다. 저장소 읽기 결과는 둘로 나눈다(두 키를 따로 본다).
+// - 읽음: 값이 없거나 JSON 이 아니거나 모양·한도에서 벗어나면 "저장한 값 없음"(평가 기준은 기본값, 기록은 빈 목록). 저장소의 값은 지우지 않는다.
+// - 읽지 못함: getItem 이나 localStorage 접근 자체가 예외를 던짐. 그 저장소에 무엇이 있는지 모르므로 그 저장소에는 쓰지 않는다.
+//   화면에는 이 페이지를 연 뒤 마지막으로 읽는 데 성공한 값을 보여 준다(읽기가 중간에 실패하기 시작해도 잘 보이던 값이 기본값으로
+//   바뀌지 않게. lib/criteriaStorage.ts 의 저장한 학과와 같은 방식). 한 번도 읽지 못했으면 기본값(평가 기준)·빈 목록(기록)이다.
+//
+// 쓰지 않았거나 쓰기가 실패한 값은 이 페이지의 메모리에만 둔다(새로고침하면 사라진다).
+// - 평가 기준: 메모리에 둔 값이 있으면 저장소의 값보다 먼저 보여 준다(사람이 마지막으로 저장한 값이다).
+// - 기록: 저장하지 못한 기록을 저장소의 기록과 합쳐 보여 주고, 다음에 기록을 저장할 수 있을 때 같이 저장한다.
+//   저장하지 못한 기록도 저장할 때와 같은 정리(arrangeHistory)로 최신 50건만 둔다(저장 실패가 이어져도 50건을 넘지 않는다).
+// - 메모리에만 둔 값이 있는 동안 화면은 "저장하지 못함" 안내를 보여 준다(hasUnsavedPrepChanges). 다음 저장이 성공하면 사라진다.
+// 다른 탭의 변경은 구독하지 않는다(storage 이벤트 없음). 화면이 다시 그려질 때 저장소를 다시 읽으면서 반영된다.
+// 화면은 useSyncExternalStore 로 읽는다. 내용이 같으면 같은 객체를 돌려준다.
+
+const listeners = new Set<() => void>();
+
+/**
+ * 마지막으로 읽는 데 성공한(또는 쓴) 평가 기준 문자열(undefined: 이 페이지에서 아직 한 번도 읽지 못함)과 그 값(null: 저장한 값 없음).
+ * 읽기가 실패하는 동안에는 이 값을 그대로 쓴다.
+ */
+let lastCriteriaRaw: string | null | undefined;
+let lastCriteria: PrepCriteria | null = null;
+/** 저장소에 쓰지 못해 메모리에만 둔 평가 기준 */
+let memoryCriteria: PrepCriteria | null = null;
+
+/** 마지막으로 읽는 데 성공한(또는 쓴) 기록 문자열과 그 목록 (읽기가 실패하는 동안에는 이 목록을 그대로 쓴다) */
+let lastHistoryRaw: string | null | undefined;
+let lastHistory: readonly PrepHistoryEntry[] = NO_HISTORY;
+/** 저장소에 쓰지 못해 메모리에만 둔 기록 (최신순, 50건까지) */
+let memoryHistory: readonly PrepHistoryEntry[] = NO_HISTORY;
+/** 마지막으로 만든 화면 기록 목록과 그것을 만든 재료 */
+let composed: {
+  stored: readonly PrepHistoryEntry[];
+  memory: readonly PrepHistoryEntry[];
+  list: readonly PrepHistoryEntry[];
+} | null = null;
+
+/** 평가 기준·기록이 바뀔 때 알림을 받는다. 구독을 끝내는 함수를 돌려준다. */
+export function subscribePrepStorage(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/**
+ * 화면에 보이는 평가 기준: 메모리에만 둔 값 → 저장소의 값 → 기본값. 저장소를 다시 읽는다.
+ * 읽지 못하면 이 페이지에서 마지막으로 읽은 값을 쓰고, 한 번도 읽지 못했으면 기본값이다.
+ */
+export function loadPrepCriteria(): PrepCriteria {
+  readCriteria();
+  return memoryCriteria ?? lastCriteria ?? DEFAULT_PREP_CRITERIA;
+}
+
+/**
+ * 화면에 보이는 기록(최신순, 50건까지): 저장소의 기록 + 메모리에만 둔 기록. 저장소를 다시 읽는다.
+ * 읽지 못하면 이 페이지에서 마지막으로 읽은 기록을 쓰고, 한 번도 읽지 못했으면 메모리에만 둔 기록뿐이다(없으면 빈 목록).
+ */
+export function loadPrepHistory(): readonly PrepHistoryEntry[] {
+  readHistory();
+  return composeHistory();
+}
+
+/** 저장소에 쓰지 못해 메모리에만 둔 값(평가 기준 또는 기록)이 있는지 */
+export function hasUnsavedPrepChanges(): boolean {
+  return memoryCriteria !== null || memoryHistory.length > 0;
+}
+
+/**
+ * 배점을 바꾼 평가 기준을 저장하고 기록을 한 건 남긴다. 순서: 기록 저장소를 이 순간 다시 읽고 → 평가 기준을 쓰고 →
+ * 새 기록을 맨 앞에 더한 기록을 쓴다. 평가 기준도 쓰기 직전에 읽어 보고, 읽지 못하면 쓰지 않는다.
+ * 쓰지 않았거나 쓰지 못한 값은 메모리에만 둔다. 둘 다 저장소에 저장했으면 true.
+ */
+export function savePrepCriteria(next: PrepCriteria, entry: PrepHistoryEntry): boolean {
+  const historyRead = readHistory();
+
+  const criteriaSaved = readCriteria().ok && writeCriteria(next);
+  memoryCriteria = criteriaSaved ? null : next;
+
+  const pending = [entry, ...memoryHistory];
+  const historySaved = historyRead.ok && writeHistory(arrangeHistory([...pending, ...historyRead.list]));
+  // 저장하지 못한 기록도 저장할 때와 같은 정리로 최신 50건만 둔다.
+  memoryHistory = historySaved ? NO_HISTORY : arrangeHistory(pending);
+
+  notify();
+  return criteriaSaved && historySaved;
+}
+
+/** 평가 기준 저장소를 읽는다. 읽으면 "마지막으로 읽은 값"을 바꾸고 ok: true, 읽지 못하면 그 값을 그대로 두고 ok: false. */
+function readCriteria(): { ok: boolean } {
+  let raw: string | null;
+  try {
+    raw = window.localStorage.getItem(PREP_CRITERIA_STORAGE_KEY);
+  } catch {
+    return { ok: false };
+  }
+  if (raw !== lastCriteriaRaw) {
+    lastCriteriaRaw = raw;
+    lastCriteria = raw === null ? null : parsePrepCriteria(parseJson(raw));
+  }
+  return { ok: true };
+}
+
+/** 평가 기준을 쓴다. 쓰면 그 값을 "마지막으로 읽은 값"으로 삼고 true, 예외가 나면 false. */
+function writeCriteria(criteria: PrepCriteria): boolean {
+  const raw = JSON.stringify(criteria);
+  try {
+    window.localStorage.setItem(PREP_CRITERIA_STORAGE_KEY, raw);
+  } catch {
+    return false;
+  }
+  lastCriteriaRaw = raw;
+  lastCriteria = parsePrepCriteria(criteria);
+  return true;
+}
+
+/** 기록 저장소를 읽는다. 읽으면 "마지막으로 읽은 목록"을 바꾸고 그 목록을, 읽지 못하면 그 목록을 그대로 두고 ok: false 를 돌려준다. */
+function readHistory(): { ok: true; list: readonly PrepHistoryEntry[] } | { ok: false; list?: undefined } {
+  let raw: string | null;
+  try {
+    raw = window.localStorage.getItem(PREP_HISTORY_STORAGE_KEY);
+  } catch {
+    return { ok: false };
+  }
+  if (raw !== lastHistoryRaw) {
+    lastHistoryRaw = raw;
+    lastHistory = raw === null ? NO_HISTORY : parsePrepHistory(parseJson(raw));
+  }
+  return { ok: true, list: lastHistory };
+}
+
+/** 기록을 쓴다. 쓰면 그 목록을 "마지막으로 읽은 목록"으로 삼고 true, 예외가 나면 false. */
+function writeHistory(list: readonly PrepHistoryEntry[]): boolean {
+  const raw = JSON.stringify(list);
+  try {
+    window.localStorage.setItem(PREP_HISTORY_STORAGE_KEY, raw);
+  } catch {
+    return false;
+  }
+  lastHistoryRaw = raw;
+  lastHistory = list;
+  return true;
+}
+
+/** 화면 기록 = 메모리에만 둔 기록 + 마지막으로 읽은 기록 (최신순, 50건까지). 재료가 같으면 같은 배열을 돌려준다. */
+function composeHistory(): readonly PrepHistoryEntry[] {
+  if (composed !== null && composed.stored === lastHistory && composed.memory === memoryHistory) return composed.list;
+  const list = memoryHistory.length === 0 ? lastHistory : arrangeHistory([...memoryHistory, ...lastHistory]);
+  composed = { stored: lastHistory, memory: memoryHistory, list };
+  return list;
+}
+
+/** JSON 이 아니면 undefined (확인 함수가 "저장한 값 없음"으로 본다) */
+function parseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+function notify() {
+  listeners.forEach((listener) => listener());
+}

@@ -13,7 +13,7 @@ type LoginScreenProps = {
   accountId: string;
   onSelectUniversity: (universityId: string) => void;
   onSelectAccount: (accountId: string) => void;
-  /** "계속"을 누르면 가는 주소 (업로드 화면) */
+  /** "계속"을 누르면 가는 주소 (전형 준비 화면) */
   continuePath: string;
 };
 
@@ -68,9 +68,9 @@ export function LoginScreen({
         <p className="text-[13px] leading-[16px] font-bold text-[#767676]">1 / 3 · 계정 선택</p>
         <h1 className="mt-[6px] text-[32px] leading-[40px] font-bold tracking-[-0.02em] text-[#111111]">로그인</h1>
         {/*
-          "계속"은 보통 HTML 폼 제출(GET, action = 업로드 화면 주소)이 받친다. 그래서 버튼이 보이는 어느 순간에 눌러도
-          (HTML 을 받는 도중, JS 가 도착하기 전, hydration 도중) 브라우저가 업로드 화면으로 이동한다(문서 이동, 주소 끝에 빈 "?").
-          JS 가 준비된 뒤에는 next/form 이 그 제출을 가로채 새로고침 없이 이동한다(주소는 정확히 업로드 화면 주소).
+          "계속"은 보통 HTML 폼 제출(GET, action = 전형 준비 화면 주소)이 받친다. 그래서 버튼이 보이는 어느 순간에 눌러도
+          (HTML 을 받는 도중, JS 가 도착하기 전, hydration 도중) 브라우저가 전형 준비 화면으로 이동한다(문서 이동, 주소 끝에 빈 "?").
+          JS 가 준비된 뒤에는 next/form 이 그 제출을 가로채 새로고침 없이 이동한다(주소는 정확히 전형 준비 화면 주소).
           두 선택 목록에는 name 이 없어 고른 값은 주소에 실리지 않는다.
         */}
         <Form className="mt-[34px] flex flex-col gap-[24px]" action={continuePath}>

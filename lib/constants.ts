@@ -10,3 +10,9 @@ export const RESULT_STORAGE_KEY = "gyeol.analysisResult";
 
 /** 확정한 학과 기준(DepartmentCriteria[])을 저장하는 localStorage 키 */
 export const DEPARTMENT_CRITERIA_STORAGE_KEY = "gyeol.departmentCriteria";
+
+/** 전형 준비 · 평가·배점 설정의 평가 기준(PrepCriteria)을 저장하는 localStorage 키 */
+export const PREP_CRITERIA_STORAGE_KEY = "gyeol.prepCriteria";
+
+/** 전형 준비 · 기준 변경 기록(PrepHistoryEntry[])을 저장하는 localStorage 키 */
+export const PREP_HISTORY_STORAGE_KEY = "gyeol.prepHistory";

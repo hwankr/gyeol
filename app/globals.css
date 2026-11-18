@@ -11,3 +11,26 @@
   background-color: #d4d4d4;
   color: #000;
 }
+
+/*
+  전형 준비 · 세부 평가 항목 패널의 가는 스크롤바 (손잡이 #999999, 길 #DBDBDB, 둥근 끝, 굵기 6px). 이 클래스를 단 요소에만 쓰인다.
+  Chrome·Edge·Safari 는 ::-webkit-scrollbar 로 꾸민다. scrollbar-width·scrollbar-color 를 같이 쓰면 Chrome 이 ::-webkit-scrollbar 를
+  무시하므로, 그 두 속성은 ::-webkit-scrollbar 를 모르는 브라우저(Firefox)에만 준다.
+*/
+.prep-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.prep-scrollbar::-webkit-scrollbar-track {
+  border-radius: 3px;
+  background-color: #dbdbdb;
+}
+.prep-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background-color: #999999;
+}
+@supports not selector(::-webkit-scrollbar) {
+  .prep-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #999999 #dbdbdb;
+  }
+}
