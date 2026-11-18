@@ -1,6 +1,5 @@
-import type { AnalysisResult, Evidence, Section } from "@/types/analysis";
-import { COMPETENCIES } from "./constants.ts";
-import { countByCompetency } from "./resultView.ts";
+import type { AnalysisResult, Criterion, DepartmentCriteria, Evidence, Section } from "@/types/analysis";
+import { countByCriterion } from "./resultView.ts";
 
 /**
  * 값이 AnalysisResult 모양(필드 이름과 타입)을 갖췄는지 확인한다.
@@ -8,8 +7,9 @@ import { countByCompetency } from "./resultView.ts";
  */
 export function isAnalysisResult(value: unknown): value is AnalysisResult {
   if (!isRecord(value)) return false;
-  const { sections, evidences } = value;
+  const { criteria, sections, evidences } = value;
   return (
+    isDepartmentCriteria(criteria) &&
     Array.isArray(sections) &&
     sections.every(isSection) &&
     Array.isArray(evidences) &&
@@ -20,10 +20,19 @@ export function isAnalysisResult(value: unknown): value is AnalysisResult {
 /**
  * AnalysisResult 의 내용이 서로 맞는지 검사하고, 어긋난 점을 문장 목록으로 돌려준다.
  * 빈 배열이면 문제가 없다는 뜻이다.
+ * 같은 구절이 원문에 여러 번 나오거나 인용 구절끼리 겹치는 것은 문제로 보지 않는다.
+ * (실제 AI 결과에서는 같은 구절이 두 기준의 근거가 될 수 있고, 화면의 segmentText 는 이 경우에도 예외 없이 동작한다.)
  */
 export function validateResult(result: AnalysisResult): string[] {
   const problems: string[] = [];
-  const competencies: readonly string[] = COMPETENCIES;
+
+  const criterionIds = new Set<string>();
+  for (const criterion of result.criteria.criteria) {
+    if (criterionIds.has(criterion.id)) {
+      problems.push(`기준 id 중복: ${criterion.id}`);
+    }
+    criterionIds.add(criterion.id);
+  }
 
   const sectionById = new Map<string, Section>();
   for (const section of result.sections) {
@@ -34,17 +43,14 @@ export function validateResult(result: AnalysisResult): string[] {
   }
 
   const evidenceIds = new Set<string>();
-  // 항목별로 이미 확인한 인용 문장 구간 (서로 겹치는지 보기 위해)
-  const rangesBySection = new Map<string, { id: string; start: number; end: number }[]>();
-
   for (const evidence of result.evidences) {
     if (evidenceIds.has(evidence.id)) {
       problems.push(`근거 id 중복: ${evidence.id}`);
     }
     evidenceIds.add(evidence.id);
 
-    if (!competencies.includes(evidence.competency)) {
-      problems.push(`근거 ${evidence.id}: 목록에 없는 역량 "${evidence.competency}"`);
+    if (!criterionIds.has(evidence.criterionId)) {
+      problems.push(`근거 ${evidence.id}: 기준 목록에 없는 기준 id "${evidence.criterionId}"`);
     }
 
     const section = sectionById.get(evidence.sectionId);
@@ -54,47 +60,50 @@ export function validateResult(result: AnalysisResult): string[] {
     }
 
     if (evidence.quote.length === 0) {
-      problems.push(`근거 ${evidence.id}: 인용 문장이 비어 있음`);
+      problems.push(`근거 ${evidence.id}: 인용 구절이 비어 있음`);
       continue;
     }
 
-    const start = section.text.indexOf(evidence.quote);
-    if (start === -1) {
+    if (!section.text.includes(evidence.quote)) {
       problems.push(
-        `근거 ${evidence.id}: 인용 문장이 항목 ${section.id} 원문에 글자 그대로 없음 — "${evidence.quote}"`,
+        `근거 ${evidence.id}: 인용 구절이 항목 ${section.id} 원문에 글자 그대로 없음 — "${evidence.quote}"`,
       );
-      continue;
     }
-    if (section.text.indexOf(evidence.quote, start + 1) !== -1) {
-      problems.push(`근거 ${evidence.id}: 인용 문장이 항목 ${section.id} 원문에 두 번 이상 나옴`);
-    }
-
-    const end = start + evidence.quote.length;
-    const ranges = rangesBySection.get(section.id) ?? [];
-    for (const other of ranges) {
-      if (start < other.end && other.start < end) {
-        problems.push(
-          `근거 ${evidence.id}: 인용 문장이 근거 ${other.id} 의 인용 문장과 항목 ${section.id} 원문에서 겹침`,
-        );
-      }
-    }
-    ranges.push({ id: evidence.id, start, end });
-    rangesBySection.set(section.id, ranges);
   }
 
   return problems;
 }
 
-/** 검사 통과 시 출력하는 한 줄 요약: 항목 수, 근거 수, 역량별 근거 수 (COMPETENCIES 순서) */
+/** 검사 통과 시 출력하는 한 줄 요약: 항목 수, 근거 수, 기준별 근거 수 (기준 목록 순서, 기준 이름 사용) */
 export function summarizeResult(result: AnalysisResult): string {
-  const counts = countByCompetency(result.evidences)
-    .map(({ competency, count }) => `${competency} ${count}`)
+  const counts = countByCriterion(result.criteria.criteria, result.evidences)
+    .map(({ name, count }) => `${name} ${count}`)
     .join(", ");
   return `항목 ${result.sections.length}개, 근거 ${result.evidences.length}개 (${counts})`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isDepartmentCriteria(value: unknown): value is DepartmentCriteria {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.department === "string" &&
+    typeof value.sourceText === "string" &&
+    Array.isArray(value.criteria) &&
+    value.criteria.every(isCriterion)
+  );
+}
+
+function isCriterion(value: unknown): value is Criterion {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.description === "string"
+  );
 }
 
 function isSection(value: unknown): value is Section {
@@ -113,10 +122,9 @@ function isSection(value: unknown): value is Section {
 
 function isEvidence(value: unknown): value is Evidence {
   if (!isRecord(value)) return false;
-  const competencies: readonly unknown[] = COMPETENCIES;
   return (
     typeof value.id === "string" &&
-    competencies.includes(value.competency) &&
+    typeof value.criterionId === "string" &&
     typeof value.sectionId === "string" &&
     typeof value.quote === "string" &&
     typeof value.reason === "string"

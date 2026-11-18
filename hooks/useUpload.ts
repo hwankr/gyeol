@@ -1,18 +1,26 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnalysisCanceledError, requestAnalysis } from "@/lib/analyzeClient";
+import { DEPARTMENT_CRITERIA_LIST, findDepartmentCriteria } from "@/lib/criteria";
 import { sampleResult } from "@/lib/mock/sampleResult";
-import { isPdfFile } from "@/lib/pdf";
+import { PDF_TOO_LARGE_ERROR, isPdfFile, isPdfTooLarge } from "@/lib/pdf";
 import { saveResult } from "@/lib/resultStorage";
 import type { AnalysisResult } from "@/types/analysis";
 
 const NOT_PDF_ERROR = "PDF 파일만 선택할 수 있습니다.";
+const NO_ACCESS_CODE_ERROR = "접속 코드를 입력해 주세요.";
 const SAVE_ERROR = "분석 결과를 브라우저에 저장하지 못했습니다. 다시 시도해 주세요.";
 const ANALYZE_ERROR = "분석에 실패했습니다. 다시 시도해 주세요.";
 
-/** 업로드 화면 상태: 파일 선택, 분석 요청, 결과 저장 후 결과 화면으로 이동. */
+/** 학과 선택의 기본값: 목록의 첫 번째 학과 */
+const DEFAULT_CRITERIA_ID = DEPARTMENT_CRITERIA_LIST[0]?.id ?? "";
+
+/** 업로드 화면 상태: 학과 선택, 파일 선택, 접속 코드, 분석 요청, 결과 저장 후 결과 화면으로 이동. */
 export function useUpload() {
   const router = useRouter();
+  const [criteriaId, setCriteriaId] = useState(DEFAULT_CRITERIA_ID);
+  /** 접속 코드. 이 상태에만 두고 sessionStorage·localStorage 에는 저장하지 않는다. */
+  const [accessCode, setAccessCode] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -41,6 +49,8 @@ export function useUpload() {
       generationRef.current += 1;
       requestRef.current?.abort();
       requestRef.current = null;
+      setCriteriaId(DEFAULT_CRITERIA_ID);
+      setAccessCode("");
       setFileName(null);
       setFile(null);
       setFileError(null);
@@ -64,6 +74,11 @@ export function useUpload() {
       setFileError(NOT_PDF_ERROR);
       return;
     }
+    if (isPdfTooLarge(selected)) {
+      setFile(null);
+      setFileError(PDF_TOO_LARGE_ERROR);
+      return;
+    }
     setFile(selected);
     setFileError(null);
   }
@@ -81,6 +96,11 @@ export function useUpload() {
 
   async function startAnalysis() {
     if (file === null || isAnalyzing) return;
+    // 접속 코드가 비어 있으면 요청을 보내지 않고 안내한다(버튼은 막지 않는다).
+    if (accessCode.trim() === "") {
+      setRequestError(NO_ACCESS_CODE_ERROR);
+      return;
+    }
 
     // 남아 있는 요청이 있으면 취소하고(정상 흐름에서는 없음) 새 세대로 시작한다.
     requestRef.current?.abort();
@@ -96,7 +116,7 @@ export function useUpload() {
 
     let result: AnalysisResult;
     try {
-      result = await requestAnalysis(file, controller.signal);
+      result = await requestAnalysis({ file, criteriaId, accessCode }, controller.signal);
     } catch (error) {
       // 취소된 요청이나 더 이상 유효하지 않은 요청은 아무것도 바꾸지 않는다(오류 문구도 세우지 않음).
       if (error instanceof AnalysisCanceledError || !isCurrent()) return;
@@ -114,19 +134,28 @@ export function useUpload() {
     if (!openResult(result)) setIsAnalyzing(false);
   }
 
+  /** 샘플 데이터는 미리 만든 결과(lib/mock/sample-result.json)를 그대로 연다. 학과 선택·접속 코드와 상관없고 API 를 부르지 않는다. */
   function viewSample() {
     if (isAnalyzing) return;
     setRequestError(null);
     openResult(sampleResult);
   }
 
+  const selectedCriteria = findDepartmentCriteria(criteriaId);
+
   return {
+    departments: DEPARTMENT_CRITERIA_LIST.map(({ id, department }) => ({ id, department })),
+    criteriaId,
+    criteriaItems: selectedCriteria?.criteria ?? [],
+    accessCode,
     fileName,
     fileError,
     requestError,
     isAnalyzing,
     fileInputKey,
     canStart: file !== null && !isAnalyzing,
+    onSelectCriteria: setCriteriaId,
+    onChangeAccessCode: setAccessCode,
     onSelectFile: selectFile,
     onStart: startAnalysis,
     onViewSample: viewSample,

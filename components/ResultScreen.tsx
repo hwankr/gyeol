@@ -3,29 +3,31 @@ import type { Ref } from "react";
 import { Area } from "@/components/Area";
 import { SERVICE_NAME } from "@/lib/constants";
 import type {
-  CompetencyTab,
+  CriterionTab,
   EvidenceCardView,
   SourceSectionView,
   TextSegment,
 } from "@/lib/resultView";
-import type { Competency } from "@/types/analysis";
 
 type ResultScreenProps = {
-  tabs: CompetencyTab[];
+  /** 학과 이름 */
+  department: string;
+  tabs: CriterionTab[];
   sections: SourceSectionView[];
   cards: EvidenceCardView[];
   /** 원문 단(스크롤 영역) */
   sourceScrollRef: Ref<HTMLDivElement>;
   /** 선택한 근거가 들어 있는 항목 */
   selectedSectionRef: Ref<HTMLElement>;
-  /** 강조한 인용 문장 */
+  /** 강조한 인용 구절 */
   highlightRef: Ref<HTMLElement>;
-  onSelectTab: (competency: Competency) => void;
+  onSelectTab: (criterionId: string) => void;
   onSelectEvidence: (evidenceId: string) => void;
 };
 
 /** 분석 결과 화면 (/result). 왼쪽 원문과 오른쪽 근거가 각자 스크롤된다. */
 export function ResultScreen({
+  department,
   tabs,
   sections,
   cards,
@@ -39,7 +41,10 @@ export function ResultScreen({
     <main className="flex h-full flex-col gap-3 p-3">
       <Area name="상단">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-bold">{SERVICE_NAME}</h1>
+          <div className="flex items-center gap-6">
+            <h1 className="text-lg font-bold">{SERVICE_NAME}</h1>
+            <p>학과: {department}</p>
+          </div>
           <Link href="/" className="underline">
             다른 학생부 업로드
           </Link>
@@ -66,11 +71,11 @@ export function ResultScreen({
           </div>
         </Area>
 
-        <Area name="역량별 근거" className="flex min-h-0 flex-col">
+        <Area name="기준별 근거" className="flex min-h-0 flex-col">
           <div role="tablist" className="mb-3 flex gap-2">
             {tabs.map((tab) => (
               <button
-                key={tab.competency}
+                key={tab.criterionId}
                 type="button"
                 role="tab"
                 aria-selected={tab.isActive}
@@ -79,15 +84,15 @@ export function ResultScreen({
                     ? "border-2 border-black px-3 py-1 font-bold"
                     : "border-2 border-neutral-300 px-3 py-1"
                 }
-                onClick={() => onSelectTab(tab.competency)}
+                onClick={() => onSelectTab(tab.criterionId)}
               >
-                {tab.competency} ({tab.count})
+                {tab.name} ({tab.count})
               </button>
             ))}
           </div>
 
           <ul role="tabpanel" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-2">
-            {cards.length === 0 && <li className="text-neutral-500">이 역량의 근거가 없습니다.</li>}
+            {cards.length === 0 && <li className="text-neutral-500">이 기준의 근거가 없습니다.</li>}
             {cards.map((card) => (
               <li key={card.id}>
                 <button

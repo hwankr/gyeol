@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { COMPETENCIES } from "@/lib/constants";
 import { buildResultView } from "@/lib/resultView";
-import type { AnalysisResult, Competency } from "@/types/analysis";
+import type { AnalysisResult } from "@/types/analysis";
 
 /** 원문 단 위쪽 가장자리와 스크롤 대상 사이 여백(px) */
 const SCROLL_MARGIN = 12;
@@ -13,11 +12,14 @@ type Selection = {
 };
 
 /**
- * 결과 화면 상태: 현재 탭, 선택한 근거, 원문 단 스크롤.
+ * 결과 화면 상태: 현재 탭(기준 id), 선택한 근거, 원문 단 스크롤.
  * 새로 저장한 결과마다 이 훅을 쓰는 컴포넌트가 새로 그려지므로(app/result/page.tsx 의 key) 처음 상태로 시작한다.
  */
 export function useResultView(result: AnalysisResult) {
-  const [activeCompetency, setActiveCompetency] = useState<Competency>(COMPETENCIES[0]);
+  /** 현재 탭의 기준 id. 처음에는 첫 번째 기준. 기준이 하나도 없으면 null. */
+  const [activeCriterionId, setActiveCriterionId] = useState<string | null>(
+    result.criteria.criteria[0]?.id ?? null,
+  );
   const [selection, setSelection] = useState<Selection | null>(null);
 
   const sourceScrollRef = useRef<HTMLDivElement>(null);
@@ -29,8 +31,8 @@ export function useResultView(result: AnalysisResult) {
   const handledRequestRef = useRef(0);
 
   const view = useMemo(
-    () => buildResultView(result, activeCompetency, selection?.evidenceId ?? null),
-    [result, activeCompetency, selection?.evidenceId],
+    () => buildResultView(result, activeCriterionId, selection?.evidenceId ?? null),
+    [result, activeCriterionId, selection?.evidenceId],
   );
 
   // 근거를 고를 때마다(같은 근거를 다시 골라도) 원문 단만 해당 위치로 스크롤한다.
@@ -44,8 +46,8 @@ export function useResultView(result: AnalysisResult) {
     scrollSourceTo(container, selectedSectionRef.current, highlightRef.current);
   }, [selection]);
 
-  function selectTab(competency: Competency) {
-    setActiveCompetency(competency);
+  function selectTab(criterionId: string) {
+    setActiveCriterionId(criterionId);
     setSelection(null);
   }
 

@@ -1,9 +1,8 @@
-import type { AnalysisResult, Competency, Evidence } from "@/types/analysis";
-import { COMPETENCIES } from "./constants.ts";
+import type { AnalysisResult, Criterion, Evidence } from "@/types/analysis";
 
 // 결과 화면에 그릴 값을 만드는 순수 함수 모음. 화면 컴포넌트는 여기서 만든 값을 그리기만 한다.
 
-/** 원문 구간 종류: 일반 / 밑줄(현재 탭 역량의 인용 문장) / 강조(선택한 근거의 인용 문장) */
+/** 원문 구간 종류: 일반 / 밑줄(현재 탭 기준의 인용 구절) / 강조(선택한 근거의 인용 구절) */
 export type SegmentKind = "plain" | "underline" | "highlight";
 
 export type TextSegment = {
@@ -11,18 +10,20 @@ export type TextSegment = {
   text: string;
 };
 
-/** 원문에 표시할 인용 문장 하나 */
+/** 원문에 표시할 인용 구절 하나 */
 export type QuoteMark = {
   quote: string;
   kind: Exclude<SegmentKind, "plain">;
 };
 
-export type CompetencyCount = {
-  competency: Competency;
+export type CriterionCount = {
+  criterionId: string;
+  /** 기준 이름 */
+  name: string;
   count: number;
 };
 
-export type CompetencyTab = CompetencyCount & {
+export type CriterionTab = CriterionCount & {
   isActive: boolean;
 };
 
@@ -50,23 +51,29 @@ export type EvidenceCardView = {
 };
 
 export type ResultView = {
-  tabs: CompetencyTab[];
+  /** 학과 이름 */
+  department: string;
+  tabs: CriterionTab[];
   sections: SourceSectionView[];
   cards: EvidenceCardView[];
 };
 
-/** 역량별 근거 개수. COMPETENCIES 순서를 따른다. */
-export function countByCompetency(evidences: readonly Evidence[]): CompetencyCount[] {
-  return COMPETENCIES.map((competency) => ({
-    competency,
-    count: evidences.filter((evidence) => evidence.competency === competency).length,
+/** 기준별 근거 개수. 기준 목록(criteria) 순서를 따른다. */
+export function countByCriterion(
+  criteria: readonly Criterion[],
+  evidences: readonly Evidence[],
+): CriterionCount[] {
+  return criteria.map((criterion) => ({
+    criterionId: criterion.id,
+    name: criterion.name,
+    count: evidences.filter((evidence) => evidence.criterionId === criterion.id).length,
   }));
 }
 
 /**
  * 원문을 일반 / 밑줄 / 강조 구간으로 나눈다.
- * - 인용 문장이 원문에 없거나 비어 있으면 그 문장은 표시하지 않고 넘어간다.
- * - 인용 문장끼리 겹치면 강조를 먼저, 그다음은 먼저 온 것을 남기고 나머지는 넘어간다.
+ * - 인용 구절이 원문에 없거나 비어 있으면 그 구절은 표시하지 않고 넘어간다.
+ * - 인용 구절끼리 겹치면(같은 구절이 두 번 오는 경우 포함) 강조를 먼저, 그다음은 먼저 온 것을 남기고 나머지는 넘어간다.
  * 어떤 입력에도 예외를 던지지 않는다.
  */
 export function segmentText(text: string, marks: readonly QuoteMark[]): TextSegment[] {
@@ -102,21 +109,24 @@ export function segmentText(text: string, marks: readonly QuoteMark[]): TextSegm
   return segments;
 }
 
-/** 현재 탭과 선택한 근거를 반영해 결과 화면 전체에 그릴 값을 만든다. */
+/**
+ * 현재 탭과 선택한 근거를 반영해 결과 화면 전체에 그릴 값을 만든다.
+ * 탭은 result.criteria.criteria 순서대로 만든다. 기준이 하나도 없으면(activeCriterionId 가 null) 근거 카드도 없다.
+ */
 export function buildResultView(
   result: AnalysisResult,
-  activeCompetency: Competency,
+  activeCriterionId: string | null,
   selectedEvidenceId: string | null,
 ): ResultView {
   const activeEvidences = result.evidences.filter(
-    (evidence) => evidence.competency === activeCompetency,
+    (evidence) => evidence.criterionId === activeCriterionId,
   );
   const selectedEvidence =
     activeEvidences.find((evidence) => evidence.id === selectedEvidenceId) ?? null;
 
-  const tabs = countByCompetency(result.evidences).map((item) => ({
+  const tabs = countByCriterion(result.criteria.criteria, result.evidences).map((item) => ({
     ...item,
-    isActive: item.competency === activeCompetency,
+    isActive: item.criterionId === activeCriterionId,
   }));
 
   const sections = result.sections.map((section) => {
@@ -149,5 +159,5 @@ export function buildResultView(
     };
   });
 
-  return { tabs, sections, cards };
+  return { department: result.criteria.department, tabs, sections, cards };
 }
