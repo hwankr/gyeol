@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Area } from "@/components/Area";
 import { SERVICE_NAME } from "@/lib/constants";
 
@@ -26,6 +27,9 @@ export function UploadScreen({
   onStart,
   onViewSample,
 }: UploadScreenProps) {
+  /** 숨겨 둔 파일 입력. "파일 업로드" 버튼이 이 입력의 파일 선택 창을 연다. */
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   return (
     <main className="flex flex-col gap-3 p-3">
       <Area name="상단">
@@ -34,16 +38,27 @@ export function UploadScreen({
 
       <Area name="학생부 PDF 업로드" className="w-[720px]">
         <div className="flex flex-col gap-3">
-          <label className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
             <span>학생부 PDF 파일</span>
+            <button
+              type="button"
+              className="border border-neutral-500 px-3 py-1 disabled:border-neutral-300 disabled:text-neutral-400"
+              disabled={isAnalyzing}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              파일 업로드
+            </button>
+            {/* 브라우저 기본 파일 입력은 숨기고 위 버튼으로 연다. 고른 파일은 아래 "선택한 파일"에 표시한다. */}
             <input
               key={fileInputKey}
+              ref={fileInputRef}
               type="file"
               accept=".pdf,application/pdf"
+              hidden
               disabled={isAnalyzing}
               onChange={(event) => onSelectFile(event.target.files?.[0] ?? null)}
             />
-          </label>
+          </div>
 
           <p>선택한 파일: {fileName ?? "없음"}</p>
           {fileError && <p role="alert">{fileError}</p>}
