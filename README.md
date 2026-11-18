@@ -1,6 +1,6 @@
 # GYEOL
 
-GYEOL 은 학생부 서류평가 보조 서비스다. 지금은 화면 뼈대(와이어프레임) 단계다. 학생부 PDF 업로드 → 항목별 분리 → 학과별 평가 기준마다 근거 구절 추출 → 근거를 누르면 원문의 해당 위치로 이동하는 흐름을 확인하는 용도다.
+GYEOL 은 학생부 서류평가 보조 서비스다. 첫 화면인 로그인 화면(`/`)에는 디자인(색·글꼴·로고)이 들어갔고, 업로드·결과 화면은 아직 화면 뼈대(와이어프레임) 단계다. 학생부 PDF 업로드 → 항목별 분리 → 학과별 평가 기준마다 근거 구절 추출 → 근거를 누르면 원문의 해당 위치로 이동하는 흐름을 확인하는 용도다.
 AI 는 근거를 찾아 보여 주기만 하고 점수, 등급, 합격 가능성, 학생 간 우열은 판단하지 않는다. PDF 파싱은 `unpdf` 로 하고, 근거는 Claude API(`claude-opus-5-5`, 공식 SDK `@anthropic-ai/sdk`)로 찾는다.
 평가 기준은 두 가지다.
 
@@ -32,11 +32,19 @@ npx next start -p 3100      # 빌드한 것을 실행 (http://localhost:3100)
 
 `next dev`/`next start` 는 `.env.local` 을 자동으로 읽는다. 앞뒤 공백을 뺀 값이 비어 있으면 없는 것으로 본다.
 
-두 API(`/api/analyze`, `/api/criteria`)는 요청을 보낸 사람을 확인하지 않는다(접속 코드·로그인 없음). 주소를 아는 누구나 AI 를 부를 수 있으므로, 주소를 공개하지 않고 쓰고 사용량 제한은 API 키 쪽(Claude 콘솔의 사용 한도 등)에서 건다.
+두 API(`/api/analyze`, `/api/criteria`)는 요청을 보낸 사람을 확인하지 않는다(접속 코드·로그인 없음). 로그인 화면(`/`)은 계정을 고르는 모양만 있고 인증이 아니다(비밀번호·세션·쿠키 없음). 그 화면을 거치지 않아도 업로드·결과 화면과 두 API 를 쓸 수 있다. 주소를 아는 누구나 AI 를 부를 수 있으므로, 주소를 공개하지 않고 쓰고 사용량 제한은 API 키 쪽(Claude 콘솔의 사용 한도 등)에서 건다.
 
 ### 화면과 API
 
-- `/` 업로드 화면
+- `/` 로그인 화면 (디자인 적용): 왼쪽에 로고와 소개, 오른쪽 카드에 `대학`·`계정` 선택 목록과 `계속` 버튼이 있다.
+  - 목록은 `lib/loginAccounts.ts` 에서 읽어 그린다. 지금은 디자인에 적힌 값 하나씩(`영남대학교`, `홍길동 · 입학사정관`)이고 처음부터 선택돼 있다.
+  - `계속`(클릭, 초점이 있을 때 Enter·Space)을 누르면 `/upload` 로 이동한다. 화면의 JavaScript 가 준비된 뒤에는 새로고침 없이 이동하고(주소 `/upload`), 준비되기 전(HTML 을 받는 도중, JS 가 도착하기 전, hydration 도중)에는 브라우저의 기본 폼 제출로 `/upload` 문서로 이동한다(문서 이동, 주소 `/upload?`). 기다림 표시는 없다.
+  - 폼은 보통 HTML 폼(GET, `action="/upload"`, `next/form`)이라 버튼이 보이는 어느 순간에 눌러도 업로드 화면에 도착한다. 선택 목록에는 `name` 이 없어 고른 값은 주소에 실리지 않는다.
+  - 실제 로그인이 아니다. 비밀번호·인증·세션·쿠키가 없고, 고른 대학·계정은 어디에도(localStorage·sessionStorage·쿠키·주소·API) 저장하거나 보내지 않는다. 업로드·결과 화면은 이 값을 쓰지 않고, 주소로 바로 들어와도 막지 않는다.
+  - `1 / 3 · 계정 선택` 은 디자인 문구 그대로다. 2·3 단계 화면은 없다.
+  - 화면 폭에 맞춰 늘고 줄며(좁으면 두 덩어리가 위아래로 쌓인다) 최소 폭 제한이 없다. 내용이 화면보다 길면 문서가 세로로 스크롤된다.
+  - 업로드·결과 화면은 이 화면과 달리 데스크톱 전용 껍데기(`app/(workspace)/layout.tsx`: 화면 높이 고정, 최소 폭 1280px, 안쪽 영역만 스크롤) 안에 있다.
+- `/upload` 업로드 화면
   - "평가 기준" 영역
     - "학과 선택" 목록: 코드에 적힌 학과(경영학과) → 저장한 학과(저장한 순서) → `새 학과 기준 만들기`. 처음에는 경영학과를 고른다.
     - 경영학과나 저장한 학과를 고르면 그 학과의 기준 목록(이름: 설명)을 읽기 전용으로 보여 준다. 저장한 학과를 골랐을 때만 `이 학과 삭제` 버튼이 보이고, 누르면 확인 창 없이 지운 뒤 경영학과로 돌아간다.
@@ -48,7 +56,7 @@ npx next start -p 3100      # 빌드한 것을 실행 (http://localhost:3100)
   - "학생부 PDF 업로드" 영역: PDF 를 고르고 "분석 시작": 파싱하고 Claude API 로 근거를 찾아 결과 화면으로 이동한다. 코드에 적힌 학과는 `criteriaId`, 저장한 학과는 그 기준 묶음(`criteria`)을 보낸다. 저장한 학과는 누른 순간 저장소를 다시 읽은 목록에서 찾아 그 값을 보낸다. 다른 탭에서 지워져 찾을 수 없으면 요청하지 않고 선택을 경영학과로 돌린 뒤 `선택한 학과 기준이 삭제되어 찾을 수 없습니다. 학과를 다시 선택해 주세요.` 를 보여 준다(고른 파일은 그대로). 실패하면 서버가 준 문구(키 없음, AI 호출 실패 등)를 그대로 보여 준다. 10MB 를 넘는 파일은 고를 때 걸러 낸다.
   - "샘플 데이터로 보기": API 를 부르지 않고 미리 만든 결과(`lib/mock/sample-result.json`)를 바로 연다. 학과 선택·초안과 상관없다.
   - 결과 화면으로 갔다가 돌아오면 업로드 화면은 처음 상태다(선택은 경영학과, 입력값·초안·오류 문구 없음). 진행 중인 분석·기준 생성 요청은 취소된다. 저장한 학과는 그대로 남는다.
-- `/result` 분석 결과 화면: 상단에 학과 이름, 왼쪽 학생부 원문, 오른쪽 기준별 근거(탭은 그 학과의 기준 순서). 탭 줄과 근거 카드 목록 사이에 선택한 탭 기준의 설명(`기준 설명: …`)을 보여 준다. 카드 목록은 남은 높이를 쓰고 그 안에서 스크롤되며, 탭 줄과 기준 설명이 길어 카드 목록을 최소 높이(8rem)로도 담을 수 없으면 오른쪽 단 전체가 세로로 스크롤된다. 근거를 누르면 원문 단이 해당 위치로 스크롤되고 인용 구절이 강조된다. 결과는 브라우저 sessionStorage 에 저장된다.
+- `/result` 분석 결과 화면: 상단에 학과 이름, 왼쪽 학생부 원문, 오른쪽 기준별 근거(탭은 그 학과의 기준 순서). 탭 줄과 근거 카드 목록 사이에 선택한 탭 기준의 설명(`기준 설명: …`)을 보여 준다. 카드 목록은 남은 높이를 쓰고 그 안에서 스크롤되며, 탭 줄과 기준 설명이 길어 카드 목록을 최소 높이(8rem)로도 담을 수 없으면 오른쪽 단 전체가 세로로 스크롤된다. 근거를 누르면 원문 단이 해당 위치로 스크롤되고 인용 구절이 강조된다. 결과는 브라우저 sessionStorage 에 저장된다. 상단의 `다른 학생부 업로드`, 결과 없이 열었을 때 나오는 `업로드 화면으로 이동` 은 `/upload` 로 간다.
 - `POST /api/criteria`: 학과 이름과 문장으로 평가 기준 초안을 만든다. 아무것도 저장하지 않는다. 본문은 JSON(`application/json`) `{ "department": string, "sourceText": string }`.
   성공하면 200 `{ "criteria": [{ "id", "name", "description" }], "warnings": string[] }`, 오류는 모두 `{ "error": "<문구>" }` 를 돌려준다.
   - 받은 기준은 서버가 정리한다(`lib/criteria/normalize.ts` 의 `normalizeCriteria`): 이름·설명이 문자열이 아니거나 앞뒤 공백을 뺀 뒤 비면 버리고, 이름은 30자·설명은 300자로 자르고, 앞에서 6개까지만 남기고, id 를 `c1`, `c2` … 로 다시 붙인다. 경고는 문자열만 남겨 한 건 300자·최대 10건으로 자른다.
@@ -82,6 +90,14 @@ npx next start -p 3100      # 빌드한 것을 실행 (http://localhost:3100)
   10MB 는 앱의 제한이다. Vercel 에 배포하면 플랫폼의 요청 본문 한도(4.5MB, multipart 포함)가 먼저 적용되어, 그보다 큰 PDF 는 앱에 닿기 전에 413 으로 막힌다.
   이때 응답에 앱의 문구가 없으므로 업로드 화면은 `파일이 너무 커서 서버가 받지 못했습니다. 더 작은 PDF 로 다시 시도해 주세요.` 를 보여 준다. 앱이 직접 돌려주는 10MB 초과 413 은 이 문구가 아니라 `파일이 너무 큽니다. 10MB 이하의 PDF 만 올릴 수 있습니다.` 를 보여 주므로, 화면 문구로 어느 쪽(앱 / 플랫폼)이 막았는지 구별할 수 있다.
   배포 환경에서 4.5MB 보다 큰 PDF 를 받으려면 업로드 경로를 바꿔야 한다(예: 저장소로 직접 업로드한 뒤 서버가 다시 검사). 후속 과제다.
+
+### 로그인 화면 글꼴과 배경 무늬
+
+- 웹 글꼴은 로그인 화면만 쓴다: 본문 Pretendard(굵기 300·400·700, `fonts/pretendard/`), 로고 글자 `Gyeol` 의 Mulish(굵기 500, 라틴 글자, `fonts/mulish/`). 대체 순서는 Pretendard → Apple SD Gothic Neo → Malgun Gothic → sans-serif, 로고 글자는 Mulish → sans-serif 다.
+- 두 글꼴 모두 SIL Open Font License 1.1 이고, 라이선스 원문은 글꼴 파일과 같은 폴더의 `LICENSE` 에 있다.
+- `next/font/local` 로 불러온다(`components/loginFonts.ts`, `font-display: swap`). 파일이 저장소에 있으므로 빌드·실행에 외부 글꼴 서버가 필요 없다. 미리 불러오기는 작은 Mulish 만 켜고, 파일 하나가 약 760KB 인 Pretendard 는 끈다.
+- 업로드·결과 화면은 웹 글꼴을 쓰지 않는다(와이어프레임 규칙). 두 화면을 새로 열면 글꼴 파일을 내려받지 않는다.
+- 배경 무늬 타일(75×260)은 `public/login-pattern.svg` 이다.
 
 ### 저장한 학과 (localStorage)
 
@@ -144,18 +160,25 @@ Claude API 를 한 번 부르므로 비용이 든다(가상 학생부 기준 약
 
 ```text
 app/
-  layout.tsx              공통 레이아웃 (lang="ko", 문서 제목, 화면 높이 고정)
-  page.tsx                업로드 화면 연결부 (useUpload → UploadScreen)
-  result/page.tsx         결과 화면 연결부 (useStoredResult, useResultView → ResultScreen)
+  layout.tsx              루트 레이아웃 (lang="ko", 문서 제목). 모든 화면이 같이 쓰는 것만 둔다
+  page.tsx                로그인 화면 연결부 (useLogin → LoginScreen)
+  (workspace)/            업로드·결과 화면 묶음 (라우트 그룹이라 주소에는 나타나지 않는다)
+    layout.tsx            업로드·결과 화면 껍데기 (화면 높이 고정, 최소 폭 1280px, 안쪽 영역만 스크롤)
+    upload/page.tsx       업로드 화면 연결부 (useUpload → UploadScreen)
+    result/page.tsx       결과 화면 연결부 (useStoredResult, useResultView → ResultScreen)
   api/analyze/route.ts    POST /api/analyze (파일 확인 → 학과 기준(criteriaId 또는 criteria) → parsePdf → blind → extractEvidence)
   api/criteria/route.ts   POST /api/criteria (입력 확인 → generateCriteria)
 components/               화면 컴포넌트. props 를 그리고 콜백만 호출한다 (디자인은 여기만 고치면 된다)
+  LoginScreen.tsx         로그인 화면 (로고·소개, 대학·계정 선택, 계속 = next/form 의 GET 폼으로 /upload 이동). 치수·색·글자는 디자인 값 그대로
+  GyeolLogo.tsx           로그인 화면 로고 (곡선 세 개 무늬 SVG + 로고 글자 "Gyeol")
+  loginFonts.ts           로그인 화면 글꼴 (next/font/local: Pretendard, Mulish)
   Area.tsx                영역 상자 (1px 회색 테두리 + "영역: 이름")
   UploadScreen.tsx        업로드 화면 (학과 선택·삭제, 기준 목록, 예시, 파일)
   NewDepartmentForm.tsx   "새 학과 기준 만들기" (학과 이름·문장 입력, 기준 만들기, 초안 고치기, 확정)
   CriteriaExamples.tsx    "기준 문장 예시" 영역 (예시 문장과 "이 예시 넣기" 버튼)
   ResultScreen.tsx        결과 화면(탭별 기준 설명 포함), 결과 없음 안내
 hooks/                    화면 상태
+  useLogin.ts             로그인 화면: 대학·계정 선택, 계속이 가는 주소(/upload) 정하기 (이동은 화면의 폼이 한다). 고른 값은 저장하지 않는다
   useUpload.ts            학과 선택·삭제·확정 저장, 파일 선택·분석 요청·결과 저장 후 이동
   useCriteriaDraft.ts     새 학과 기준 만들기: 입력값, 기준 생성 요청, 초안 고치기, 확정할 값 만들기
   useSavedDepartments.ts  localStorage 의 저장한 학과 읽기 (hydration 안전)
@@ -163,6 +186,7 @@ hooks/                    화면 상태
   useResultView.ts        현재 탭(기준), 선택한 근거, 원문 단 스크롤
 lib/
   constants.ts            서비스명, sessionStorage·localStorage 키
+  loginAccounts.ts        로그인 화면의 대학·계정 목록 (디자인에 적힌 값 하나씩)
   criteria/               학과별 평가 기준 (화면과 서버가 같이 쓴다)
     business.ts           경영학과 기준 (임시 값)
     index.ts              코드에 적힌 학과 목록, id 로 찾기
@@ -187,6 +211,11 @@ lib/
     extractEvidence.ts    근거 추출 (Claude API)
     generateCriteria.ts   학과 기준 초안 생성 (Claude API)
     locateQuote.ts        AI 가 인용한 구절을 원문에서 찾기 (제공받은 검증된 코드, 고치지 않는다)
+fonts/                    로그인 화면 글꼴 파일 (SIL OFL 1.1, 라이선스 원문은 각 폴더의 LICENSE)
+  pretendard/             Pretendard 300·400·700 (woff2), LICENSE
+  mulish/                 Mulish 500 라틴 글자 (woff2), LICENSE
+public/
+  login-pattern.svg       로그인 화면 배경 무늬 타일 (75×260)
 samples/
   virtual-student-record.pdf  가상(합성) 학생부 PDF, 12쪽. 실제 인물·학교가 아니다
 scripts/

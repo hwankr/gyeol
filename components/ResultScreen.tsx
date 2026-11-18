@@ -48,7 +48,7 @@ export function ResultScreen({
             <h1 className="text-lg font-bold">{SERVICE_NAME}</h1>
             <p className="min-w-0 [overflow-wrap:anywhere]">학과: {department}</p>
           </div>
-          <Link href="/" className="shrink-0 underline">
+          <Link href="/upload" className="shrink-0 underline">
             다른 학생부 업로드
           </Link>
         </div>
@@ -137,7 +137,7 @@ export function NoResultScreen() {
     <main className="p-3">
       <Area name="안내">
         <p className="mb-2">분석 결과가 없습니다.</p>
-        <Link href="/" className="underline">
+        <Link href="/upload" className="underline">
           업로드 화면으로 이동
         </Link>
       </Area>

@@ -13,7 +13,7 @@ type Selection = {
 
 /**
  * 결과 화면 상태: 현재 탭(기준 id), 선택한 근거, 원문 단 스크롤.
- * 새로 저장한 결과마다 이 훅을 쓰는 컴포넌트가 새로 그려지므로(app/result/page.tsx 의 key) 처음 상태로 시작한다.
+ * 새로 저장한 결과마다 이 훅을 쓰는 컴포넌트가 새로 그려지므로(app/(workspace)/result/page.tsx 의 key) 처음 상태로 시작한다.
  */
 export function useResultView(result: AnalysisResult) {
   /** 현재 탭의 기준 id. 처음에는 첫 번째 기준. 기준이 하나도 없으면 null. */

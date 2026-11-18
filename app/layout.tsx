@@ -10,10 +10,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="ko">
-      {/* 문서 전체는 화면 높이에 고정하고 아래 영역만 스크롤한다. 결과 화면은 이 안에서 두 단이 각자 스크롤한다. */}
-      <body className="flex h-screen min-w-[1280px] flex-col overflow-hidden bg-white text-black">
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-      </body>
+      {/*
+        모든 화면이 같이 쓰는 것만 둔다. 화면 높이 고정·최소 폭(데스크톱 전용) 껍데기는 업로드·결과 화면만 쓰므로
+        app/(workspace)/layout.tsx 에 있다. 로그인 화면(/)은 화면 폭에 맞춰 늘고 줄며 내용이 길면 문서가 스크롤된다.
+        루트 레이아웃을 둘로 나누면 화면 사이 이동이 새로고침이 되므로 하나로 둔다.
+      */}
+      <body className="bg-white text-black">{children}</body>
     </html>
   );
 }

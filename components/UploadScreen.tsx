@@ -41,7 +41,7 @@ type UploadScreenProps = {
   onViewSample: () => void;
 };
 
-/** 업로드 화면 (/) */
+/** 업로드 화면 (/upload) */
 export function UploadScreen({
   departments,
   criteriaId,

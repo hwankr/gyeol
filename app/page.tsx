@@ -1,9 +1,9 @@
 "use client";
 
-import { UploadScreen } from "@/components/UploadScreen";
-import { useUpload } from "@/hooks/useUpload";
+import { LoginScreen } from "@/components/LoginScreen";
+import { useLogin } from "@/hooks/useLogin";
 
-export default function UploadPage() {
-  const upload = useUpload();
-  return <UploadScreen {...upload} />;
+export default function LoginPage() {
+  const login = useLogin();
+  return <LoginScreen {...login} />;
 }
