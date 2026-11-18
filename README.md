@@ -1,7 +1,8 @@
 # GYEOL
 
-GYEOL 은 학생부 서류평가 보조 서비스다. 지금은 화면 뼈대(와이어프레임) 단계다. 학생부 PDF 업로드 → 항목별 분리 → 학과별 평가 기준마다 근거 구절 추출 → 근거를 누르면 원문의 해당 위치로 이동하는 흐름을 확인하는 용도다.
+GYEOL 은 학생부 서류평가 보조 서비스다. 지금은 화면 뼈대(와이어프레임) 단계다. 학생부 PDF 업로드 → 항목별 분리 → 식별 정보 가리기(블라인드 처리) → 학과별 평가 기준마다 근거 구절 추출 → 근거를 누르면 원문의 해당 위치로 이동하는 흐름을 확인하는 용도다.
 AI 는 근거를 찾아 보여 주기만 하고 점수, 등급, 합격 가능성, 학생 간 우열은 판단하지 않는다. PDF 파싱은 `unpdf` 로 하고, 근거는 Claude API(`claude-opus-5-5`, 공식 SDK `@anthropic-ai/sdk`)로 찾는다.
+지원자를 식별할 수 있는 정보(이름, 학교명 등)는 AI 에 보내기 전, 그리고 화면에 보내기 전에 서버에서 규칙으로 가린다(`lib/pipeline/blind.ts`, 아래 "블라인드 처리"). AI 와 화면은 가려진 원문만 받는다.
 평가 기준은 두 가지다.
 
 - 코드에 적힌 학과: `lib/criteria/` 에 둔다. 지금은 경영학과 하나(임시 값)다. 삭제할 수 없다.
@@ -46,9 +47,12 @@ npx next start -p 3100      # 빌드한 것을 실행 (http://localhost:3100)
     - `새 학과 기준 만들기`를 고른 동안에는 `분석 시작`을 누를 수 없고 `기준을 확정한 뒤 분석을 시작할 수 있습니다.` 를 보여 준다. 초안은 `/api/analyze` 로 보내지 않는다. 다른 학과를 골랐다가 돌아오면 입력한 값과 초안이 그대로 있다(이 화면이 보이는 동안).
   - "기준 문장 예시" 영역("평가 기준" 오른쪽): 예시 학과(지금은 컴퓨터공학과 하나)의 학과 이름과 문장을 보여 준다. `이 예시 넣기`를 누르면 `새 학과 기준 만들기`가 선택되고 학과 이름·문장 입력란에 그 예시가 채워진다(이미 적은 값은 바뀌고, 이미 만든 초안은 그대로다). AI 는 부르지 않으며 `기준 만들기`는 직접 누른다. 분석 중이거나 기준을 만드는 중에는 누를 수 없다. 예시는 `lib/criteria/examples.ts` 에 있고, 써 보려고 지어낸 문장이다(실제 대학의 기준이 아니다).
   - "학생부 PDF 업로드" 영역: PDF 를 고르고 "분석 시작": 파싱하고 Claude API 로 근거를 찾아 결과 화면으로 이동한다. 코드에 적힌 학과는 `criteriaId`, 저장한 학과는 그 기준 묶음(`criteria`)을 보낸다. 저장한 학과는 누른 순간 저장소를 다시 읽은 목록에서 찾아 그 값을 보낸다. 다른 탭에서 지워져 찾을 수 없으면 요청하지 않고 선택을 경영학과로 돌린 뒤 `선택한 학과 기준이 삭제되어 찾을 수 없습니다. 학과를 다시 선택해 주세요.` 를 보여 준다(고른 파일은 그대로). 실패하면 서버가 준 문구(키 없음, AI 호출 실패 등)를 그대로 보여 준다. 10MB 를 넘는 파일은 고를 때 걸러 낸다.
-  - "샘플 데이터로 보기": API 를 부르지 않고 미리 만든 결과(`lib/mock/sample-result.json`)를 바로 연다. 학과 선택·초안과 상관없다.
+  - "샘플 데이터로 보기": API 를 부르지 않고 미리 만든 결과(`lib/mock/sample-result.json`)를 바로 연다. 학과 선택·초안과 상관없다. 이 결과도 블라인드 처리된 원문과 처리 내역(`인적·학적사항 5곳, 학교명 12곳`)을 담고 있다.
   - 결과 화면으로 갔다가 돌아오면 업로드 화면은 처음 상태다(선택은 경영학과, 입력값·초안·오류 문구 없음). 진행 중인 분석·기준 생성 요청은 취소된다. 저장한 학과는 그대로 남는다.
-- `/result` 분석 결과 화면: 상단에 학과 이름, 왼쪽 학생부 원문, 오른쪽 기준별 근거(탭은 그 학과의 기준 순서). 탭 줄과 근거 카드 목록 사이에 선택한 탭 기준의 설명(`기준 설명: …`)을 보여 준다. 카드 목록은 남은 높이를 쓰고 그 안에서 스크롤되며, 탭 줄과 기준 설명이 길어 카드 목록을 최소 높이(8rem)로도 담을 수 없으면 오른쪽 단 전체가 세로로 스크롤된다. 근거를 누르면 원문 단이 해당 위치로 스크롤되고 인용 구절이 강조된다. 결과는 브라우저 sessionStorage 에 저장된다.
+- `/result` 분석 결과 화면: 상단에 학과 이름, 왼쪽 학생부 원문(영역 이름 `학생부 원문 (블라인드 처리됨)`), 오른쪽 기준별 근거(탭은 그 학과의 기준 순서). 탭 줄과 근거 카드 목록 사이에 선택한 탭 기준의 설명(`기준 설명: …`)을 보여 준다. 카드 목록은 남은 높이를 쓰고 그 안에서 스크롤되며, 탭 줄과 기준 설명이 길어 카드 목록을 최소 높이(8rem)로도 담을 수 없으면 오른쪽 단 전체가 세로로 스크롤된다. 근거를 누르면 원문 단이 해당 위치로 스크롤되고 인용 구절이 강조된다. 결과는 브라우저 sessionStorage 에 저장된다.
+  - 원문 영역 맨 위(원문 스크롤 상자 밖)에 `블라인드 처리 내역: <종류> <수>곳, …` 한 줄을 보여 준다(예: `블라인드 처리 내역: 인적·학적사항 5곳, 학교명 12곳`). 결과의 `masks` 를 받은 순서대로 쓰고(가린 곳 수가 1 이상인 것만), 가린 것이 없으면 `블라인드 처리 내역: 가린 정보 없음`. 원문을 스크롤해도 이 줄은 제자리에 있다.
+  - 가려진 자리는 본문에 `[블라인드]`, `[이름]`, `[학교명]` 같은 글자로 들어 있고 그대로 보인다. 따로 표시하거나 원래 값을 보여 주는 기능은 없다(원래 값은 결과에 없다).
+  - sessionStorage 의 결과에 `masks` 가 없으면(블라인드 처리를 거치지 않은 예전 결과) 그리지 않고 `분석 결과가 없습니다.` 안내를 보여 준다.
 - `POST /api/criteria`: 학과 이름과 문장으로 평가 기준 초안을 만든다. 아무것도 저장하지 않는다. 본문은 JSON(`application/json`) `{ "department": string, "sourceText": string }`.
   성공하면 200 `{ "criteria": [{ "id", "name", "description" }], "warnings": string[] }`, 오류는 모두 `{ "error": "<문구>" }` 를 돌려준다.
   - 받은 기준은 서버가 정리한다(`lib/criteria/normalize.ts` 의 `normalizeCriteria`): 이름·설명이 문자열이 아니거나 앞뒤 공백을 뺀 뒤 비면 버리고, 이름은 30자·설명은 300자로 자르고, 앞에서 6개까지만 남기고, id 를 `c1`, `c2` … 로 다시 붙인다. 경고는 문자열만 남겨 한 건 300자·최대 10건으로 자른다.
@@ -60,7 +64,10 @@ npx next start -p 3100      # 빌드한 것을 실행 (http://localhost:3100)
   | 400 | 학과 이름이 없음(`학과 이름을 입력해 주세요.`), 50자 초과(`학과 이름은 50자 이하로 입력해 주세요.`), 문장이 없음(`학과가 보고 싶은 점을 문장으로 입력해 주세요.`), 2,000자 초과(`문장은 2,000자 이하로 입력해 주세요.`). 길이는 앞뒤 공백을 뺀 값으로 재고, 넘으면 잘라서 보내지 않고 거부한다. |
   | 502 | 기준 생성 실패: `AI_API_KEY` 없음, AI 호출 실패, 60초 초과, AI 거절, 잘린 응답, 응답 해석 실패 |
 
-- `POST /api/analyze`: `multipart/form-data` 로 받는다. 성공하면 `AnalysisResult` JSON(`criteria`, `sections`, `evidences`), 오류는 모두 `{ "error": "<문구>" }` 를 돌려준다. 응답의 `criteria` 는 실제로 쓴 기준(정리된 값)이다.
+- `POST /api/analyze`: `multipart/form-data` 로 받는다. 성공하면 `AnalysisResult` JSON(`criteria`, `sections`, `evidences`, `masks`), 오류는 모두 `{ "error": "<문구>" }` 를 돌려준다. 응답의 `criteria` 는 실제로 쓴 기준(정리된 값)이다.
+  `sections` 는 블라인드 처리를 거친 항목이고(가리기 전 원문은 응답·서버 로그·오류 문구·AI 요청 어디에도 넣지 않는다), `evidences` 의 `quote` 는 가려진 원문 안에 글자 그대로 있다.
+  `masks` 는 블라인드 처리 내역 `{ "type": string, "count": number }[]` 이다. 가린 정보 종류와 가린 곳 수이며, `blind` 가 처음 센 순서대로 온다. 가린 것이 없으면 `[]`.
+  예(가상 학생부): `"masks": [{ "type": "인적·학적사항", "count": 5 }, { "type": "학교명", "count": 12 }]`
 
   | 필드 | 내용 |
   | --- | --- |
@@ -76,6 +83,9 @@ npx next start -p 3100      # 빌드한 것을 실행 (http://localhost:3100)
   | 400 | 학과 기준: `criteriaId`·`criteria` 둘 다 없음 또는 `criteriaId` 가 목록에 없음(`학과를 선택해 주세요.`), 둘 다 있음(`criteriaId 와 criteria 중 하나만 보내 주세요.`), `criteria` 가 문자열이 아니거나 20,000자를 넘거나 JSON 이 아니거나 형식이 틀림(`학과 기준 형식이 올바르지 않습니다.`), 정리한 뒤 기준이 0개(`평가 기준이 없습니다. 기준을 1개 이상 넣어 주세요.`) |
   | 400 | PDF 파싱 실패 (한국어 문구. 파서의 한국어 안내는 그대로, 손상된 PDF·암호가 걸린 PDF 처럼 PDF 라이브러리가 영어로 알리는 오류는 한국어 문구로 바꿔 돌려주고 원래 원인은 서버 로그에 남긴다) |
   | 502 | 근거 추출 실패: `AI_API_KEY` 없음, AI 호출 실패, 60초 초과, AI 거절, 잘린 응답, 응답 해석 실패 |
+  | 502 | 블라인드 처리·근거 추출 중 예상하지 못한 오류(`분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.`. 원인은 서버 로그에만 남긴다) |
+
+  파싱에 성공하면 블라인드 처리(`blind`)를 한 뒤 근거 추출을 한다. 블라인드 처리는 규칙으로만 가리므로 정상이라면 실패하지 않는다.
 
   `criteria` 의 `DepartmentCriteria` 확인(`lib/criteria/normalize.ts` 의 `checkDepartmentCriteria`): `id` 는 앞뒤 공백을 뺀 길이 1~64, `department` 는 1~50, `sourceText` 는 0~2,000자의 문자열이고 `criteria` 는 배열이어야 한다. 분석은 받은 기준을 그대로 쓰며 기준을 다시 만들지 않고 `sourceText` 를 AI 에 보내지 않는다(분석 한 번에 AI 호출은 근거 추출 1회).
 
@@ -98,6 +108,26 @@ npx next start -p 3100      # 빌드한 것을 실행 (http://localhost:3100)
 ### AI 호출 공용 모듈 (`lib/pipeline/claude.ts`)
 
 근거 추출과 기준 생성이 같이 쓴다. 클라이언트 생성(`maxRetries: 0`, SDK 로그 끔), 60초 제한(응답 본문 수신까지 합쳐서, 재시도 없음), `output_config.effort` 명시, structured outputs(`output_config.format`, JSON schema), 스트리밍 없음, `stop_reason` 확인(거절·잘린 응답), 글 블록을 JSON 으로 읽기, 오류 분류(시간 초과·키 인증 실패·호출 한도·연결 실패·응답 해석 실패)와 서버 로그를 한곳에서 한다. 실패하면 화면에 보여 줄 한국어 문구를 담은 `AiCallError` 를 던지고, API 라우트는 이것을 502 로 바꾼다. 로그에는 개수·시간·상태·토큰 수만 남긴다.
+
+### 블라인드 처리 (`lib/pipeline/blind.ts`)
+
+- 지원자를 식별할 수 있는 정보를 규칙(정규식)으로 찾아 가린다. 서버에서 PDF 파싱 바로 뒤, AI 호출과 응답보다 먼저 실행한다(`parsePdf` → `blind` → `extractEvidence`). 근거 추출과 응답에는 `blind` 가 돌려준 가려진 항목만 쓰므로, 근거의 `quote` 도 가려진 원문과 글자 그대로 맞는다.
+- 제공받은 검증된 코드다. 규칙(정규식, 가리는 대상, 표시 글자, 세는 방식)은 고치지 않는다. 가려지지 않는 것이 보이면 고치지 않고 알린다.
+- 시그니처: `blind(sections)` → `{ sections, masks }`(동기 함수). `masks` 는 `{ type, count }[]` 이다.
+- 가리는 것과 바뀌는 글자 (`masks` 의 `type`)
+
+  | 대상 | 바뀌는 글자 | `type` |
+  | --- | --- | --- |
+  | 인적·학적사항 항목의 값 전체 (줄마다 `항목 이름: [블라인드]`, 한 줄을 한 곳으로 센다) | `[블라인드]` | `인적·학적사항` |
+  | 인적·학적사항에서 읽은 학생 이름이 다른 항목에 나온 곳 | `[이름]` | `이름` |
+  | 학교 이름 (○○고등학교, ○○중학교, ○○초등학교. `일반고등학교`처럼 학교 종류를 가리키는 말은 그대로 둔다) | `[학교명]` | `학교명` |
+  | 대학 이름 (○○대학교. `국립대학교`처럼 종류를 가리키는 말은 그대로 둔다) | `[대학명]` | `대학명` |
+  | 주민등록번호 모양의 숫자 | `[주민등록번호]` | `주민등록번호` |
+  | 전화번호 모양의 숫자 | `[전화번호]` | `전화번호` |
+
+- 가리지 못하는 것: 축제명, 기숙사명, 교사 이름, 기업·기관명처럼 문맥을 봐야 아는 것. 원래 값은 결과에 남지 않으며, 가린 내용을 다시 보여 주는 기능은 없다.
+- 이미 가린 항목에 다시 적용하면 본문은 그대로이고 `masks` 는 빈 배열이 된다(같은 자리를 다시 세지 않는다).
+- 가상 학생부(`samples/virtual-student-record.pdf`)에서는 `인적·학적사항 5`, `학교명 12` 를 가린다(`s1` 과 봉사활동실적 `s15`~`s17`).
 
 ### 근거 추출 (`lib/pipeline/extractEvidence.ts`)
 
@@ -122,12 +152,31 @@ npx tsc --noEmit     # 타입 검사
 npm run lint         # ESLint
 npm run check:mock   # 샘플 데이터 검사 (필드 형식, 모든 quote 가 해당 항목 text 안에 글자 그대로 있는지 등)
 npx tsx scripts/check-parse.ts   # 가상 학생부 PDF 파싱 검사 (다른 PDF 는 경로를 인자로 준다)
+npx tsx scripts/check-blind.ts   # 가상 학생부 블라인드 처리 검사 (이름·학교명이 남아 있지 않은지)
 ```
 
 `npx tsx scripts/check-parse.ts` 는 첫 줄에 `파싱 성공: 항목 57개, 경고 0개 (samples/virtual-student-record.pdf)` 를 출력하고, 이어서 항목별 개수와 경고 목록을 출력한다.
 파싱에 실패하면(예: 이미지로 된 PDF) 오류 문구를 출력하고 종료 코드 1 로 끝난다. `tsx` 는 프로젝트 의존성이 아니라 `npx` 로 그때그때 받는다. `node scripts/check-parse.ts` 로도 같은 결과가 나온다.
 
-`check:mock` 은 새 의존성 없이 Node 의 타입 제거 실행으로 `scripts/checkMock.ts` 를 바로 실행한다(`check-parse.ts`, `make-sample.ts` 도 Node 로 바로 돌 수 있게 같은 규칙을 따른다).
+`npx tsx scripts/check-blind.ts` 는 가상 학생부를 `parsePdf` → `blind` 로 돌려, 결과 전체(가린 항목과 `masks` 를 JSON 문자열로 만든 것)에 이 가상 학생부의 이름 `김민준` 과 학교명 `가상고등학교` 가 남아 있지 않은지 확인한다. 인자는 받지 않는다. 출력은 아래와 같다(가리기 전 개수는 검사가 헛돌지 않았음을 보여 준다).
+
+```text
+항목 57개 (samples/virtual-student-record.pdf)
+
+가리기 전 → 가린 뒤 (결과 전체에서 찾은 곳 수):
+- 김민준: 1곳 → 0곳
+- 가상고등학교: 14곳 → 0곳
+
+masks 2종:
+- 인적·학적사항 5
+- 학교명 12
+
+블라인드 검사 통과: 가린 뒤 결과에 "김민준", "가상고등학교" 이(가) 없음
+```
+
+남아 있으면 어느 문자열이 어느 항목 id 에 남았는지 출력하고 종료 코드 1, PDF 를 읽지 못하거나 파싱에 실패해도 종료 코드 1 로 끝난다. `masks` 의 값은 출력만 하고 판정하지 않는다. `node scripts/check-blind.ts` 로도 같은 결과가 나온다.
+
+`check:mock` 은 새 의존성 없이 Node 의 타입 제거 실행으로 `scripts/checkMock.ts` 를 바로 실행한다(`check-parse.ts`, `check-blind.ts`, `make-sample.ts`, `blind-sample.ts` 도 Node 로 바로 돌 수 있게 같은 규칙을 따른다).
 그래서 `lib/` 안의 모듈끼리 값을 가져올 때는 `./constants.ts` 처럼 상대 경로에 `.ts` 확장자를 붙인다(`import type` 은 `@/` 경로를 써도 된다).
 
 ## 샘플 데이터 다시 만들기
@@ -136,9 +185,20 @@ npx tsx scripts/check-parse.ts   # 가상 학생부 PDF 파싱 검사 (다른 PD
 npm run make:sample
 ```
 
-저장소 루트에서 실행한다. 가상 학생부 PDF(`samples/virtual-student-record.pdf`)를 경영학과 기준으로 실제 파이프라인(`parsePdf` → `blind` → `extractEvidence`)에 한 번 돌려 `lib/mock/sample-result.json` 에 저장한다.
+저장소 루트에서 실행한다. 가상 학생부 PDF(`samples/virtual-student-record.pdf`)를 경영학과 기준으로 실제 파이프라인(`parsePdf` → `blind` → `extractEvidence`)에 한 번 돌려 `lib/mock/sample-result.json` 에 저장한다. 저장하는 결과는 가려진 항목과 블라인드 처리 내역(`masks`)을 담는다.
 Claude API 를 한 번 부르므로 비용이 든다(가상 학생부 기준 약 16~17초). `AI_API_KEY` 가 프로세스 환경에 없으면 `.env.local` 을 읽어 온다. 저장 전에 결과를 검사해 문제가 있으면 저장하지 않고 종료 코드 1 로 끝난다.
 출력은 항목 수, 근거 통과·버림 개수, 기준별 근거 수, 걸린 시간이다. `npx tsx scripts/make-sample.ts` 로도 같은 결과가 나온다. `sample-result.json` 은 손으로 고치지 않는다.
+
+지금 커밋된 `sample-result.json` 은 블라인드 처리를 넣기 전에 `make:sample` 로 만든 결과에, AI 를 다시 부르지 않고 `scripts/blind-sample.ts` 로 블라인드 처리를 적용한 것이다(근거는 그대로).
+
+```text
+npx tsx scripts/blind-sample.ts   # node scripts/blind-sample.ts 로도 돈다
+```
+
+- 한 번 실행하는 스크립트다. `sample-result.json` 의 `sections` 에 `blind` 를 적용하고 `masks` 를 더해(`{ criteria, sections, evidences, masks }`) 그 자리에 저장한다. `criteria` 와 `evidences` 는 바꾸지 않는다.
+- 저장 전에 결과를 검사하고(`isAnalysisResult`, `validateResult`: 모든 근거의 `quote` 가 해당 항목 `text` 에 글자 그대로 있는지 등) 문제가 있으면 저장하지 않고 종료 코드 1 로 끝난다. 저장한 뒤 파일을 다시 읽어 같은 검사를 한 번 더 하고, 근거 수와 `masks`, 요약을 출력한다.
+- 이미 `masks` 가 있는 파일(이미 블라인드 처리된 파일)이면 가리지도 저장하지도 않고 검사만 한다. 가린 항목에 다시 적용하면 `masks` 가 빈 배열이 되어 처리 내역이 지워지기 때문이다.
+- 처리 전 파일의 `sections`·`evidences` 는 가리기 전 원문이므로, 실패할 때도 그 내용을 출력하지 않는다. 실패 출력은 경로와 고정 문구, 오류 종류·코드(예: 파일이 없으면 `Error, ENOENT`), 검사 문제 문장뿐이다. 검사 문제 문장에는 기준·항목·근거 id 와 블라인드 처리 내역의 종류 이름·순번·개수만 들어가고(예: `근거 e1: 인용 구절이 항목 s15 원문에 글자 그대로 없음`), 항목 원문·인용 구절·이유는 들어가지 않는다. JSON 이 아니면 `샘플 결과가 올바른 JSON 이 아닙니다: <경로>` 만 출력하고 JSON 해석 오류의 내용(파일 조각이 들어 있다)은 출력하지 않는다. `criteria` 가 객체가 아니거나 `sections`·`evidences` 가 배열이 아니면 `criteria 는 객체, sections·evidences 는 배열이어야 합니다` 를 출력한다. 모두 종료 코드 1 이다.
 
 ## 폴더 구조
 
@@ -154,7 +214,7 @@ components/               화면 컴포넌트. props 를 그리고 콜백만 호
   UploadScreen.tsx        업로드 화면 (학과 선택·삭제, 기준 목록, 예시, 파일)
   NewDepartmentForm.tsx   "새 학과 기준 만들기" (학과 이름·문장 입력, 기준 만들기, 초안 고치기, 확정)
   CriteriaExamples.tsx    "기준 문장 예시" 영역 (예시 문장과 "이 예시 넣기" 버튼)
-  ResultScreen.tsx        결과 화면(탭별 기준 설명 포함), 결과 없음 안내
+  ResultScreen.tsx        결과 화면(탭별 기준 설명, 블라인드 처리 내역 줄 포함), 결과 없음 안내
 hooks/                    화면 상태
   useUpload.ts            학과 선택·삭제·확정 저장, 파일 선택·분석 요청·결과 저장 후 이동
   useCriteriaDraft.ts     새 학과 기준 만들기: 입력값, 기준 생성 요청, 초안 고치기, 확정할 값 만들기
@@ -169,8 +229,8 @@ lib/
     examples.ts           "새 학과 기준 만들기"에 넣어 볼 예시 문장 (지어낸 문장)
     limits.ts             기준 개수·길이 제한 (기준 6개, 이름 30자, 설명 300자, 문장 2,000자, 학과 이름 50자 등)
     normalize.ts          기준 정리(normalizeCriteria), 경고 정리, 학과 기준 확인(checkDepartmentCriteria, parseDepartmentCriteria)
-  resultView.ts           기준별 개수, 원문을 일반/밑줄/강조 구간으로 나누기, 화면용 값(탭별 기준 설명 포함) 만들기
-  validateResult.ts       결과 모양 검사, 결과 내용 검사 (근거 quote 가 원문에 글자 그대로 있는지 등)
+  resultView.ts           기준별 개수, 원문을 일반/밑줄/강조 구간으로 나누기, 블라인드 처리 내역 문자열, 화면용 값(탭별 기준 설명 포함) 만들기
+  validateResult.ts       결과 모양 검사(masks 없는 예전 결과는 거부), 결과 내용 검사 (근거 quote 가 원문에 글자 그대로 있는지, masks 형식 등)
   resultStorage.ts        sessionStorage 저장·불러오기
   criteriaStorage.ts      저장한 학과 localStorage 저장·불러오기·삭제 (읽기·쓰기 실패 시 메모리에만 둠, 같은 이름 확인), 새 학과 id
   apiClient.ts            화면의 API 호출 공용 (요청 취소 오류, 서버 오류 문구 읽기)
@@ -178,11 +238,11 @@ lib/
   criteriaClient.ts       POST /api/criteria 호출 (department, sourceText)
   pdf.ts                  PDF 파일인지 확인 (이름·형식만), 최대 크기(10MB), 파싱 오류를 한국어 문구로 바꾸기
   mock/
-    sample-result.json    가상 학생부를 경영학과 기준으로 실제 파이프라인에 돌린 결과 (npm run make:sample)
+    sample-result.json    가상 학생부를 경영학과 기준으로 실제 파이프라인에 돌린 결과 (npm run make:sample), 블라인드 처리됨 (scripts/blind-sample.ts)
     sampleResult.ts       "샘플 데이터로 보기" 결과 (위 파일 그대로)
   pipeline/               분석 파이프라인 (parsePdf·claude·extractEvidence·generateCriteria 는 서버에서만 가져온다)
     parsePdf.ts           PDF → 항목(Section[]) 실제 파서 (unpdf)
-    blind.ts              식별 정보 가리기 (아직 구현 전)
+    blind.ts              블라인드 처리: 식별 정보 가리기와 처리 내역(masks) (제공받은 검증된 코드, 규칙을 고치지 않는다)
     claude.ts             Claude API 호출 공용 (60초 제한, stop_reason 확인, JSON 읽기, 오류 분류와 로그)
     extractEvidence.ts    근거 추출 (Claude API)
     generateCriteria.ts   학과 기준 초안 생성 (Claude API)
@@ -192,13 +252,16 @@ samples/
 scripts/
   checkMock.ts            npm run check:mock 실행 스크립트
   check-parse.ts          PDF 파싱 검사 스크립트 (npx tsx scripts/check-parse.ts)
+  check-blind.ts          블라인드 처리 검사 스크립트 (npx tsx scripts/check-blind.ts)
   make-sample.ts          샘플 결과 만들기 (npm run make:sample, Claude API 호출)
-types/analysis.ts         데이터 형식 (Section, Criterion, DepartmentCriteria, Evidence, AnalysisResult)
+  blind-sample.ts         샘플 결과에 블라인드 처리를 적용하는 한 번 실행 스크립트 (AI 호출 없음, 이미 처리된 파일은 바꾸지 않음)
+types/analysis.ts         데이터 형식 (Section, Criterion, DepartmentCriteria, Evidence, AnalysisResult(블라인드 처리 내역 masks 포함))
 ```
 
-## 실제 구현을 끼워 넣을 곳 (TODO)
+## 실제 구현으로 바꾼 곳
 
-PDF 파싱(`lib/pipeline/parsePdf.ts`)과 근거 추출(`lib/pipeline/extractEvidence.ts`)은 실제 구현으로 바뀌었다. 남은 곳은 아래 하나다. 시그니처는 그대로 두고 본문만 바꾸면 된다.
+PDF 파싱(`lib/pipeline/parsePdf.ts`), 블라인드 처리(`lib/pipeline/blind.ts`), 근거 추출(`lib/pipeline/extractEvidence.ts`)은 모두 실제 구현으로 바뀌었다. 끼워 넣을 곳(TODO)은 남아 있지 않다.
 
-- `lib/pipeline/blind.ts` (`// TODO: 실제 구현`) — 원문에서 이름·학교명·주민등록번호·주소 같은 식별 정보를 `●●●` 로 가린다. 지금은 받은 항목을 그대로 돌려준다.
-  근거의 quote 가 가린 뒤의 원문과 글자 그대로 맞도록 근거 추출보다 먼저 실행한다.
+- `lib/pipeline/blind.ts` — 제공받은 검증된 코드다. 규칙(정규식, 가리는 대상, 표시 글자, 세는 방식)을 고치지 않는다.
+  서버에서 AI 호출과 응답보다 먼저 실행해 인적·학적사항 값 전체(`[블라인드]`), 그 항목에서 읽은 학생 이름(`[이름]`), 학교·대학 이름(`[학교명]`, `[대학명]`), 주민등록번호·전화번호 모양의 숫자(`[주민등록번호]`, `[전화번호]`)를 가린다.
+  축제명, 기숙사명, 교사 이름, 기업·기관명처럼 문맥을 봐야 아는 것은 가리지 못한다. 근거의 quote 가 가린 뒤의 원문과 글자 그대로 맞도록 근거 추출보다 먼저 실행한다. 자세한 내용은 위 "블라인드 처리".

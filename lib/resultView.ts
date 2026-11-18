@@ -58,7 +58,12 @@ export type ResultView = {
   activeDescription: string | null;
   sections: SourceSectionView[];
   cards: EvidenceCardView[];
+  /** 블라인드 처리 내역 (예: "인적·학적사항 5곳, 학교명 12곳"). 가린 것이 없으면 "가린 정보 없음" */
+  maskSummary: string;
 };
+
+/** 블라인드 처리 내역에 보여 줄 것이 없을 때의 문구 */
+const NO_MASK_SUMMARY = "가린 정보 없음";
 
 /** 기준별 근거 개수. 기준 목록(criteria) 순서를 따른다. */
 export function countByCriterion(
@@ -70,6 +75,15 @@ export function countByCriterion(
     name: criterion.name,
     count: evidences.filter((evidence) => evidence.criterionId === criterion.id).length,
   }));
+}
+
+/**
+ * 블라인드 처리 내역 문자열. 가린 곳 수가 1 이상인 것만 받은 순서대로 "<종류> <수>곳" 으로 만들어 ", " 로 잇는다.
+ * 예: "인적·학적사항 5곳, 학교명 12곳". 보여 줄 것이 하나도 없으면 "가린 정보 없음".
+ */
+export function formatMaskSummary(masks: AnalysisResult["masks"]): string {
+  const parts = masks.filter((mask) => mask.count >= 1).map((mask) => `${mask.type} ${mask.count}곳`);
+  return parts.length === 0 ? NO_MASK_SUMMARY : parts.join(", ");
 }
 
 /**
@@ -169,5 +183,6 @@ export function buildResultView(
     activeDescription: activeCriterion?.description ?? null,
     sections,
     cards,
+    maskSummary: formatMaskSummary(result.masks),
   };
 }

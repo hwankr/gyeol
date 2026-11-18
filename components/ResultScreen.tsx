@@ -17,6 +17,8 @@ type ResultScreenProps = {
   activeDescription: string | null;
   sections: SourceSectionView[];
   cards: EvidenceCardView[];
+  /** 블라인드 처리 내역 (예: "인적·학적사항 5곳, 학교명 12곳" 또는 "가린 정보 없음") */
+  maskSummary: string;
   /** 원문 단(스크롤 영역) */
   sourceScrollRef: Ref<HTMLDivElement>;
   /** 선택한 근거가 들어 있는 항목 */
@@ -34,6 +36,7 @@ export function ResultScreen({
   activeDescription,
   sections,
   cards,
+  maskSummary,
   sourceScrollRef,
   selectedSectionRef,
   highlightRef,
@@ -56,7 +59,9 @@ export function ResultScreen({
 
       {/* 두 단 폭 3:2 를 내용 길이와 상관없이 지킨다(minmax(0, …): 긴 기준 이름·글자가 단 폭을 넓히지 못하게). */}
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3">
-        <Area name="학생부 원문" className="flex min-h-0 flex-col">
+        <Area name="학생부 원문 (블라인드 처리됨)" className="flex min-h-0 flex-col">
+          {/* 원문 스크롤 상자 밖에 둔다: 원문을 스크롤해도 제자리에 있고, 원문 위치로 이동하는 스크롤 계산에 끼지 않는다. */}
+          <p className="[overflow-wrap:anywhere]">블라인드 처리 내역: {maskSummary}</p>
           <div ref={sourceScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-2">
             {sections.map((section) => (
               <article
