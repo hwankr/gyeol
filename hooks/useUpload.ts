@@ -12,7 +12,6 @@ import { saveResult } from "@/lib/resultStorage";
 import type { AnalysisResult } from "@/types/analysis";
 
 const NOT_PDF_ERROR = "PDF 파일만 선택할 수 있습니다.";
-const NO_ACCESS_CODE_ERROR = "접속 코드를 입력해 주세요.";
 const SAVE_ERROR = "분석 결과를 브라우저에 저장하지 못했습니다. 다시 시도해 주세요.";
 const ANALYZE_ERROR = "분석에 실패했습니다. 다시 시도해 주세요.";
 const NOT_CONFIRMED_REASON = "기준을 확정한 뒤 분석을 시작할 수 있습니다.";
@@ -32,7 +31,7 @@ const NEW_DEPARTMENT_LABEL = "새 학과 기준 만들기";
 
 /**
  * 업로드 화면 상태: 학과 선택(코드에 적힌 학과 → 저장한 학과 → 새 학과 기준 만들기), 저장한 학과 삭제,
- * 새 학과 기준 만들기(useCriteriaDraft), 파일 선택, 접속 코드, 분석 요청, 결과 저장 후 결과 화면으로 이동.
+ * 새 학과 기준 만들기(useCriteriaDraft), 파일 선택, 분석 요청, 결과 저장 후 결과 화면으로 이동.
  */
 export function useUpload() {
   const router = useRouter();
@@ -41,8 +40,6 @@ export function useUpload() {
   const [selectedId, setSelectedId] = useState(DEFAULT_CRITERIA_ID);
   /** 저장한 학과를 브라우저에 저장(또는 삭제)하지 못했을 때의 안내 문구 */
   const [storageNotice, setStorageNotice] = useState<string | null>(null);
-  /** 접속 코드. 이 상태에만 두고 sessionStorage·localStorage 에는 저장하지 않는다. */
-  const [accessCode, setAccessCode] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -75,7 +72,6 @@ export function useUpload() {
       requestRef.current = null;
       setSelectedId(DEFAULT_CRITERIA_ID);
       setStorageNotice(null);
-      setAccessCode("");
       setFileName(null);
       setFile(null);
       setFileError(null);
@@ -129,7 +125,7 @@ export function useUpload() {
 
   function startCriteriaGeneration() {
     if (isAnalyzing) return;
-    void criteriaDraft.generate(accessCode);
+    void criteriaDraft.generate();
   }
 
   /**
@@ -189,15 +185,10 @@ export function useUpload() {
   async function startAnalysis() {
     // 확정하지 않은 기준(새 학과 기준 만들기)으로는 분석하지 않는다. 초안은 /api/analyze 로 보내지 않는다.
     if (file === null || isAnalyzing || analysisCriteria === null) return;
-    // 접속 코드가 비어 있으면 요청을 보내지 않고 안내한다(버튼은 막지 않는다).
-    if (accessCode.trim() === "") {
-      setRequestError(NO_ACCESS_CODE_ERROR);
-      return;
-    }
 
     // 저장한 학과를 골랐으면 화면에 마지막으로 그려진 값이 아니라 이 순간 다시 읽은 목록에서 찾는다
     // (다른 탭에서 지웠는데 이 탭이 아직 다시 그려지지 않은 경우). 없으면 요청하지 않고 기본 학과로 돌린 뒤 안내한다.
-    // 파일과 접속 코드 입력값은 그대로 둔다.
+    // 고른 파일은 그대로 둔다.
     let criteriaToSend = analysisCriteria;
     if (selectedSaved !== undefined) {
       const latest = loadSavedDepartments().find((department) => department.id === selectedSaved.id);
@@ -223,7 +214,7 @@ export function useUpload() {
 
     let result: AnalysisResult;
     try {
-      result = await requestAnalysis({ ...criteriaToSend, file, accessCode }, controller.signal);
+      result = await requestAnalysis({ ...criteriaToSend, file }, controller.signal);
     } catch (error) {
       // 취소된 요청이나 더 이상 유효하지 않은 요청은 아무것도 바꾸지 않는다(오류 문구도 세우지 않음).
       if (error instanceof RequestCanceledError || !isCurrent()) return;
@@ -241,7 +232,7 @@ export function useUpload() {
     if (!openResult(result)) setIsAnalyzing(false);
   }
 
-  /** 샘플 데이터는 미리 만든 결과(lib/mock/sample-result.json)를 그대로 연다. 학과 선택·초안·접속 코드와 상관없고 API 를 부르지 않는다. */
+  /** 샘플 데이터는 미리 만든 결과(lib/mock/sample-result.json)를 그대로 연다. 학과 선택·초안과 상관없고 API 를 부르지 않는다. */
   function viewSample() {
     if (isAnalyzing) return;
     setRequestError(null);
@@ -277,7 +268,6 @@ export function useUpload() {
       onAddItem: criteriaDraft.addItem,
       onConfirm: confirmDraft,
     },
-    accessCode,
     fileName,
     fileError,
     requestError,
@@ -287,7 +277,6 @@ export function useUpload() {
     startBlockedReason: isNewDepartment ? NOT_CONFIRMED_REASON : null,
     onSelectCriteria: selectDepartment,
     onDeleteDepartment: deleteSelectedDepartment,
-    onChangeAccessCode: setAccessCode,
     onSelectFile: selectFile,
     onStart: startAnalysis,
     onViewSample: viewSample,

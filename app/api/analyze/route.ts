@@ -1,5 +1,4 @@
 import type { AnalysisResult, DepartmentCriteria, Section } from "@/types/analysis";
-import { checkAccessCode } from "@/lib/accessCode";
 import { findDepartmentCriteria } from "@/lib/criteria";
 import { MAX_CRITERIA_FIELD_LENGTH } from "@/lib/criteria/limits";
 import { checkDepartmentCriteria } from "@/lib/criteria/normalize";
@@ -25,18 +24,17 @@ const CRITERIA_ERRORS = {
 
 /**
  * POST /api/analyze — multipart/form-data 로 학생부 PDF 를 받아 분석 결과(AnalysisResult)를 돌려준다.
- * 필드: file(PDF), criteriaId(코드에 적힌 학과 기준 id) 또는 criteria(저장한 학과의 DepartmentCriteria JSON 문자열) 중 하나,
- * accessCode(접속 코드). 오류 응답은 모두 { error: "<문구>" } 이다.
+ * 필드: file(PDF), criteriaId(코드에 적힌 학과 기준 id) 또는 criteria(저장한 학과의 DepartmentCriteria JSON 문자열) 중 하나.
+ * 오류 응답은 모두 { error: "<문구>" } 이다. 요청을 보낸 사람을 확인하지 않는다(인증 없음. 주소를 아는 누구나 부를 수 있다).
  *
  * 확인 순서와 상태 코드
  * 1. 폼을 읽지 못함 → 400
- * 2. 접속 코드: 서버에 ACCESS_CODE 가 없음 → 500, 보낸 코드가 없거나 다름 → 401 (파일 처리·AI 호출보다 먼저)
- * 3. 파일: 없음·PDF 아님 → 400, 10MB 초과 → 413
- * 4. 학과 기준 → 400: 둘 다 없음, 둘 다 있음, criteriaId 가 목록에 없음,
+ * 2. 파일: 없음·PDF 아님 → 400, 10MB 초과 → 413
+ * 3. 학과 기준 → 400: 둘 다 없음, 둘 다 있음, criteriaId 가 목록에 없음,
  *    criteria 가 문자열이 아님·20,000자 초과·JSON 아님·형식이 틀림·기준 0개
  *    criteria 는 기준 생성과 같은 검증(normalizeCriteria: 1~6개, 이름 30자·설명 300자, id c1…)으로 정리해 쓴다.
- * 5. PDF 파싱 실패 → 400 (한국어 문구. 파서의 한국어 안내는 그대로, PDF 라이브러리의 영어 오류는 한국어로 바꿈)
- * 6. blind → 근거 추출. 근거 추출 실패 → 502
+ * 4. PDF 파싱 실패 → 400 (한국어 문구. 파서의 한국어 안내는 그대로, PDF 라이브러리의 영어 오류는 한국어로 바꿈)
+ * 5. blind → 근거 추출. 근거 추출 실패 → 502
  * 근거 추출은 받은 기준을 그대로 쓴다. 기준을 다시 만들지 않고(generateCriteria 를 부르지 않는다) sourceText 를 AI 에 보내지 않는다.
  */
 export async function POST(request: Request) {
@@ -45,12 +43,6 @@ export async function POST(request: Request) {
     formData = await request.formData();
   } catch {
     return errorResponse(400, "multipart/form-data 형식으로 file 필드에 PDF 파일을 보내 주세요.");
-  }
-
-  // 공개 주소에서 아무나 AI 호출 비용을 쓰지 못하게, 파일을 읽거나 AI 를 부르기 전에 접속 코드부터 확인한다.
-  const accessCodeFailure = checkAccessCode(formData.get("accessCode"), LOG_TAG);
-  if (accessCodeFailure !== null) {
-    return errorResponse(accessCodeFailure.status, accessCodeFailure.message);
   }
 
   const file = formData.get("file");

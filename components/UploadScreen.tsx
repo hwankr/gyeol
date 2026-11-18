@@ -19,7 +19,6 @@ type UploadScreenProps = {
   storageNotice: string | null;
   /** "새 학과 기준 만들기" 영역 */
   newDepartment: NewDepartmentFormProps;
-  accessCode: string;
   fileName: string | null;
   fileError: string | null;
   requestError: string | null;
@@ -31,7 +30,6 @@ type UploadScreenProps = {
   startBlockedReason: string | null;
   onSelectCriteria: (criteriaId: string) => void;
   onDeleteDepartment: () => void;
-  onChangeAccessCode: (accessCode: string) => void;
   onSelectFile: (file: File | null) => void;
   onStart: () => void;
   onViewSample: () => void;
@@ -46,7 +44,6 @@ export function UploadScreen({
   canDeleteDepartment,
   storageNotice,
   newDepartment,
-  accessCode,
   fileName,
   fileError,
   requestError,
@@ -56,7 +53,6 @@ export function UploadScreen({
   startBlockedReason,
   onSelectCriteria,
   onDeleteDepartment,
-  onChangeAccessCode,
   onSelectFile,
   onStart,
   onViewSample,
@@ -149,18 +145,6 @@ export function UploadScreen({
 
           <p>선택한 파일: {fileName ?? "없음"}</p>
           {fileError && <p role="alert">{fileError}</p>}
-
-          <label className="flex items-center gap-3">
-            <span>접속 코드</span>
-            <input
-              type="password"
-              autoComplete="off"
-              className="w-60 border border-neutral-500 px-2 py-1 disabled:border-neutral-300 disabled:text-neutral-400"
-              value={accessCode}
-              disabled={isAnalyzing}
-              onChange={(event) => onChangeAccessCode(event.target.value)}
-            />
-          </label>
 
           <div className="flex gap-2">
             <button

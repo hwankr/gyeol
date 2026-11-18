@@ -9,8 +9,6 @@ export type CriteriaRequest = {
   department: string;
   /** 학과가 보고 싶은 점을 적은 문장 */
   sourceText: string;
-  /** 접속 코드. 입력한 그대로 보낸다(앞뒤 공백은 서버가 뺀다). */
-  accessCode: string;
 };
 
 export type CriteriaDraftResponse = {
@@ -27,7 +25,7 @@ export type CriteriaDraftResponse = {
  * - signal 로 취소되면(응답을 기다리는 중이든 받은 뒤든) RequestCanceledError 를 던진다.
  */
 export async function requestCriteria(
-  { department, sourceText, accessCode }: CriteriaRequest,
+  { department, sourceText }: CriteriaRequest,
   signal?: AbortSignal,
 ): Promise<CriteriaDraftResponse> {
   let response: Response;
@@ -35,7 +33,7 @@ export async function requestCriteria(
     response = await fetch("/api/criteria", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ department, sourceText, accessCode }),
+      body: JSON.stringify({ department, sourceText }),
       signal,
     });
   } catch {

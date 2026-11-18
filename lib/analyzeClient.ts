@@ -18,12 +18,10 @@ export type AnalysisCriteria =
 export type AnalysisRequest = AnalysisCriteria & {
   /** 학생부 PDF */
   file: File;
-  /** 접속 코드. 입력한 그대로 보낸다(앞뒤 공백은 서버가 뺀다). */
-  accessCode: string;
 };
 
 /**
- * 학생부 PDF 를 학과 기준, 접속 코드와 함께 POST /api/analyze 로 보내 분석 결과를 받는다.
+ * 학생부 PDF 를 학과 기준과 함께 POST /api/analyze 로 보내 분석 결과를 받는다.
  * - 학과 기준은 criteriaId(코드에 적힌 학과) 또는 criteria(저장한 학과. JSON 문자열로 만들어 criteria 필드에 넣는다) 중 하나를 보낸다.
  * - 실패하면 화면에 보여 줄 문구를 담은 Error 를 던진다. 서버가 준 { error } 문구가 있으면(공백만 있는 문자열 제외) 그대로 쓴다.
  * - 응답이 413 인데 문구가 없으면(배포 플랫폼이 큰 요청을 먼저 막은 경우) PLATFORM_TOO_LARGE_ERROR 를 쓴다.
@@ -42,7 +40,6 @@ export async function requestAnalysis(
   } else {
     body.append("criteriaId", request.criteriaId);
   }
-  body.append("accessCode", request.accessCode);
 
   let response: Response;
   try {

@@ -8,7 +8,6 @@ import type { DepartmentCriteria } from "@/types/analysis";
 
 const NO_DEPARTMENT_ERROR = "학과 이름을 입력해 주세요.";
 const NO_SOURCE_TEXT_ERROR = "학과가 보고 싶은 점을 문장으로 입력해 주세요.";
-const NO_ACCESS_CODE_ERROR = '아래 "접속 코드" 입력란에 접속 코드를 입력해 주세요.';
 const GENERATE_ERROR = "기준을 만들지 못했습니다. 다시 시도해 주세요.";
 const DUPLICATE_DEPARTMENT_ERROR = "같은 이름의 학과가 이미 있습니다. 다른 학과 이름을 입력해 주세요.";
 const NO_CRITERIA_ERROR = "기준이 없습니다. 기준을 1개 이상 추가해 주세요.";
@@ -72,8 +71,8 @@ export function useCriteriaDraft() {
     };
   }, []);
 
-  /** 기준 만들기. 학과 이름·문장·접속 코드가 비어 있으면 요청하지 않고 안내한다. */
-  async function generate(accessCode: string) {
+  /** 기준 만들기. 학과 이름이나 문장이 비어 있으면 요청하지 않고 안내한다. */
+  async function generate() {
     if (isGenerating) return;
     const department = departmentName.trim();
     const text = sourceText.trim();
@@ -83,10 +82,6 @@ export function useCriteriaDraft() {
     }
     if (text === "") {
       setGenerateError(NO_SOURCE_TEXT_ERROR);
-      return;
-    }
-    if (accessCode.trim() === "") {
-      setGenerateError(NO_ACCESS_CODE_ERROR);
       return;
     }
 
@@ -103,7 +98,7 @@ export function useCriteriaDraft() {
     let result: Awaited<ReturnType<typeof requestCriteria>>;
     try {
       // 앞뒤 공백을 뺀 문장을 보낸다. 확정하면 이 문장을 그대로 sourceText 로 저장한다.
-      result = await requestCriteria({ department, sourceText: text, accessCode }, controller.signal);
+      result = await requestCriteria({ department, sourceText: text }, controller.signal);
     } catch (error) {
       // 취소된 요청이나 더 이상 유효하지 않은 요청은 아무것도 바꾸지 않는다.
       if (error instanceof RequestCanceledError || !isCurrent()) return;

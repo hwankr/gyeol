@@ -1,4 +1,3 @@
-import { checkAccessCode } from "@/lib/accessCode";
 import { MAX_DEPARTMENT_NAME_LENGTH, MAX_SOURCE_TEXT_LENGTH } from "@/lib/criteria/limits";
 import { AiCallError } from "@/lib/pipeline/claude";
 import { generateCriteria } from "@/lib/pipeline/generateCriteria";
@@ -7,22 +6,21 @@ import { generateCriteria } from "@/lib/pipeline/generateCriteria";
 const LOG_TAG = "api/criteria";
 
 /** 본문을 JSON 객체로 읽지 못했을 때 보여 주는 문구 */
-const INVALID_BODY_ERROR = "JSON 형식으로 department, sourceText, accessCode 를 보내 주세요.";
+const INVALID_BODY_ERROR = "JSON 형식으로 department, sourceText 를 보내 주세요.";
 
 /** 기준 생성에서 예상하지 못한 오류가 났을 때 보여 주는 문구 */
 const UNEXPECTED_ERROR = "기준을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
 
 /**
  * POST /api/criteria — 학과 이름과 학과가 보고 싶은 점을 적은 문장으로 평가 기준 초안을 만든다. 아무것도 저장하지 않는다.
- * 본문: JSON { department, sourceText, accessCode }. 성공하면 { criteria: [{ id, name, description }], warnings: string[] }.
- * 오류 응답은 모두 { error: "<문구>" } 이다.
+ * 본문: JSON { department, sourceText }. 성공하면 { criteria: [{ id, name, description }], warnings: string[] }.
+ * 오류 응답은 모두 { error: "<문구>" } 이다. 요청을 보낸 사람을 확인하지 않는다(인증 없음. 주소를 아는 누구나 부를 수 있다).
  *
  * 확인 순서와 상태 코드
  * 1. 본문을 JSON 객체로 읽지 못함 → 400
- * 2. 접속 코드: 서버에 ACCESS_CODE 가 없음 → 500, 보낸 코드가 없거나 다름 → 401 (입력 확인·AI 호출보다 먼저)
- * 3. 입력: 학과 이름이 없음·50자 초과, 문장이 없음·2,000자 초과(앞뒤 공백을 뺀 길이) → 400. 조용히 잘라서 보내지 않는다.
- * 4. 기준 생성 실패(키 없음, 호출 실패, 60초 초과, 거절, 잘린 응답, 해석 실패) → 502
- * 5. 성공 → 200. 검증 뒤 기준이 0개여도(문장 전체가 제외 대상인 경우 등) 오류로 만들지 않고 criteria: [] 와 warnings 를 돌려준다.
+ * 2. 입력: 학과 이름이 없음·50자 초과, 문장이 없음·2,000자 초과(앞뒤 공백을 뺀 길이) → 400. 조용히 잘라서 보내지 않는다.
+ * 3. 기준 생성 실패(키 없음, 호출 실패, 60초 초과, 거절, 잘린 응답, 해석 실패) → 502
+ * 4. 성공 → 200. 검증 뒤 기준이 0개여도(문장 전체가 제외 대상인 경우 등) 오류로 만들지 않고 criteria: [] 와 warnings 를 돌려준다.
  */
 export async function POST(request: Request) {
   let body: unknown;
@@ -34,13 +32,7 @@ export async function POST(request: Request) {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return errorResponse(400, INVALID_BODY_ERROR);
   }
-  const { department, sourceText, accessCode } = body as Record<string, unknown>;
-
-  // 공개 주소에서 아무나 AI 호출 비용을 쓰지 못하게, 입력을 확인하거나 AI 를 부르기 전에 접속 코드부터 확인한다.
-  const accessCodeFailure = checkAccessCode(accessCode, LOG_TAG);
-  if (accessCodeFailure !== null) {
-    return errorResponse(accessCodeFailure.status, accessCodeFailure.message);
-  }
+  const { department, sourceText } = body as Record<string, unknown>;
 
   const trimmedDepartment = typeof department === "string" ? department.trim() : "";
   if (trimmedDepartment === "") {
