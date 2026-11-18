@@ -25,15 +25,3 @@ export type CompetencyListCoversAll = AssertNever<
   Exclude<Competency, (typeof COMPETENCIES)[number]>
 >;
 type AssertNever<T extends never> = T;
-
-/** 학생부 항목명 목록 (학생부에 실리는 순서) */
-export const SECTION_CATEGORIES = [
-  "인적·학적사항",
-  "출결사항",
-  "자율활동",
-  "동아리활동",
-  "진로활동",
-  "봉사활동실적",
-  "세부능력 및 특기사항",
-  "행동특성 및 종합의견",
-] as const;

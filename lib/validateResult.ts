@@ -1,5 +1,5 @@
 import type { AnalysisResult, Evidence, Section } from "@/types/analysis";
-import { COMPETENCIES, SECTION_CATEGORIES } from "./constants.ts";
+import { COMPETENCIES } from "./constants.ts";
 import { countByCompetency } from "./resultView.ts";
 
 /**
@@ -23,7 +23,6 @@ export function isAnalysisResult(value: unknown): value is AnalysisResult {
  */
 export function validateResult(result: AnalysisResult): string[] {
   const problems: string[] = [];
-  const categories: readonly string[] = SECTION_CATEGORIES;
   const competencies: readonly string[] = COMPETENCIES;
 
   const sectionById = new Map<string, Section>();
@@ -32,9 +31,6 @@ export function validateResult(result: AnalysisResult): string[] {
       problems.push(`항목 id 중복: ${section.id}`);
     }
     sectionById.set(section.id, section);
-    if (!categories.includes(section.category)) {
-      problems.push(`항목 ${section.id}: 목록에 없는 항목명 "${section.category}"`);
-    }
   }
 
   const evidenceIds = new Set<string>();
@@ -109,7 +105,9 @@ function isSection(value: unknown): value is Section {
     (value.grade === null || typeof value.grade === "number") &&
     (value.subject === undefined || typeof value.subject === "string") &&
     typeof value.page === "number" &&
-    typeof value.text === "string"
+    typeof value.text === "string" &&
+    (value.fieldId === undefined || typeof value.fieldId === "string") &&
+    (value.hours === undefined || typeof value.hours === "number")
   );
 }
 

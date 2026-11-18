@@ -149,12 +149,14 @@ function SegmentText({
   return <>{segment.text}</>;
 }
 
-/** 항목 제목: 항목명 · 학년 · 과목 (학년이 없으면 학년, 과목이 없으면 과목을 뺀다) */
+/** 항목 제목: 항목명 · 학년 · 과목 · 시간 · 쪽 번호 (학년·과목·시간은 없으면 뺀다) */
 function sectionTitle(section: SourceSectionView): string {
   return [
     section.category,
     section.grade === null ? null : `${section.grade}학년`,
     section.subject ?? null,
+    section.hours === undefined ? null : `${section.hours}시간`,
+    `${section.page}쪽`,
   ]
     .filter((part) => part !== null)
     .join(" · ");

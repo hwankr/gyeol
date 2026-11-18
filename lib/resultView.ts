@@ -31,6 +31,10 @@ export type SourceSectionView = {
   category: string;
   grade: number | null;
   subject?: string;
+  /** 창의적 체험활동 영역의 시간. 없으면 undefined */
+  hours?: number;
+  /** PDF 쪽 번호 */
+  page: number;
   /** 선택한 근거가 들어 있는 항목인지 */
   isSelected: boolean;
   segments: TextSegment[];
@@ -127,6 +131,8 @@ export function buildResultView(
       category: section.category,
       grade: section.grade,
       subject: section.subject,
+      hours: section.hours,
+      page: section.page,
       isSelected: section.id === selectedEvidence?.sectionId,
       segments: segmentText(section.text, marks),
     };
