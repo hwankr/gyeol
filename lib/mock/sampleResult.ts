@@ -1,7 +1,7 @@
 import type { AnalysisResult } from "@/types/analysis";
 import sampleResultJson from "./sample-result.json" with { type: "json" };
 
-// "샘플 데이터로 보기"에 쓰는 샘플 결과. sample-result.json 을 가공하지 않고 그대로 내보낸다.
+// 예시 지원자의 원문보기에 쓰는 샘플 결과(lib/applicants/original.ts). sample-result.json 을 가공하지 않고 그대로 내보낸다.
 // - sample-result.json 은 가상(합성) 학생부 PDF(samples/virtual-student-record.pdf)를 경영학과 기준으로
 //   실제 파이프라인(parsePdf → blind → extractEvidence, Claude API. 그때 blind 는 아직 아무것도 가리지 않았다)에
 //   한 번 돌린 결과에, AI 를 다시 부르지 않고

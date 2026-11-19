@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  BUTTON_SECONDARY_CLASS,
   PANEL_CLASS,
   PANEL_HEAD_CLASS,
   PANEL_TITLE_CLASS,
@@ -14,10 +13,10 @@ type EvaluateListScreenProps = {
   crumbs: readonly ConsoleCrumb[];
   /** 제목 옆의 글: 전형 · 모집 단위 · 접수 건수 */
   note: string;
+  /** 목록에 넣지 못한 올린 지원자가 있을 때의 안내 (없으면 빈 글) */
+  skippedNote: string;
   /** 목록 구분. count 가 null 이면 수를 적지 않는다(평가 대기 목록). */
   tabs: { key: string; label: string; count: number | null; on: boolean; onPick: () => void }[];
-  /** 학생부를 올려 분석하는 화면의 주소 */
-  uploadPath: string;
   /** 내 점수 정렬 버튼 */
   sort: { mark: string; active: boolean; label: string; onToggle: () => void };
   rows: { code: string; href: string; summary: string; scoreText: string; status: EvaluationStatus }[];
@@ -44,7 +43,15 @@ const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
  * 오른쪽은 평가 진행 현황(고리 그림과 위원별 막대. 사람을 누르면 고리가 그 사람의 비율을 보여 준다).
  * 좁은 화면에서는 진행 현황이 목록 아래로 내려가고, 목록은 상자 안에서 가로로 스크롤된다.
  */
-export function EvaluateListScreen({ crumbs, note, tabs, uploadPath, sort, rows, progress }: EvaluateListScreenProps) {
+export function EvaluateListScreen({
+  crumbs,
+  note,
+  skippedNote,
+  tabs,
+  sort,
+  rows,
+  progress,
+}: EvaluateListScreenProps) {
   return (
     <>
       <EvaluateHead crumbs={crumbs} note={note} />
@@ -65,11 +72,13 @@ export function EvaluateListScreen({ crumbs, note, tabs, uploadPath, sort, rows,
             </button>
           ))}
         </div>
-        {/* 디자인에는 없는 링크: 학생부 PDF 를 올려 AI 근거를 뽑는 화면으로 가는 길이 주 메뉴에서 빠져 여기에 둔다. */}
-        <Link href={uploadPath} className={`${BUTTON_SECONDARY_CLASS} h-[32px] scroll-m-[8px] px-[12px]`}>
-          학생부 올려 분석하기
-        </Link>
       </div>
+      {/* 디자인에는 없는 줄: 올린 학생부 가운데 지금 평가 기준으로 분석하지 않아 목록에 넣지 못한 것이 있을 때만 나온다. */}
+      {skippedNote !== "" && (
+        <p role="status" className="mt-[8px] text-[13px] leading-[18px] text-[#8A4B00]">
+          {skippedNote}
+        </p>
+      )}
       <div className={`${PANEL_CLASS} mt-[12px] flex flex-[1_1_auto] flex-wrap items-stretch`}>
         <div className="min-w-0 flex-[999_1_440px] overflow-x-auto">
           <div className="min-w-[600px]">

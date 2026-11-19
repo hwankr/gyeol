@@ -1,19 +1,25 @@
 import { normalizeSearchText } from "../applicants/applicants.ts";
+import { isUploadedCode, uploadedCodeNumber } from "../applicants/uploaded.ts";
 import type { PrepElement } from "../prep/criteria.ts";
 import {
+  DOCUMENT_AREAS,
   EVALUATION_APPLICANTS,
+  EXTRA_DOCUMENT_AREAS,
   SLOT_COUNT,
+  type ApplicantEvidence,
   type DocumentArea,
   type EvaluationApplicant,
   type EvaluationSeed,
   type Passage,
+  type PassageSegment,
   type Slot,
   type SlotAssessment,
 } from "./sampleEvaluations.ts";
 
 // 평가하기 화면의 평가 형식, 저장 값 확인, 화면용 계산. 브라우저와 Node 어디서나 돈다(순수 함수).
 // 평가 요소·배점·세부 평가 항목은 전형 준비에서 저장한 평가 기준(lib/prep/criteria.ts 의 PrepElement)을 그대로 쓴다.
-// 예시 자료(./sampleEvaluations.ts)는 평가 요소를 자리(0~3)로 적어 두었으므로 요소 순번으로 자리를 맞춘다.
+// 지원자는 예시 지원자(./sampleEvaluations.ts)와 올린 지원자(./uploadedEvaluation.ts)이고, 지원자 목록은 인자로 받는다.
+// 예시 자료는 평가 요소를 자리(0~3)로 적어 두었으므로 요소 순번으로 자리를 맞춘다. 올린 지원자는 요소 순번이 그대로 자리다.
 
 /** 저장한 평가의 상태: 고치는 중(평가 중) / 임시 저장 / 제출 완료 */
 export type EvaluationRecordStatus = "editing" | "draft" | "submitted";
@@ -148,8 +154,16 @@ function parseRecord(value: unknown): EvaluationRecord | null {
 }
 
 /**
+ * 올린 지원자의 평가를 남기는 최대 수. 넘으면 번호가 작은 것부터 버린다(올린 지원자는 최근 10건만 남으므로 넉넉한 값이다.
+ * 목록에서 밀려난 올린 지원자의 평가가 저장소에 끝없이 쌓이지 않게 한다).
+ */
+export const MAX_UPLOADED_EVALUATIONS = 50;
+
+/**
  * 저장소에서 읽은 값(JSON 해석 결과)을 확인한다. 모양이 틀리면(객체가 아님, version 이 1 이 아님, records 가 객체가 아님)
- * 저장한 평가가 없는 것으로 본다. 배정되지 않은 지원자의 코드와 모양이 틀린 평가는 버리고 나머지만 쓴다.
+ * 저장한 평가가 없는 것으로 본다. 쓰는 코드는 예시 지원자 24명의 코드와 올린 지원자의 코드 꼴("A-" + 네 자리, 번호 315 이상. 번호가 큰
+ * 50건까지)이다. 그 밖의 코드와 모양이 틀린 평가는 버리고 나머지만 쓴다. 올린 지원자의 평가가 지금 목록의 지원자 것인지는 여기서 보지
+ * 않는다(effectiveRecord 가 평가의 basis 로 본다).
  */
 export function parseEvaluations(value: unknown): Evaluations {
   if (!isRecord(value) || value.version !== EVALUATIONS_VERSION || !isRecord(value.records)) return NO_EVALUATIONS;
@@ -160,6 +174,14 @@ export function parseEvaluations(value: unknown): Evaluations {
     const record = parseRecord(stored[applicant.code]);
     if (record !== null) result[applicant.code] = record;
   }
+  const uploadedCodes = Object.keys(stored)
+    .filter(isUploadedCode)
+    .sort((a, b) => uploadedCodeNumber(a) - uploadedCodeNumber(b))
+    .slice(-MAX_UPLOADED_EVALUATIONS);
+  for (const code of uploadedCodes) {
+    const record = parseRecord(stored[code]);
+    if (record !== null) result[code] = record;
+  }
   return Object.keys(result).length === 0 ? NO_EVALUATIONS : result;
 }
 
@@ -168,14 +190,20 @@ export function serializeEvaluations(evaluations: Evaluations): string {
   return JSON.stringify({ version: EVALUATIONS_VERSION, records: evaluations });
 }
 
-/** 요소 순번 → 예시 자료의 자리 (요소가 넷보다 많으면 자리를 돌려 쓴다) */
-export function slotOf(elementIndex: number): Slot {
-  return (elementIndex % SLOT_COUNT) as Slot;
+/** AI 제안이 없는 자리에 쓰는 값 (지원자에게는 늘 제안이 하나 이상 있어 정상이라면 쓰이지 않는다) */
+const NO_ASSESSMENT: SlotAssessment = Object.freeze({ score: 0, confidence: 1, tagPicks: Object.freeze([]) });
+
+/**
+ * 요소 순번 → 그 지원자 자료의 자리. 요소가 자리보다 많으면 자리를 돌려 쓴다(예시 지원자는 자리가 넷이다).
+ * 올린 지원자는 자리 수가 평가 요소 수와 같아 요소 순번이 그대로 자리다.
+ */
+export function slotOf(applicant: Pick<EvaluationApplicant, "ai">, elementIndex: number): number {
+  return applicant.ai.length === 0 ? 0 : elementIndex % applicant.ai.length;
 }
 
 /** 그 요소에 대한 AI 제안 */
 export function assessmentOf(applicant: EvaluationApplicant, elementIndex: number): SlotAssessment {
-  return applicant.ai[slotOf(elementIndex)];
+  return applicant.ai[slotOf(applicant, elementIndex)] ?? NO_ASSESSMENT;
 }
 
 /**
@@ -186,6 +214,16 @@ export function assessmentOf(applicant: EvaluationApplicant, elementIndex: numbe
  */
 export function criteriaBasis(elements: readonly PrepElement[]): string {
   return elements.map((element) => `${element.id}:${element.name}`).join("|");
+}
+
+/**
+ * 그 지원자의 평가에 적는 basis: 평가 요소 구성(criteriaBasis)에, 올린 지원자면 "#" 과 그 분석의 표시(stamp: 분석을 남긴 때)를 붙인 글.
+ * 올린 지원자의 코드는 목록에서 가장 큰 번호 + 1 로 정하므로, 저장하지 못해 메모리에만 있던 지원자가 새로고침으로 사라지면 같은 코드가
+ * 다른 학생부에 다시 붙을 수 있다. 표시를 같이 적어 두면 그때 예전 학생부에 준 점수가 새 학생부에 붙지 않는다.
+ */
+export function evaluationBasis(applicant: Pick<EvaluationApplicant, "stamp">, elements: readonly PrepElement[]): string {
+  const basis = criteriaBasis(elements);
+  return applicant.stamp === undefined ? basis : `${basis}#${applicant.stamp}`;
 }
 
 /**
@@ -206,8 +244,8 @@ export function seedRecord(seed: EvaluationSeed | null, elements: readonly PrepE
 }
 
 /**
- * 지금 평가: 지금 평가 요소 구성으로 저장한 평가가 있으면 그것, 없으면 처음 상태 (둘 다 없으면 null = "대기").
- * 다른 구성일 때 저장한 평가는 쓰지 않는다(저장소에는 그대로 있고, 이 지원자를 다시 고치면 그때 지금 구성의 평가로 바뀌어 저장된다).
+ * 지금 평가: 지금 평가 요소 구성으로(올린 지원자면 그 분석에 대해) 저장한 평가가 있으면 그것, 없으면 처음 상태 (둘 다 없으면 null = "대기").
+ * basis 가 다른 평가는 쓰지 않는다(저장소에는 그대로 있고, 이 지원자를 다시 고치면 그때 지금 basis 의 평가로 바뀌어 저장된다).
  */
 export function effectiveRecord(
   applicant: EvaluationApplicant,
@@ -215,7 +253,7 @@ export function effectiveRecord(
   elements: readonly PrepElement[],
 ): EvaluationRecord | null {
   const record = stored[applicant.code];
-  if (record !== undefined && record.basis === criteriaBasis(elements)) return record;
+  if (record !== undefined && record.basis === evaluationBasis(applicant, elements)) return record;
   return seedRecord(applicant.seed, elements);
 }
 
@@ -264,12 +302,19 @@ export function weightsLine(elements: readonly PrepElement[]): string {
   return elements.map((element) => element.weight).join("·");
 }
 
-/** 그 요소의 AI 태그 줄: 예시 자료가 고른 묶음의 태그를 "# 탐구심화 # 자기주도" 로 잇는다 (겹치는 태그는 한 번만). */
+/**
+ * 그 요소의 AI 태그 줄: "# 탐구심화 # 자기주도" (겹치는 태그는 한 번만).
+ * 올린 지원자는 분석할 때 정한 태그(tags)를 그대로, 예시 자료는 고른 묶음(tagPicks)의 태그를 잇는다.
+ */
 export function assessmentTags(assessment: SlotAssessment, element: PrepElement): string {
   const tags: string[] = [];
-  for (const pick of assessment.tagPicks) {
-    const tag = element.groups[pick % element.groups.length]?.tag;
-    if (tag !== undefined && !tags.includes(tag)) tags.push(tag);
+  if (assessment.tags !== undefined) {
+    for (const tag of assessment.tags) if (!tags.includes(tag)) tags.push(tag);
+  } else {
+    for (const pick of assessment.tagPicks) {
+      const tag = element.groups[pick % element.groups.length]?.tag;
+      if (tag !== undefined && !tags.includes(tag)) tags.push(tag);
+    }
   }
   return tags.map((tag) => `# ${tag}`).join(" ");
 }
@@ -279,40 +324,53 @@ export const LOW_CONFIDENCE = 1;
 
 export const MAX_CONFIDENCE = 4;
 
-/** 조각이 근거로 쓰인 자리인지: 지금 평가 기준에 그 자리를 쓰는 요소가 있어야 한다(요소가 넷보다 적으면 뒤 자리는 근거가 아니다). */
-export function isEvidenceSlot(slot: Slot | undefined, elementCount: number): slot is Slot {
-  return slot !== undefined && slot < Math.min(elementCount, SLOT_COUNT);
+/**
+ * 근거로 쓰이는 자리의 수: 지금 평가 기준에 그 자리를 쓰는 요소가 있어야 한다(요소가 자리보다 적으면 뒤 자리는 근거가 아니다).
+ * 예시 지원자는 자리가 넷이라 요소가 셋이면 앞의 세 자리만 근거다.
+ */
+export function evidenceSlotCount(applicant: Pick<EvaluationApplicant, "ai">, elementCount: number): number {
+  return Math.min(elementCount, applicant.ai.length);
 }
 
-/** 서류 구분의 짧은 이름 → 원문 출처에 적는 말 */
-function areaSubject(passage: Passage): string {
-  return passage.subject;
+/** 조각의 자리 가운데 근거로 쓰이는 것 (limit 은 evidenceSlotCount) */
+export function evidenceSlotsOf(segment: PassageSegment, limit: number): number[] {
+  return segment.slots.filter((slot) => slot < limit);
+}
+
+/** 원문 출처의 학년 머리: "2학년 · " (학년이 없는 항목은 빈 글) */
+function gradePrefix(passage: Passage): string {
+  return passage.grade === null ? "" : `${passage.grade}학년 · `;
 }
 
 /** 원문 위에 적는 출처: "2학년 · 물리학II" */
 export function passageSource(passage: Passage): string {
-  return `${passage.grade}학년 · ${areaSubject(passage)}`;
+  return `${gradePrefix(passage)}${passage.subject}`;
 }
 
 /** 근거에 적는 출처: "2학년 · 세특 · 물리학II" */
 export function evidenceSource(passage: Passage): string {
-  return `${passage.grade}학년 · ${passage.area} · ${areaSubject(passage)}`;
+  return `${gradePrefix(passage)}${passage.area} · ${passage.subject}`;
 }
 
 /** 근거 문장 하나 */
-export type EvidenceItem = {
-  id: string;
-  source: string;
-  text: string;
-};
+export type EvidenceItem = ApplicantEvidence;
 
-/** 그 요소의 근거 문장 (모든 서류 구분에서, 원문 순서대로) */
-export function evidencesOf(applicant: EvaluationApplicant, elementIndex: number, elementCount: number): EvidenceItem[] {
-  const slot = slotOf(elementIndex);
+/**
+ * 그 요소의 근거 문장 (모든 서류 구분에서, 원문 순서대로).
+ * 올린 지원자는 분석이 준 근거 구절(evidences)을, 예시 지원자는 원문 조각을 쓴다(조각 하나가 근거 문장 하나다).
+ */
+export function evidencesOf(
+  applicant: EvaluationApplicant,
+  elementIndex: number,
+  elementCount: number,
+): readonly EvidenceItem[] {
+  const slot = slotOf(applicant, elementIndex);
+  if (slot >= evidenceSlotCount(applicant, elementCount)) return [];
+  if (applicant.evidences !== undefined) return applicant.evidences[slot] ?? [];
   const items: EvidenceItem[] = [];
   for (const passage of applicant.passages) {
     passage.segments.forEach((segment, index) => {
-      if (segment.slot === slot && isEvidenceSlot(segment.slot, elementCount)) {
+      if (segment.slots.includes(slot)) {
         items.push({ id: `${passage.id}-${index}`, source: evidenceSource(passage), text: segment.text });
       }
     });
@@ -323,6 +381,14 @@ export function evidencesOf(applicant: EvaluationApplicant, elementIndex: number
 /** 그 서류 구분의 원문 */
 export function passagesIn(applicant: EvaluationApplicant, area: DocumentArea): readonly Passage[] {
   return applicant.passages.filter((passage) => passage.area === area);
+}
+
+/** 그 지원자의 서류 구분 버튼: 네 영역은 늘, "독서" 는 그 영역의 원문이 있을 때만 */
+export function documentAreasOf(applicant: EvaluationApplicant): DocumentArea[] {
+  return [
+    ...DOCUMENT_AREAS,
+    ...EXTRA_DOCUMENT_AREAS.filter((area) => applicant.passages.some((passage) => passage.area === area)),
+  ];
 }
 
 /** 세부 평가 항목의 질문 하나: 응답을 저장하는 키("q1" …)와 요소 안에서 이어지는 번호 */
@@ -376,19 +442,25 @@ export function rubricScore(average: number): number {
   return clampScore(average * 20);
 }
 
-/** 지원자 찾기 (배정되지 않은 코드면 undefined) */
-export function findEvaluationApplicant(code: string | null): EvaluationApplicant | undefined {
-  return code === null ? undefined : EVALUATION_APPLICANTS.find((applicant) => applicant.code === code);
+/** 지원자 찾기 (목록에 없는 코드면 undefined). 목록은 평가할 지원자 전체다(./uploadedEvaluation.ts 의 evaluationApplicants). */
+export function findEvaluationApplicant(
+  applicants: readonly EvaluationApplicant[],
+  code: string | null,
+): EvaluationApplicant | undefined {
+  return code === null ? undefined : applicants.find((applicant) => applicant.code === code);
 }
 
-/** 평가 순서에서의 자리(1부터)와 앞뒤 지원자 코드 */
-export function queuePosition(code: string): { position: number; total: number; previous: string | null; next: string | null } {
-  const index = EVALUATION_APPLICANTS.findIndex((applicant) => applicant.code === code);
+/** 평가 순서(목록 순서)에서의 자리(1부터)와 앞뒤 지원자 코드 */
+export function queuePosition(
+  applicants: readonly EvaluationApplicant[],
+  code: string,
+): { position: number; total: number; previous: string | null; next: string | null } {
+  const index = applicants.findIndex((applicant) => applicant.code === code);
   return {
     position: index + 1,
-    total: EVALUATION_APPLICANTS.length,
-    previous: index > 0 ? EVALUATION_APPLICANTS[index - 1].code : null,
-    next: index >= 0 && index < EVALUATION_APPLICANTS.length - 1 ? EVALUATION_APPLICANTS[index + 1].code : null,
+    total: applicants.length,
+    previous: index > 0 ? applicants[index - 1].code : null,
+    next: index >= 0 && index < applicants.length - 1 ? applicants[index + 1].code : null,
   };
 }
 
@@ -413,6 +485,11 @@ export function percentText(done: number, total: number): string {
 /** 총평 화면 주소 */
 export function summaryPath(code: string): string {
   return `/evaluate/summary?code=${encodeURIComponent(code)}`;
+}
+
+/** 평가하기 · 원문보기 화면 주소 (그 지원자의 학생부 원문과 기준별 근거) */
+export function evaluateOriginalPath(code: string): string {
+  return `/evaluate/original?code=${encodeURIComponent(code)}`;
 }
 
 /** 세부 항목 평가 화면 주소. elementId 가 비어 있으면 요소를 적지 않는다(그 화면이 첫 요소를 보여 준다). */

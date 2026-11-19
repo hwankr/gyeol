@@ -4,11 +4,11 @@ import { isAnalysisResult } from "../validateResult.ts";
 import type { Applicant } from "./applicants.ts";
 import { SAMPLE_APPLICANT_COUNT, sampleApplicantCode } from "./sampleApplicants.ts";
 
-// 올린 지원자: 업로드 화면에서 분석한 학생부를 지원자 관리에 지원자로 보여 주기 위한 형식·확인·변환. 순수 함수.
+// 올린 지원자: 학생부 올리기 화면에서 분석한 학생부를 지원자 관리에 지원자로 보여 주기 위한 형식·확인·변환. 순수 함수.
 // 저장 값은 { version: 1, items: [{ code, at, result }] } 이다(lib/applicants/uploadedStorage.ts 가 localStorage 에 쓴다).
 // - code: "A-" + 네 자리 숫자. 예시 지원자(A-0001~A-0314) 뒤 번호(315 이상)다.
 // - at: 남긴 때(ISO 문자열).
-// - result: 서버가 돌려준 분석 결과 그대로(블라인드 처리된 원문·근거·처리 내역). 결과 화면이 sessionStorage 에 넣는 값과 같다.
+// - result: 서버가 돌려준 분석 결과 그대로(블라인드 처리된 원문·근거·처리 내역·AI 제안). 원문보기 화면과 평가하기 화면이 이 값을 쓴다.
 // 파일 이름은 학생 이름이 들어 있는 경우가 많아 어디에도 두지 않는다(이 형식에 필드가 없다).
 
 /** 지금 저장 형식의 버전 */
@@ -39,6 +39,17 @@ const CODE_PATTERN = /^A-(\d{4})$/;
 function codeNumber(code: string): number | null {
   const match = CODE_PATTERN.exec(code);
   return match === null ? null : Number(match[1]);
+}
+
+/** 올린 지원자의 코드인지: "A-" + 네 자리이고 번호가 예시 지원자 다음(315) 이상 */
+export function isUploadedCode(code: string): boolean {
+  const number = codeNumber(code);
+  return number !== null && number >= FIRST_UPLOADED_NUMBER;
+}
+
+/** 올린 지원자 코드의 번호 (형식이 아니면 0). 코드 순서로 늘어놓을 때 쓴다. */
+export function uploadedCodeNumber(code: string): number {
+  return codeNumber(code) ?? 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -110,8 +121,11 @@ export function nextUploadedCode(items: readonly UploadedApplicant[]): string | 
   return next > MAX_CODE_NUMBER ? null : sampleApplicantCode(next);
 }
 
-/** 서류 확인의 네 영역과 영역에 드는 항목 이름(파서가 준 category). 그 밖의 항목(인적·학적사항, 출결 등)은 세지 않는다. */
-const DOCUMENT_AREAS: readonly { label: string; categories: readonly string[] }[] = [
+/**
+ * 서류 확인의 네 영역과 영역에 드는 항목 이름(파서가 준 category). 그 밖의 항목(인적·학적사항, 출결 등)은 세지 않는다.
+ * 평가하기 화면의 서류 원문도 이 나눔을 쓴다(lib/evaluate/uploadedEvaluation.ts).
+ */
+export const DOCUMENT_AREAS: readonly { label: "교과" | "세특" | "창체" | "행특"; categories: readonly string[] }[] = [
   { label: "교과", categories: ["교과 성적"] },
   { label: "세특", categories: ["세부능력 및 특기사항"] },
   { label: "창체", categories: ["자율활동", "동아리활동", "진로활동", "봉사활동실적"] },

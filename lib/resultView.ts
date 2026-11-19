@@ -1,6 +1,6 @@
 import type { AnalysisResult, Criterion, Evidence } from "@/types/analysis";
 
-// 결과 화면에 그릴 값을 만드는 순수 함수 모음. 화면 컴포넌트는 여기서 만든 값을 그리기만 한다.
+// 원문보기 화면(components/OriginalScreen.tsx)에 그릴 값을 만드는 순수 함수 모음. 화면 컴포넌트는 여기서 만든 값을 그리기만 한다.
 
 /** 원문 구간 종류: 일반 / 밑줄(현재 탭 기준의 인용 구절) / 강조(선택한 근거의 인용 구절) */
 export type SegmentKind = "plain" | "underline" | "highlight";
@@ -126,7 +126,7 @@ export function segmentText(text: string, marks: readonly QuoteMark[]): TextSegm
 }
 
 /**
- * 현재 탭과 선택한 근거를 반영해 결과 화면 전체에 그릴 값을 만든다.
+ * 지금 고른 기준과 고른 근거를 반영해 원문보기 화면 전체에 그릴 값을 만든다.
  * 탭은 result.criteria.criteria 순서대로 만든다. 기준이 하나도 없으면(activeCriterionId 가 null) 근거 카드도, 기준 설명도 없다.
  */
 export function buildResultView(

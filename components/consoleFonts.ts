@@ -3,7 +3,7 @@ import localFont from "next/font/local";
 // 새 화면(전형 준비 등, app/(console)/)이 쓰는 글꼴. 로그인 화면의 글꼴 선언(components/loginFonts.ts)과 같은 방식이다.
 // 로그인 화면과 선언을 같이 쓰면 두 화면의 글꼴 이름(계산된 font-family)과 내려받는 굵기가 서로 묶이므로 따로 선언한다.
 // 이 파일은 새 화면 껍데기(components/ConsoleShell.tsx)에서만 가져온다. 그래서 @font-face 와 미리 불러오기가 그 화면들에만 들어가고,
-// 로그인 화면이 내려받는 글꼴은 늘지 않으며 업로드·결과 화면은 글꼴을 내려받지 않는다.
+// 로그인 화면이 내려받는 글꼴은 늘지 않는다.
 // 대체 글꼴은 디자인 순서 그대로 두려고 next/font 가 만드는 Arial 대체 글꼴(adjustFontFallback)을 끈다.
 
 /**

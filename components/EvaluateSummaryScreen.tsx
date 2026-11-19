@@ -19,8 +19,8 @@ type EvaluateSummaryScreenProps = {
   /** 제목 옆의 글: 전형 · 모집 단위 */
   headNote: string;
   bar: ComponentProps<typeof ApplicantBar>;
-  /** 학생 성장 요약: 학년별 성장 지수·활동 건수와 그림을 글로 풀어 쓴 이름 */
-  growth: { points: readonly GrowthPoint[]; label: string };
+  /** 학생 성장 요약: 학년별 성장 지수·건수, 건수 막대 눈금의 끝, 그림을 글로 풀어 쓴 이름 */
+  growth: { points: readonly GrowthPoint[]; countMax: number; label: string };
   document: DocumentView;
   /** 항목별 점수와 근거 (AI 제안) */
   basis: {
@@ -30,7 +30,7 @@ type EvaluateSummaryScreenProps = {
     criteria: { id: string; name: string; aiScore: number; flag: string | null; on: boolean; onPick: () => void }[];
     /** 고른 평가 요소의 이름과 근거 문장 */
     selectedName: string;
-    evidences: EvidenceItem[];
+    evidences: readonly EvidenceItem[];
     confidenceText: string;
     tagsText: string;
     aiScore: number;
@@ -98,7 +98,7 @@ export function EvaluateSummaryScreen({ crumbs, headNote, bar, growth, document,
                 <AccentTag>AI 제안</AccentTag>
               </div>
               <div className="p-[16px]">
-                <GrowthChart points={growth.points} label={growth.label} />
+                <GrowthChart points={growth.points} countMax={growth.countMax} label={growth.label} />
                 <ul className="mt-[8px]">
                   {growth.points.map((point, index) => (
                     <li
@@ -177,6 +177,12 @@ export function EvaluateSummaryScreen({ crumbs, headNote, bar, growth, document,
                     <p className="mt-[4px] rounded-[6px] bg-[#F6F7FB] px-[12px] py-[8px] text-[14px] leading-[22px] [overflow-wrap:anywhere] break-keep">
                       {evidence.text}
                     </p>
+                    {/* 디자인에는 없는 줄: 올린 지원자의 근거에는 AI 가 적은 이유가 있다(예시 지원자에는 없다). */}
+                    {evidence.reason !== undefined && (
+                      <p className="mt-[4px] px-[12px] text-[12px] leading-[18px] text-[#505050] [overflow-wrap:anywhere] break-keep">
+                        {evidence.reason}
+                      </p>
+                    )}
                   </div>
                 ))}
                 {basis.evidences.length === 0 && (
@@ -336,7 +342,10 @@ export function EvaluateSummaryScreen({ crumbs, headNote, bar, growth, document,
               <strong className="font-semibold">다른 위원 의견</strong>
               {mine.peers === null && <span className="text-[12px] text-[#505050]">제출 후 공개</span>}
             </p>
-            {mine.peers !== null && (
+            {mine.peers !== null && mine.peers.length === 0 && (
+              <p className="mt-[8px] text-[13px] leading-[18px] text-[#505050]">이 지원자를 평가한 다른 위원이 없습니다.</p>
+            )}
+            {mine.peers !== null && mine.peers.length > 0 && (
               <ul className="mt-[8px] flex flex-col gap-[10px]">
                 {mine.peers.map((peer) => (
                   <li key={peer.reviewer}>
@@ -366,23 +375,22 @@ const CHART = {
   /** 학년 셋의 가운데 x */
   centers: [62, 120, 178],
   barWidth: 28,
-  /** 활동 건수 눈금의 끝 */
-  maxCount: 5,
 } as const;
 
 const CHART_HEIGHT = CHART.bottom - CHART.top;
 
 /**
- * 학생 성장 요약 그림: 막대는 학년별 활동 건수(오른쪽 눈금 0~5), 꺾은선은 학년별 성장 지수(왼쪽 눈금 0~100).
+ * 학생 성장 요약 그림: 막대는 학년별 건수(오른쪽 눈금 0~countMax. 디자인은 5), 꺾은선은 학년별 성장 지수(왼쪽 눈금 0~100).
  * 값은 꺾은선의 점 위에 숫자로도 적는다. 그림 전체는 글로 풀어 쓴 이름(label)을 가진 그림 하나다.
  */
-function GrowthChart({ points, label }: { points: readonly GrowthPoint[]; label: string }) {
+function GrowthChart({ points, countMax, label }: { points: readonly GrowthPoint[]; countMax: number; label: string }) {
+  const maxCount = Math.max(1, countMax);
   const dots = points.map((point, index) => ({
     grade: point.grade,
     index: point.index,
     x: CHART.centers[index] ?? CHART.centers[0],
     y: CHART.bottom - (Math.min(100, Math.max(0, point.index)) / 100) * CHART_HEIGHT,
-    barHeight: (Math.min(CHART.maxCount, Math.max(0, point.count)) / CHART.maxCount) * CHART_HEIGHT,
+    barHeight: (Math.min(maxCount, Math.max(0, point.count)) / maxCount) * CHART_HEIGHT,
   }));
   /** 가로 눈금선 다섯 줄 (100, 80, 60, 40, 20) */
   const gridLines = [0, 1, 2, 3, 4].map((step) => CHART.top + (step * CHART_HEIGHT) / 5);
@@ -439,7 +447,7 @@ function GrowthChart({ points, label }: { points: readonly GrowthPoint[]; label:
         0
       </text>
       <text x="218" y="16" fontSize="10" fill="#505050">
-        {CHART.maxCount}
+        {maxCount}
       </text>
       <text x="218" y="154" fontSize="10" fill="#505050">
         0

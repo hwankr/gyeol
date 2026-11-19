@@ -9,10 +9,7 @@ import { DEFAULT_PREP_CRITERIA } from "@/lib/prep/defaultCriteria";
 import { GUIDELINE_CHANGES } from "@/lib/prep/guidelineChanges";
 import { revealVertically } from "@/lib/prep/reveal";
 import { loadPrepCriteria, loadPrepDraft, setPrepDraft, subscribePrepStorage, type PrepDraft } from "@/lib/prep/storage";
-import { PDF_TOO_LARGE_ERROR, isPdfFile, isPdfTooLarge } from "@/lib/pdf";
-
-/** PDF 가 아닌 파일을 골랐을 때의 문구. 업로드 화면(hooks/useUpload.ts)과 글자 그대로 같다. */
-const NOT_PDF_ERROR = "PDF 파일만 선택할 수 있습니다.";
+import { checkPdfFile, formatFileSize, takeInputFile } from "@/lib/pdfPick";
 
 /** 초안을 기다리는 동안의 상태 글 */
 const GENERATING_STATUS = "모집요강을 읽는 중…";
@@ -29,12 +26,6 @@ const NO_CHANGES_NOTICE = "모집요강에서 전년 대비 변경 사항을 찾
 /** 초안 안내의 링크가 가는 탭: 평가 · 배점 설정 (components/GuidelineUploadTab.tsx 의 링크 주소와 같다) */
 const WEIGHTS_PATH = "/prep/weights";
 
-/** 고른 파일의 크기 글: 1MB 이상이면 "2.4 MB"(소수 한 자리), 아니면 "380 KB"(반올림, 1 보다 작으면 1). 디자인의 표기 그대로다. */
-function formatFileSize(bytes: number): string {
-  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
 // 서버 렌더링과 hydration 중에는 초안이 없고(초안은 브라우저 메모리에만 있다) 저장한 평가 기준은 기본값이다.
 // 그래서 서버 HTML 과 첫 클라이언트 렌더링이 같아 hydration 경고가 나지 않는다(hooks/usePrepWeights.ts 와 같은 방식).
 function getServerDraft(): PrepDraft | null {
@@ -43,24 +34,6 @@ function getServerDraft(): PrepDraft | null {
 
 function getServerCriteria(): PrepCriteria {
   return DEFAULT_PREP_CRITERIA;
-}
-
-/** 고른 파일의 확인: 통과하면 그 파일, 걸리면 오류 문구. 확인은 업로드 화면과 같은 함수(lib/pdf.ts)다. */
-function checkFile(file: File): { file: File | null; fileError: string | null } {
-  if (!isPdfFile(file)) return { file: null, fileError: NOT_PDF_ERROR };
-  if (isPdfTooLarge(file)) return { file: null, fileError: PDF_TOO_LARGE_ERROR };
-  return { file, fileError: null };
-}
-
-/**
- * 파일 입력란에 들어 있는 첫 파일을 꺼내고 입력란을 비운다. 비워 두어야 같은 파일을 다시 골라도 change 가 일어난다.
- * (입력란을 새로 만들지 않고 값만 비우므로 키보드 초점은 그대로다.)
- */
-function takeInputFile(input: HTMLInputElement | null): File | null {
-  const file = input?.files?.[0];
-  if (input === null || file === undefined) return null;
-  input.value = "";
-  return file;
 }
 
 /**
@@ -100,7 +73,7 @@ export function useGuidelineUpload() {
    */
   const generationRef = useRef(0);
 
-  // 이 화면의 수명 관리 (hooks/useUpload.ts 와 같은 방식).
+  // 이 화면의 수명 관리 (학생부 올리기 hooks/useRecordUpload.ts 도 같은 방식이다).
   // - 화면이 준비되기 전에는 본문이 inert 라(usePrepTabReady) 파일을 고를 수 없다. 그래서 준비 전에 고른 파일을 읽어 오는 처리는 없다.
   // - cacheComponents 에서는 다른 화면으로 가도 이 화면이 숨겨질 뿐 상태가 남는다. 숨겨지거나 언마운트될 때 cleanup 에서
   //   진행 중인 요청을 취소하고 세대 번호를 올려 늦게 오는 응답이 아무것도 바꾸지 못하게 한 뒤, 처음 상태(고른 파일 없음, 파일 줄·버튼 줄
@@ -146,7 +119,8 @@ export function useGuidelineUpload() {
 
   /** 고른 파일을 확인·표시한다. 전에 보이던 실패 문구는 지운다(새 파일에는 맞지 않는다). */
   function showFile(picked: File) {
-    const checked = checkFile(picked);
+    // 고른 파일의 확인과 크기 글, 입력란에서 파일 꺼내기는 학생부 올리기와 같이 쓴다(lib/pdfPick.ts).
+    const checked = checkPdfFile(picked);
     setFile(checked.file);
     setFileError(checked.fileError);
     setRequestError(null);

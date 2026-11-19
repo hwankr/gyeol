@@ -11,7 +11,7 @@ import {
 } from "./limits.ts";
 
 // 밖에서 들어온 학과 기준(AI 응답, API 요청, localStorage 값)을 확인하고 정리하는 순수 함수.
-// 업로드 화면(브라우저)과 서버가 같이 쓰므로 서버 전용 코드를 가져오지 않는다. 어떤 입력에도 예외를 던지지 않는다.
+// 화면(브라우저)과 서버가 같이 쓰므로 서버 전용 코드를 가져오지 않는다. 어떤 입력에도 예외를 던지지 않는다.
 
 /**
  * 글을 최대 길이(UTF-16 단위)로 자른다. 자른 자리에서 서로게이트 쌍이 반으로 갈리면 남은 반쪽도 버리고,
@@ -108,12 +108,6 @@ export function checkDepartmentCriteria(value: unknown): DepartmentCriteriaCheck
     ok: true,
     value: { id: trimmedId, department: trimmedDepartment, sourceText, criteria: normalized },
   };
-}
-
-/** checkDepartmentCriteria 를 통과하면 정리된 값, 아니면 null. */
-export function parseDepartmentCriteria(value: unknown): DepartmentCriteria | null {
-  const check = checkDepartmentCriteria(value);
-  return check.ok ? check.value : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

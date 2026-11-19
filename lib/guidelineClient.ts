@@ -11,7 +11,7 @@ const FALLBACK_ERROR = "기준 초안을 만들지 못했습니다. 다시 시�
 
 /**
  * 413 인데 서버가 준 문구가 없을 때(배포 플랫폼이 요청을 앱보다 먼저 막은 경우) 보여 주는 문구.
- * 업로드 화면(lib/analyzeClient.ts)과 글자 그대로 같다.
+ * 학생부 올리기(lib/analyzeClient.ts)와 글자 그대로 같다.
  */
 const PLATFORM_TOO_LARGE_ERROR = "파일이 너무 커서 서버가 받지 못했습니다. 더 작은 PDF 로 다시 시도해 주세요.";
 

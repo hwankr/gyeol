@@ -181,9 +181,8 @@ type DocumentPanelProps = {
   /** 가림 누락을 신고했는지 */
   maskReported: boolean;
   onToggleMaskReport: () => void;
-  onOpenOriginal: () => void;
-  /** 원문보기에서 결과를 저장하지 못했는지 */
-  originalFailed: boolean;
+  /** 원문보기 화면의 주소 (그 지원자의 학생부 원문과 기준별 근거) */
+  originalHref: string;
 };
 
 /**
@@ -199,8 +198,7 @@ export function DocumentPanel({
   passages,
   maskReported,
   onToggleMaskReport,
-  onOpenOriginal,
-  originalFailed,
+  originalHref,
 }: DocumentPanelProps) {
   return (
     <section aria-labelledby={titleId} className={className}>
@@ -244,18 +242,34 @@ export function DocumentPanel({
             </button>
           ))}
         </div>
-        {passages.map((passage) => (
-          <div key={passage.id} className="mt-[12px] border-t border-t-[#E4E4E4] pt-[12px]">
-            <p className="text-[12px] leading-[16px] font-semibold text-[#505050]">{passage.source}</p>
-            <p className="mt-[6px] text-[14px] leading-[24px] [overflow-wrap:anywhere] break-keep">
-              {passage.segments.map((segment) => (
-                <span key={segment.key} className={SEGMENT_CLASS[segment.emphasis]}>
-                  {segment.text}
-                </span>
-              ))}
+        {/*
+          원문이 길면(올린 학생부의 세특은 과목 수십 건이다) 이 상자 안에서 세로로 스크롤한다. 높이는 화면 높이의 60%(360px 보다 작아지지 않음)까지다.
+          예시 지원자의 원문은 짧아 스크롤이 생기지 않는다. 키보드로도 스크롤할 수 있게 초점을 받는다.
+        */}
+        <div
+          role="group"
+          aria-label="서류 원문 내용"
+          tabIndex={0}
+          className="mt-[12px] max-h-[max(360px,60vh)] scroll-m-[8px] overflow-y-auto"
+        >
+          {passages.map((passage, index) => (
+            <div key={passage.id} className={`border-t border-t-[#E4E4E4] pt-[12px] ${index === 0 ? "" : "mt-[12px]"}`}>
+              <p className="text-[12px] leading-[16px] font-semibold text-[#505050]">{passage.source}</p>
+              <p className="mt-[6px] text-[14px] leading-[24px] [overflow-wrap:anywhere] break-keep whitespace-pre-line">
+                {passage.segments.map((segment) => (
+                  <span key={segment.key} className={SEGMENT_CLASS[segment.emphasis]}>
+                    {segment.text}
+                  </span>
+                ))}
+              </p>
+            </div>
+          ))}
+          {passages.length === 0 && (
+            <p className="border-t border-t-[#E4E4E4] pt-[12px] text-[13px] leading-[18px] text-[#505050]">
+              이 구분의 원문이 없습니다.
             </p>
-          </div>
-        ))}
+          )}
+        </div>
         <div
           className={`mt-[12px] flex flex-wrap items-center gap-[8px] border-t border-t-[#E4E4E4] pt-[12px] ${
             showLegend ? "justify-between" : "justify-end"
@@ -266,19 +280,11 @@ export function DocumentPanel({
               밑줄은 AI가 근거로 쓴 문장, 색 면은 지금 고른 항목의 근거입니다.
             </span>
           )}
-          <button
-            type="button"
-            onClick={onOpenOriginal}
-            className={`${BUTTON_SECONDARY_CLASS} h-[28px] scroll-m-[8px] px-[10px] leading-[normal]`}
-          >
+          {/* 원문보기 화면으로 가는 링크다(디자인의 버튼 모양 그대로). */}
+          <Link href={originalHref} className={`${BUTTON_SECONDARY_CLASS} h-[28px] scroll-m-[8px] px-[10px] leading-[normal]`}>
             원문보기
-          </button>
+          </Link>
         </div>
-        {originalFailed && (
-          <p role="alert" className="mt-[8px] text-[12px] leading-[18px] text-[#BA1A1A]">
-            원문을 열지 못했습니다. 브라우저 저장소를 쓸 수 있는지 확인한 뒤 다시 눌러 주세요.
-          </p>
-        )}
       </div>
     </section>
   );

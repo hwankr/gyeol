@@ -10,6 +10,14 @@ export type ConsoleMenu = {
 /** 지원자 관리 화면의 주소 (주 메뉴, 현재 위치 줄의 "지원자 관리") */
 export const APPLICANTS_PATH = "/applicants";
 
+/** 지원자 관리 · 학생부 올리기 화면의 주소 */
+export const APPLICANTS_UPLOAD_PATH = "/applicants/upload";
+
+/** 지원자 관리 · 원문보기 화면의 주소 (그 지원자의 학생부 원문과 기준별 근거) */
+export function applicantOriginalPath(code: string): string {
+  return `/applicants/original?code=${encodeURIComponent(code)}`;
+}
+
 /** 평가하기 화면의 첫 주소: 평가 대기 목록 (주 메뉴, 현재 위치 줄의 "평가하기") */
 export const EVALUATE_PATH = "/evaluate";
 

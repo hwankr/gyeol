@@ -28,7 +28,7 @@ import {
 } from "@/lib/prep/storage";
 
 // 서버 렌더링과 hydration 중에는 기본 평가 기준(저장한 값 없음)으로 그린다. 그래서 서버 HTML 과 첫 클라이언트 렌더링이 같아
-// hydration 경고가 나지 않고, 브라우저에서 localStorage 를 읽은 뒤 저장한 배점이 나타난다(hooks/useSavedDepartments.ts 와 같은 방식).
+// hydration 경고가 나지 않고, 브라우저에서 localStorage 를 읽은 뒤 저장한 배점이 나타난다(hooks/useEvaluationData.ts 와 같은 방식).
 function getServerCriteria(): PrepCriteria {
   return DEFAULT_PREP_CRITERIA;
 }
@@ -117,7 +117,7 @@ export function usePrepWeights() {
   /** 크게 보기·작게 보기를 누른 버튼에 초점이 있었으면, 다시 그린 뒤 그 버튼이 보이게 한다. */
   const revealBigButtonRef = useRef(false);
 
-  // 이 화면의 수명 관리 (hooks/useUpload.ts 와 같은 방식).
+  // 이 화면의 수명 관리 (hooks/useGuidelineUpload.ts 와 같은 방식).
   // cacheComponents 에서는 다른 화면으로 가도 이 화면이 숨겨질 뿐 상태가 남는다. 숨겨지거나 언마운트될 때 cleanup 에서
   // 고치던 배점을 버리고 보기 상태(저장된 값)·첫 요소 선택·작게 보기로 되돌리고, 방금 저장했다는 안내를 지운다.
   // 저장한 값과 메모리에만 둔 값, 초안(lib/prep/storage.ts)은 되돌리지 않는다. 초안이 있으면 다시 보일 때 초안의 배점으로 수정 상태다.

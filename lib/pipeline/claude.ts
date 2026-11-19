@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-// Claude API 호출 공용 모듈. 근거 추출(extractEvidence.ts)과 기준 생성(generateCriteria.ts)이 같이 쓴다.
+// Claude API 호출 공용 모듈. 근거 추출(extractEvidence.ts), AI 제안(assessRecord.ts), 모집요강 초안 생성(generateGuidelineDraft.ts)이 같이 쓴다.
 // 클라이언트 생성, 60초 제한, stop_reason 확인, 글 블록을 JSON 으로 읽기, 오류 분류와 로그를 한곳에서 한다.
 //
 // 이 파일은 서버에서만 가져온다(API 라우트와 그 라우트가 쓰는 lib/pipeline 모듈, scripts/make-sample.ts).

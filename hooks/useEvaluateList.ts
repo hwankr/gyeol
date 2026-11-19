@@ -1,11 +1,9 @@
-import { useLayoutEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { useConsoleSearch } from "@/hooks/useConsoleSearch";
 import { useEvaluationData } from "@/hooks/useEvaluationData";
 import { ADMISSION } from "@/lib/admission";
 import { SAMPLE_APPLICANT_COUNT } from "@/lib/applicants/sampleApplicants";
-import { NO_UPLOADED_APPLICANTS, type UploadedApplicant } from "@/lib/applicants/uploaded";
-import { loadUploadedApplicants, subscribeUploadedApplicants } from "@/lib/applicants/uploadedStorage";
 import { EVALUATE_PATH } from "@/lib/consoleMenu";
 import {
   effectiveRecord,
@@ -17,8 +15,8 @@ import {
   type EvaluationStatus,
 } from "@/lib/evaluate/evaluation";
 import {
+  ASSIGNED_COUNT,
   DEPARTMENT_PROGRESS,
-  EVALUATION_APPLICANTS,
   EVALUATION_DEADLINE_TEXT,
   PEER_PROGRESS,
 } from "@/lib/evaluate/sampleEvaluations";
@@ -45,13 +43,6 @@ const INITIAL_SORT: SortMode = "none";
 /** 상단 바 검색 입력란의 안내 글자 (디자인 그대로) */
 const SEARCH_LABEL = "지원자 코드 또는 요약 검색";
 
-/** 학생부를 올려 분석하는 화면 (디자인에는 없지만 그 화면으로 가는 길이 여기뿐이라 목록 구분 줄 끝에 링크를 둔다) */
-const UPLOAD_PATH = "/upload";
-
-function getServerUploaded(): readonly UploadedApplicant[] {
-  return NO_UPLOADED_APPLICANTS;
-}
-
 /** 목록 한 줄 */
 type Row = {
   code: string;
@@ -63,14 +54,13 @@ type Row = {
 };
 
 /**
- * 평가하기 · 평가 대기 목록 화면 상태: 배정된 지원자 24명(lib/evaluate/sampleEvaluations.ts)과 저장한 내 평가(localStorage)로 상태·내 점수·
- * 진행 현황을 계산하고, 목록 구분·내 점수 정렬·검색(상단 바)·진행 현황에서 볼 사람 고르기를 다룬다.
+ * 평가하기 · 평가 대기 목록 화면 상태: 평가할 지원자(예시 지원자 24명과 지금 평가 기준으로 분석한 올린 지원자. hooks/useEvaluationData.ts)와
+ * 저장한 내 평가(localStorage)로 상태·내 점수·진행 현황을 계산하고, 목록 구분·내 점수 정렬·검색(상단 바)·진행 현황에서 볼 사람 고르기를 다룬다.
  * 내 점수는 전형 준비에서 저장한 배점으로 가중 평균한 값이라 배점을 바꾸면 같이 바뀐다.
  */
 export function useEvaluateList() {
   const search = useConsoleSearch();
-  const { elements, stored } = useEvaluationData();
-  const uploaded = useSyncExternalStore(subscribeUploadedApplicants, loadUploadedApplicants, getServerUploaded);
+  const { elements, stored, applicants, uploadedCount, skippedUploadCount } = useEvaluationData();
   const [tab, setTab] = useState<EvaluateListTab>(INITIAL_TAB);
   const [sort, setSort] = useState<SortMode>(INITIAL_SORT);
   /** 진행 현황에서 고른 사람의 순번 (null: 모집 단위 전체) */
@@ -111,10 +101,10 @@ export function useEvaluateList() {
     };
   }, [inputRef, listenerRef, setInputEnabled]);
 
-  /** 배정된 지원자 전체 (평가 순서 = 코드 순서) */
+  /** 평가할 지원자 전체 (평가 순서 = 코드 순서) */
   const all = useMemo<Row[]>(
     () =>
-      EVALUATION_APPLICANTS.map((applicant) => {
+      applicants.map((applicant) => {
         const record = effectiveRecord(applicant, stored, elements);
         return {
           code: applicant.code,
@@ -124,7 +114,7 @@ export function useEvaluateList() {
           submitted: record?.status === "submitted",
         };
       }),
-    [stored, elements],
+    [applicants, stored, elements],
   );
   const left = useMemo(() => all.filter((row) => !row.submitted), [all]);
   const done = useMemo(() => all.filter((row) => row.submitted), [all]);
@@ -147,10 +137,11 @@ export function useEvaluateList() {
     { name: `${ADMISSION.reviewerName} ${ADMISSION.reviewerRole} (나)`, ringName: `${ADMISSION.reviewerName} ${ADMISSION.reviewerRole}`, done: done.length, total: all.length },
     ...PEER_PROGRESS.map((peer) => ({ ...peer, ringName: peer.name })),
   ];
+  // 모집 단위 전체: 예시 값(전체 312건, 내 것을 뺀 나머지의 제출 227건)에 내 제출 수를 더하고, 목록에 들어온 올린 지원자 수만큼 전체가 는다.
   const department = {
     name: `${ADMISSION.unit} 전체`,
     done: DEPARTMENT_PROGRESS.othersDone + done.length,
-    total: DEPARTMENT_PROGRESS.total,
+    total: DEPARTMENT_PROGRESS.total + Math.max(0, all.length - ASSIGNED_COUNT),
   };
   const shown = who === null ? department : (people[who] ?? department);
   const shownPercent = percentText(shown.done, shown.total);
@@ -161,7 +152,12 @@ export function useEvaluateList() {
   return {
     crumbs: [{ label: "홈" }, { label: "평가하기", href: EVALUATE_PATH }, { label: currentTab.label }],
     /** 제목 옆의 글: 전형 · 모집 단위 · 접수 건수 (예시 지원자 + 올린 지원자) */
-    note: `${ADMISSION.trackFull} · ${ADMISSION.unit} · 접수 ${SAMPLE_APPLICANT_COUNT + uploaded.length}건`,
+    note: `${ADMISSION.trackFull} · ${ADMISSION.unit} · 접수 ${SAMPLE_APPLICANT_COUNT + uploadedCount}건`,
+    /** 지금 평가 기준으로 분석하지 않아 목록에 넣지 못한 올린 지원자가 있을 때의 안내 (없으면 빈 글) */
+    skippedNote:
+      skippedUploadCount === 0
+        ? ""
+        : `올린 학생부 ${skippedUploadCount}건은 지금 평가 기준으로 분석한 것이 아니어서 목록에 없습니다. 지원자 관리의 학생부 올리기에서 다시 올려 주세요.`,
     tabs: TABS.map((item) => ({
       key: item.key,
       label: item.label,
@@ -169,7 +165,6 @@ export function useEvaluateList() {
       on: item.key === tab,
       onPick: () => setTab(item.key),
     })),
-    uploadPath: UPLOAD_PATH,
     sort: {
       mark: SORT_MARK[sort],
       active: sort !== "none",

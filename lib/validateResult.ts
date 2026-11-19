@@ -1,15 +1,26 @@
-import type { AnalysisResult, Criterion, DepartmentCriteria, Evidence, Section } from "@/types/analysis";
+import type {
+  AnalysisResult,
+  Assessment,
+  Criterion,
+  DepartmentCriteria,
+  ElementAssessment,
+  Evidence,
+  GradeGrowth,
+  Section,
+} from "@/types/analysis";
+import { ASSESSMENT_LIMITS, GROWTH_GRADES } from "./evaluate/assessment.ts";
 import { countByCriterion } from "./resultView.ts";
 
 /**
  * 값이 AnalysisResult 모양(필드 이름과 타입)을 갖췄는지 확인한다.
- * sessionStorage 나 API 응답처럼 밖에서 들어온 값을 화면에 넘기기 전에 쓴다.
+ * localStorage 나 API 응답처럼 밖에서 들어온 값을 화면에 넘기기 전에 쓴다.
  * masks 가 없는 값은 블라인드 처리를 거치지 않은 예전 결과이므로 받아들이지 않는다
  * ("블라인드 처리됨" 화면에 가리지 않은 원문을 그리지 않게).
+ * assessment(AI 제안)는 없어도 되고(전형 준비 기준이 아닌 분석, 예전 결과), 있으면 모양이 맞아야 한다.
  */
 export function isAnalysisResult(value: unknown): value is AnalysisResult {
   if (!isRecord(value)) return false;
-  const { criteria, sections, evidences, masks } = value;
+  const { criteria, sections, evidences, masks, assessment } = value;
   return (
     isDepartmentCriteria(criteria) &&
     Array.isArray(sections) &&
@@ -17,7 +28,8 @@ export function isAnalysisResult(value: unknown): value is AnalysisResult {
     Array.isArray(evidences) &&
     evidences.every(isEvidence) &&
     Array.isArray(masks) &&
-    masks.every(isMask)
+    masks.every(isMask) &&
+    (assessment === undefined || isAssessment(assessment))
   );
 }
 
@@ -92,7 +104,44 @@ export function validateResult(result: AnalysisResult): string[] {
     }
   }
 
+  // AI 제안(있을 때): 요소가 기준과 같은 순서·개수이고, 점수 0~100·신뢰도 1~4 의 정수, 성장은 1·2·3학년 세 건에 지수 0~100 의 정수.
+  // 문장에는 기준 id 와 숫자만 넣는다(요약·이름표의 글은 넣지 않는다).
+  const assessment = result.assessment;
+  if (assessment !== undefined) {
+    const criteria = result.criteria.criteria;
+    if (assessment.elements.length !== criteria.length) {
+      problems.push(`AI 제안: 요소 수(${assessment.elements.length})가 기준 수(${criteria.length})와 다름`);
+    }
+    for (const [index, element] of assessment.elements.entries()) {
+      const expected = criteria[index]?.id;
+      if (expected !== undefined && element.criterionId !== expected) {
+        problems.push(`AI 제안 ${index + 1}번째 요소: 기준 id 가 "${expected}" 가 아님 — "${element.criterionId}"`);
+      }
+      if (!isIntegerIn(element.score, ASSESSMENT_LIMITS.minScore, ASSESSMENT_LIMITS.maxScore)) {
+        problems.push(`AI 제안 ${index + 1}번째 요소: 점수가 0~100 의 정수가 아님 — ${element.score}`);
+      }
+      if (!isIntegerIn(element.confidence, ASSESSMENT_LIMITS.minConfidence, ASSESSMENT_LIMITS.maxConfidence)) {
+        problems.push(`AI 제안 ${index + 1}번째 요소: 신뢰도가 1~4 의 정수가 아님 — ${element.confidence}`);
+      }
+    }
+    if (assessment.growth.length !== GROWTH_GRADES.length) {
+      problems.push(`AI 제안: 학년별 성장이 ${GROWTH_GRADES.length}건이 아님 — ${assessment.growth.length}건`);
+    }
+    for (const [index, point] of assessment.growth.entries()) {
+      if (point.grade !== GROWTH_GRADES[index]) {
+        problems.push(`AI 제안 학년별 성장 ${index + 1}번째: 학년이 ${GROWTH_GRADES[index] ?? "없음"} 이 아님 — ${point.grade}`);
+      }
+      if (!isIntegerIn(point.index, ASSESSMENT_LIMITS.minScore, ASSESSMENT_LIMITS.maxScore)) {
+        problems.push(`AI 제안 학년별 성장 ${index + 1}번째: 지수가 0~100 의 정수가 아님 — ${point.index}`);
+      }
+    }
+  }
+
   return problems;
+}
+
+function isIntegerIn(value: number, min: number, max: number): boolean {
+  return Number.isInteger(value) && value >= min && value <= max;
 }
 
 /** 검사 통과 시 출력하는 한 줄 요약: 항목 수, 근거 수, 기준별 근거 수 (기준 목록 순서, 기준 이름 사용) */
@@ -144,6 +193,39 @@ function isSection(value: unknown): value is Section {
 function isMask(value: unknown): value is AnalysisResult["masks"][number] {
   if (!isRecord(value)) return false;
   return typeof value.type === "string" && typeof value.count === "number";
+}
+
+/** AI 제안의 모양(필드 이름과 타입). 값의 범위는 validateResult 가 보고, 화면은 범위 밖 값을 범위 안으로 맞춰 그린다. */
+function isAssessment(value: unknown): value is Assessment {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.rubric === "string" &&
+    typeof value.summary === "string" &&
+    Array.isArray(value.elements) &&
+    value.elements.every(isElementAssessment) &&
+    Array.isArray(value.growth) &&
+    value.growth.every(isGradeGrowth)
+  );
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isElementAssessment(value: unknown): value is ElementAssessment {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.criterionId === "string" &&
+    isFiniteNumber(value.score) &&
+    isFiniteNumber(value.confidence) &&
+    Array.isArray(value.tags) &&
+    value.tags.every((tag) => typeof tag === "string")
+  );
+}
+
+function isGradeGrowth(value: unknown): value is GradeGrowth {
+  if (!isRecord(value)) return false;
+  return isFiniteNumber(value.grade) && typeof value.label === "string" && isFiniteNumber(value.index);
 }
 
 function isEvidence(value: unknown): value is Evidence {

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { EvaluateDetailScreen } from "@/components/EvaluateDetailScreen";
 import { EvaluateMissing } from "@/components/EvaluateParts";
 import { useEvaluateDetail } from "@/hooks/useEvaluateDetail";
+import { useEvaluationData } from "@/hooks/useEvaluationData";
 import { ADMISSION } from "@/lib/admission";
 import { findEvaluationApplicant } from "@/lib/evaluate/evaluation";
 import type { EvaluationApplicant } from "@/lib/evaluate/sampleEvaluations";
@@ -24,7 +25,9 @@ export default function EvaluateDetailPage() {
 
 function DetailByCode() {
   const params = useSearchParams();
-  const applicant = findEvaluationApplicant(params.get("code"));
+  // 평가할 지원자 목록(예시 지원자 + 지금 평가 기준으로 분석한 올린 지원자)에서 찾는다(총평 화면과 같다).
+  const { applicants } = useEvaluationData();
+  const applicant = findEvaluationApplicant(applicants, params.get("code"));
   if (applicant === undefined) return <EvaluateMissing note={`${ADMISSION.trackFull} · ${ADMISSION.unit}`} />;
   const itemId = params.get("item");
   // 지원자나 평가 요소가 바뀌면 새로 그려서 서류 구분·안내 글을 처음 상태로 시작한다(응답은 저장소에 있어 그대로다).

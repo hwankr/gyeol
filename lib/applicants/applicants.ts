@@ -51,7 +51,7 @@ export type Applicant = {
   /** 처음 상태 (저장한 결정이 없을 때) */
   initialStatus: ApplicantStatus;
   /**
-   * 원문보기로 여는 분석 결과. 업로드 화면에서 분석한 학생부(올린 지원자, lib/applicants/uploaded.ts)만 그 결과가 있고,
+   * 원문보기로 여는 분석 결과. 학생부 올리기에서 분석한 학생부(올린 지원자, lib/applicants/uploaded.ts)만 그 결과가 있고,
    * 예시 지원자는 없다(원문보기는 미리 만든 샘플 결과를 연다).
    */
   original?: AnalysisResult;
