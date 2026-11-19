@@ -30,14 +30,30 @@ export const PDF_PASSWORD_ERROR = "암호가 걸린 PDF 는 읽을 수 없습니
 export const PDF_PARSE_ERROR = "PDF 를 읽지 못했습니다.";
 
 /**
+ * 파서(lib/pipeline/parsePdf.ts)가 글자가 없는 PDF(스캔본, 이미지 PDF)에 직접 쓰는 안내 문구. 쪽 수만 달라지고 나머지는 글자 그대로 맞춘다.
+ * 파서의 문구가 바뀌면 이것도 같이 고친다(고치지 않으면 일반 문구 PDF_PARSE_ERROR 로 바뀐다).
+ */
+const PARSER_NO_TEXT_MESSAGE =
+  /^PDF \d+쪽에서 글자를 찾지 못했습니다\. 스캔본이나 이미지로 된 PDF는 지원하지 않습니다\. 글자가 들어 있는 텍스트 PDF를 올려주세요\.$/;
+
+/**
  * PDF 파싱 오류를 업로드 화면에 보여 줄 한국어 문구로 바꾼다.
- * - 파서(lib/pipeline/parsePdf.ts)가 직접 쓴 한국어 안내(예: 글자가 없는 이미지 PDF)는 그대로 돌려준다.
- * - PDF 라이브러리(pdf.js)가 던지는 오류는 문구가 영어라서(예: "Invalid PDF structure.") 오류 종류(name)로 구분해 한국어 문구로 바꾼다.
- * - 그 밖에 한글이 없는 문구는 화면에 내보내지 않고 일반 문구로 바꾼다.
+ * - 파서(lib/pipeline/parsePdf.ts)가 직접 쓴 안내 문구로 확인된 것(PARSER_NO_TEXT_MESSAGE)만 그대로 돌려준다.
+ * - PDF 라이브러리(pdf.js)가 던지는 오류는 문구가 영어라서(예: "Invalid PDF structure.") 오류 종류(name)로 구분해 한국어 고정 문구로 바꾼다.
+ * - 그 밖의 오류는 한글이 들어 있어도 일반 문구로 바꾼다. 오류 문구에는 가리기 전 학생부 내용(이름·학교명 등)이 섞일 수 있어서
+ *   응답에 그대로 싣지 않는다.
+ * - 어떤 값에도 예외를 던지지 않는다. name·message 는 한 번씩만 읽고 확인한 그 값만 쓰며, 읽다가 예외가 나면(getter, Proxy 등)
+ *   일반 문구(PDF_PARSE_ERROR)를 돌려준다.
  */
 export function describePdfParseError(error: unknown): string {
-  if (!(error instanceof Error)) return PDF_PARSE_ERROR;
-  if (error.name === "PasswordException") return PDF_PASSWORD_ERROR;
-  if (error.name === "InvalidPDFException") return PDF_DAMAGED_ERROR;
-  return /[가-힣]/.test(error.message) ? error.message : PDF_PARSE_ERROR;
+  try {
+    if (!(error instanceof Error)) return PDF_PARSE_ERROR;
+    const name: unknown = error.name;
+    if (name === "PasswordException") return PDF_PASSWORD_ERROR;
+    if (name === "InvalidPDFException") return PDF_DAMAGED_ERROR;
+    const message: unknown = error.message;
+    return typeof message === "string" && PARSER_NO_TEXT_MESSAGE.test(message) ? message : PDF_PARSE_ERROR;
+  } catch {
+    return PDF_PARSE_ERROR;
+  }
 }
