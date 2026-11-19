@@ -265,14 +265,15 @@ npx next start -p 3100      # 빌드한 것을 실행 (http://localhost:3100)
 
 ### 글꼴과 로그인 화면 배경 무늬
 
-- 웹 글꼴은 로그인 화면과 새 화면(전형 준비, 지원자 관리, 평가하기)만 쓴다. 본문은 Pretendard(`fonts/pretendard/`), 로고 글자 `Gyeol` 은 Mulish(굵기 500, 라틴 글자, `fonts/mulish/`). 대체 순서는 Pretendard → Apple SD Gothic Neo → Malgun Gothic → sans-serif, 로고 글자는 Mulish → sans-serif 다.
-  - 로그인 화면: Pretendard 400·500·600·700 과 Mulish (`components/loginFonts.ts`).
-  - 새 화면: Pretendard 400·500·600·700 과 Mulish (`components/consoleFonts.ts`, 새 화면 껍데기 `components/ConsoleShell.tsx` 에서만 가져온다).
+- 웹 글꼴은 로그인 화면과 새 화면(전형 준비, 지원자 관리, 평가하기)만 쓴다. 글꼴은 Pretendard(`fonts/pretendard/`) 하나이고, 대체 순서는 Pretendard → Apple SD Gothic Neo → Malgun Gothic → sans-serif 다. 로고는 글꼴이 아니라 그림(`components/GyeolLogo.tsx`)이다.
+  - 로그인 화면: Pretendard 400·500·600·700 (`components/loginFonts.ts`).
+  - 새 화면: Pretendard 400·500·600·700 (`components/consoleFonts.ts`, 새 화면 껍데기 `components/ConsoleShell.tsx` 에서만 가져온다).
   - `fonts/pretendard/` 에는 굵기 300·800 파일도 있지만 지금은 어느 화면도 불러오지 않는다.
-- 두 글꼴 모두 SIL Open Font License 1.1 이고, 라이선스 원문은 글꼴 파일과 같은 폴더의 `LICENSE` 에 있다.
-- `next/font/local` 로 불러온다(`font-display: swap`). 파일이 저장소에 있으므로 빌드·실행에 외부 글꼴 서버가 필요 없다. 미리 불러오기는 작은 Mulish(약 13KB)만 켜고, 파일 하나가 약 760~790KB 인 Pretendard 는 끈다(CSS 가 문서 머리에 있어 글자를 그릴 때 쓰는 굵기만 곧바로 내려받고, 그동안은 대체 글꼴로 보여 준다).
-- 두 선언은 따로다(로그인 화면과 새 화면이 저마다의 CSS 에만 `@font-face` 를 넣는다). 두 선언이 쓰는 파일(Pretendard 400·500·600·700, Mulish)이 같아서 내려받는 주소가 같고 브라우저가 한 번만 받는다.
+- Pretendard 는 SIL Open Font License 1.1 이고, 라이선스 원문은 글꼴 파일과 같은 폴더의 `LICENSE` 에 있다.
+- `next/font/local` 로 불러온다(`font-display: swap`). 파일이 저장소에 있으므로 빌드·실행에 외부 글꼴 서버가 필요 없다. 미리 불러오기는 끈다(파일 하나가 약 760~790KB)(CSS 가 문서 머리에 있어 글자를 그릴 때 쓰는 굵기만 곧바로 내려받고, 그동안은 대체 글꼴로 보여 준다).
+- 두 선언은 따로다(로그인 화면과 새 화면이 저마다의 CSS 에만 `@font-face` 를 넣는다). 두 선언이 쓰는 파일(Pretendard 400·500·600·700)이 같아서 내려받는 주소가 같고 브라우저가 한 번만 받는다.
 - 배경 무늬 타일(75×260)은 `public/login-pattern.svg` 이다.
+- 브라우저 탭 아이콘은 `app/icon.svg`(어두운 화면 설정에서는 흰색), `app/favicon.ico`(16·32·48px), 홈 화면 아이콘은 `app/apple-icon.png`(180px, 흰 바탕)이다. Next 의 파일 규칙으로 문서 머리에 연결된다.
 
 ### 움직임 (화면 전환, 올려놓음·누름, 나타남)
 
@@ -543,6 +544,8 @@ npx tsx scripts/blind-sample.ts   # node scripts/blind-sample.ts 로도 돈다
 app/
   layout.tsx              루트 레이아웃 (lang="ko", 문서 제목). 모든 화면이 같이 쓰는 것만 둔다
   page.tsx                로그인 화면 연결부 (useLogin → LoginScreen)
+  icon.svg, favicon.ico   브라우저 탭 아이콘 (곡선 세 개 무늬. icon.svg 는 어두운 화면 설정에서 흰색)
+  apple-icon.png          홈 화면 아이콘 (180px, 흰 바탕)
   (console)/              새 화면 묶음 (디자인 적용. 라우트 그룹이라 주소에는 나타나지 않는다)
     layout.tsx            새 화면 껍데기 연결부 (useConsoleNav → ConsoleShell: 사이드바·상단 바. 검색 입력란·입력 이벤트를 받을 곳·켜고 끄기(useConsoleSearchState)를 context 로 건넴). 껍데기 바깥의 화면 전환 경계
     prep/layout.tsx       전형 준비 공통 머리 연결부 (usePrepHeader → PrepHeader), 세 탭의 키 반복 규칙(useKeyRepeatGuard)·초점 규칙(usePrepFocusKeeper)
@@ -560,9 +563,9 @@ app/
   api/guideline/route.ts  POST /api/guideline (파일·모집 단위 확인 → readGuidelinePages → generateGuidelineDraft)
 components/               화면 컴포넌트. props 를 그리고 콜백만 호출한다 (디자인은 여기만 고치면 된다)
   LoginScreen.tsx         로그인 화면 (로고·소개, 대학·계정 선택, 계속 = next/form 의 GET 폼으로 /prep 이동, 고른 계정의 안내 한 줄). 치수·색·글자는 디자인 값 그대로
-  GyeolLogo.tsx           로그인 화면 로고 (곡선 세 개 무늬 SVG + 로고 글자 "Gyeol")
-  loginFonts.ts           로그인 화면 글꼴 (next/font/local: Pretendard 400~700, Mulish)
-  consoleFonts.ts         새 화면 글꼴 (next/font/local: Pretendard 400~700, Mulish)
+  GyeolLogo.tsx           로고 (곡선 세 개 무늬와 로고 글자 "Gyeol" 을 한 SVG 로. 받은 로고 그림의 윤곽을 옮긴 것, 색은 글자색을 따름. 로그인 화면·새 화면 사이드바가 같이 씀)
+  loginFonts.ts           로그인 화면 글꼴 (next/font/local: Pretendard 400~700)
+  consoleFonts.ts         새 화면 글꼴 (next/font/local: Pretendard 400~700)
   consoleUi.tsx           새 화면이 같이 쓰는 조각 (현재 위치 줄 ConsoleCrumbs, 제목 줄 ConsoleTitle, 상태 표시 StatusChip, 꼬리표 AccentTag, 이어 붙인 버튼·테두리 상자·버튼 클래스)
   ConsoleShell.tsx        새 화면 껍데기 (사이드바: 로고·대학·전형 선택·주 메뉴·로그아웃, 상단 바: 검색(지원자 관리·평가 대기 목록에서만 동작)·계정·내보내기·알림, 그 아래 본문 <main>)
   PrepHeader.tsx          전형 준비 공통 머리 (현재 위치, 제목·오늘 날짜, 전형 요약, 탭 줄)
@@ -657,7 +660,6 @@ lib/
     locateQuote.ts        AI 가 인용한 구절을 원문에서 찾기 (제공받은 검증된 코드, 고치지 않는다)
 fonts/                    로그인·새 화면 글꼴 파일 (SIL OFL 1.1, 라이선스 원문은 각 폴더의 LICENSE)
   pretendard/             Pretendard 300·400·500·600·700·800 (woff2. 화면이 불러오는 것은 400·500·600·700), LICENSE
-  mulish/                 Mulish 500 라틴 글자 (woff2), LICENSE
 public/
   login-pattern.svg       로그인 화면 배경 무늬 타일 (75×260)
 samples/

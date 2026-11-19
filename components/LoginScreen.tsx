@@ -67,7 +67,10 @@ export function LoginScreen({
 
       <div className="relative box-border min-w-0 flex-[1_1_480px] p-[clamp(32px,6vw,88px)] text-white">
         <div className="max-w-[480px] animate-rise-in">
-          <GyeolLogo />
+          {/* 로고 그림 높이 48px 은 바뀌기 전 로고(56px 글자)의 대문자 높이에 맞춘 값이다. 상자 높이 56px 은 그대로라 아래 간격이 바뀌지 않는다. */}
+          <div className="flex h-[56px] items-center">
+            <GyeolLogo className="h-[48px] text-white" />
+          </div>
           <p className="mt-[32px] text-[16px] leading-[26px]">{INTRO}</p>
           {/* 항목마다 위에 가는 줄을 긋고, 마지막 항목은 아래에도 긋는다. */}
           <dl className="mt-[32px] flex flex-col">

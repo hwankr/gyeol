@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode, Ref } from "react";
-import { consoleMulish, consolePretendard } from "@/components/consoleFonts";
+import { consolePretendard } from "@/components/consoleFonts";
+import { GyeolLogo } from "@/components/GyeolLogo";
 import { ADMISSION } from "@/lib/admission";
 import type { ConsoleMenu } from "@/lib/consoleMenu";
 
@@ -38,22 +39,9 @@ export function ConsoleShell({ menus, logoutPath, search, searchInputRef, childr
       className={`${consolePretendard.className} box-border flex min-h-screen flex-wrap bg-white text-[14px] leading-[20px] text-[#111111]`}
     >
       <div className="box-border flex flex-[1_0_248px] flex-col border-r border-r-[#E4E4E4] px-[12px] pt-[20px] pb-[16px]">
-        <div className="flex items-center gap-[0.33em] px-[12px] text-[22px] leading-none text-[#001AD0]">
-          <svg aria-hidden="true" viewBox="0 0 107 147" className="h-[0.96em] w-[0.7em] flex-none">
-            <path fill="#001AD0" d="M0 0A53.5 53.5 0 0 0 107 0L91 0Q85.5 0 85.1 5A32 32 0 0 1 21.9 5Q21.5 0 16 0Z" />
-            <path
-              fill="#001AD0"
-              d="M0 46.75A53.5 53.5 0 0 0 107 46.75L91 46.75Q85.5 46.75 85.1 51.75A32 32 0 0 1 21.9 51.75Q21.5 46.75 16 46.75Z"
-            />
-            <path
-              fill="#001AD0"
-              d="M0 93.5A53.5 53.5 0 0 0 107 93.5L91 93.5Q85.5 93.5 85.1 98.5A32 32 0 0 1 21.9 98.5Q21.5 93.5 16 93.5Z"
-            />
-          </svg>
-          {/* 글자를 무늬와 눈으로 가운데가 맞게 조금 올린다(디자인 값). */}
-          <span className={`${consoleMulish.className} relative -top-[0.123em] font-medium tracking-[-0.01em]`}>
-            Gyeol
-          </span>
+        {/* 로고 그림 높이 19px 은 바뀌기 전 로고(22px 글자)의 대문자 높이에 맞춘 값이다. 상자 높이 22px 은 그대로라 아래 간격이 바뀌지 않는다. */}
+        <div className="flex h-[22px] items-center px-[12px]">
+          <GyeolLogo className="h-[19px] text-[#000947]" />
         </div>
         <div className="mt-[24px] px-[12px]">
           <p className="text-[14px] leading-[20px] font-semibold">{ADMISSION.university}</p>

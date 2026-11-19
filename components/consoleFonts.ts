@@ -23,14 +23,3 @@ export const consolePretendard = localFont({
   fallback: ["Apple SD Gothic Neo", "Malgun Gothic", "sans-serif"],
   adjustFontFallback: false,
 });
-
-/** 로고 글자 "Gyeol" 의 글꼴 Mulish (굵기 500, 라틴 글자). 파일이 작아(약 13KB) 미리 불러온다. */
-export const consoleMulish = localFont({
-  src: "../fonts/mulish/mulish-latin-500-normal.woff2",
-  weight: "500",
-  style: "normal",
-  display: "swap",
-  preload: true,
-  fallback: ["sans-serif"],
-  adjustFontFallback: false,
-});
