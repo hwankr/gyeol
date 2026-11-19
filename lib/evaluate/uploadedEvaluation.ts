@@ -1,6 +1,7 @@
 import type { AnalysisResult, Assessment } from "@/types/analysis";
 import { DOCUMENT_AREAS as AREA_CATEGORIES, type UploadedApplicant } from "../applicants/uploaded.ts";
 import { PREP_CRITERIA_ID, rubricFingerprint } from "../prep/analysisCriteria.ts";
+import { recordFormGroup } from "../recordForm.ts";
 import type { PrepElement } from "../prep/criteria.ts";
 import { ASSESSMENT_LIMITS, GROWTH_GRADES, NO_GROWTH_LABEL, NO_SUMMARY } from "./assessment.ts";
 import { evidenceSource } from "./evaluation.ts";
@@ -92,7 +93,8 @@ export function splitBySlots(
  * 올린 지원자 → 평가할 지원자. 지금 평가 기준으로 평가할 수 없으면(assessmentFor) null.
  * - 한 줄 요약, 요소별 AI 점수·신뢰도·태그: AI 제안의 값(범위 밖 값은 범위 안으로 맞춘다). 자리는 평가 요소 순번이다.
  * - 서류 원문: 교과(교과 성적)·세특·창체(자율·동아리·진로·봉사)·행특·독서(독서활동상황) 항목을 문서 순서대로. 과목이 없는 항목은
- *   항목 이름을 과목 자리에 쓴다. 그 밖의 항목은 넣지 않는다. 근거 구절은 원문에서 처음 나오는 자리에 표시한다(splitBySlots).
+ *   서식의 묶음 이름(교과 성적의 "진로 선택 과목"·"체육·예술")이나 항목 이름을 과목 자리에 쓴다. 그 밖의 항목은 넣지 않는다.
+ *   근거 구절은 원문에서 처음 나오는 자리에 표시한다(splitBySlots). 원문마다 학생부 항목의 id 와 쪽 번호를 붙인다(origin).
  * - 근거 문장: 요소마다 근거 구절과 AI 가 적은 이유를 원문 순서대로(항목 순서, 항목 안에서는 구절이 나오는 순서).
  * - 학년별 성장: 이름표와 지수는 AI 제안, 건수는 그 학년 항목에서 나온 근거 구절의 수.
  * - 처음 평가 상태는 없고("대기") 다른 위원 의견도 없다. 원문보기는 이 분석 결과를 연다. 평가는 이 분석(남긴 때)에 묶는다(stamp).
@@ -122,7 +124,11 @@ export function uploadedEvaluationApplicant(
       id: `${item.code}-p${sectionIndex}`,
       area,
       grade,
-      subject: section.subject !== undefined && section.subject.trim() !== "" ? section.subject : section.category,
+      subject:
+        section.subject !== undefined && section.subject.trim() !== ""
+          ? section.subject
+          : (recordFormGroup(section.fieldId) ?? section.category),
+      origin: { sectionId: section.id, page: section.page },
       segments: splitBySlots(
         section.text,
         marks

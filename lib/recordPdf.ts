@@ -1,7 +1,9 @@
 import { extractText, getDocumentProxy, inspectPages, registerImageDecoders } from "unpdf";
-import type { Section } from "@/types/analysis";
+import type { AnalysisResult, Section } from "@/types/analysis";
 import { describePdfParseError } from "./pdf.ts";
 import { parsePdfDocument, type ParseReport } from "./pipeline/parsePdf.ts";
+import { recordFormPart } from "./recordForm.ts";
+import { buildRecordPages, type RecordPages } from "./recordPages.ts";
 import {
   MAX_PAGE_IMAGE_BASE64_LENGTH,
   MAX_PAGE_TEXT_LENGTH,
@@ -73,6 +75,11 @@ export type OpenedRecord = {
   imagePages: RecordImagePage[];
   /** 쪽 하나를 JPEG 로 그려 base64 문자열로 돌려준다. 실패하면 RecordPdfError */
   renderPage(page: number): Promise<string>;
+  /**
+   * 분석이 끝난 뒤: 가린 정보의 자리를 덮은 쪽 그림과 항목·근거의 자리를 만든다(lib/recordPages.ts). originals 는 서버에 보낸
+   * 가리기 전 항목(같은 순서), result 는 받은 분석 결과다. 취소되거나 만들지 못하면 null(분석 결과는 그대로 쓴다).
+   */
+  buildPages(originals: readonly Section[], result: AnalysisResult, signal?: AbortSignal): Promise<RecordPages | null>;
   /** 문서를 닫는다(여러 번 불러도 된다) */
   close(): void;
 };
@@ -141,6 +148,13 @@ export async function openRecordPdf(file: File): Promise<OpenedRecord> {
           throw error instanceof RecordPdfError ? error : new RecordPdfError(RENDER_ERROR);
         }
       },
+      buildPages: async (originals, result, signal) => {
+        try {
+          return await buildRecordPages({ pdf, scannedPages: scanned, originals, result, signal });
+        } catch {
+          return null;
+        }
+      },
     };
   } catch (error) {
     close();
@@ -150,14 +164,19 @@ export async function openRecordPdf(file: File): Promise<OpenedRecord> {
 
 /**
  * 파서가 이 문서의 양식을 알아보았는지: 서술형 항목(자율활동, 세부능력 및 특기사항 등)을 하나라도 읽었고,
- * 읽은 글자의 MIN_RECOGNIZED_RATIO 이상을 항목·항목 이름·표 구조로 알아보았을 때.
+ * 읽은 글자의 MIN_RECOGNIZED_RATIO 이상을 항목·항목 이름·표 구조로 알아보았고, 경고가 하나도 없고(처음 보는 표 머리글, 분류하지 못한 줄 등),
+ * 모든 항목이 학생부 서식(lib/recordForm.ts)의 칸으로 읽혔을 때.
+ * 파서는 가상 학생부의 표 모양에 맞춰져 있다. 실제 발급 학생부(별지 제8호 서식)는 표 머리글이 달라 일부만 맞는 경우가 있는데,
+ * 그때 맞지 않는 표(예: 창의적 체험활동상황)가 통째로 한 항목이 되어 분석에서 빠지지 않도록, 조금이라도 어긋나면 AI 가 서식에 맞춰 읽게 한다.
  */
 function parserUnderstood(report: ParseReport): boolean {
   const { stats } = report;
   const recognized = stats.sections + stats.labels + stats.structure;
   return (
     report.sections.some((section) => NARRATIVE_CATEGORIES.includes(section.category)) &&
-    recognized >= stats.total * MIN_RECOGNIZED_RATIO
+    recognized >= stats.total * MIN_RECOGNIZED_RATIO &&
+    report.warnings.length === 0 &&
+    report.sections.every((section) => recordFormPart(section.fieldId)?.category === section.category)
   );
 }
 

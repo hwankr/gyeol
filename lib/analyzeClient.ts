@@ -1,6 +1,7 @@
 import type { AnalysisResult } from "@/types/analysis";
 import type { PrepCriteria } from "./prep/criteria.ts";
 import { CONNECTION_ERROR, RequestCanceledError, readErrorMessage } from "./apiClient.ts";
+import type { RecordPages } from "./recordPages.ts";
 import type { OpenedRecord, RecordImagePage } from "./recordPdf.ts";
 import { mergeRecordSections, readPageSections, type PageReading, type PageSection } from "./recordSections.ts";
 import { isAnalysisResult } from "./validateResult.ts";
@@ -9,6 +10,7 @@ import { isAnalysisResult } from "./validateResult.ts";
 // PDF 파일은 서버로 보내지 않는다. 브라우저에서 PDF 를 읽어(lib/recordPdf.ts) 항목만 POST /api/analyze 로 보내고,
 // 글자가 없는 쪽(과 파서가 양식을 알아보지 못한 문서의 쪽)은 쪽마다 그림 한 장을 POST /api/record-page 로 보내 AI 가 읽게 한다.
 // 그래서 파일이 커도 배포 환경(Vercel)의 요청 본문 한도(4.5MB)에 걸리지 않는다.
+// 분석이 끝나면 PDF 를 닫기 전에, 가린 정보의 자리를 덮은 쪽 그림과 항목·근거의 자리를 만든다(lib/recordPages.ts). 원문보기가 쓴다.
 
 const FALLBACK_ERROR = "분석에 실패했습니다. 다시 시도해 주세요.";
 
@@ -48,7 +50,17 @@ export type AnalysisProgress =
   | { stage: "reading" }
   /** 이미지 쪽을 AI 가 읽는 중. done 은 다 읽은 쪽 수, total 은 읽어야 하는 쪽 수 */
   | { stage: "pages"; done: number; total: number }
-  | { stage: "analyzing" };
+  | { stage: "analyzing" }
+  /** 분석이 끝나 가린 쪽 그림을 만드는 중 */
+  | { stage: "rendering" };
+
+/** 분석이 돌려주는 것 */
+export type AnalysisOutcome = {
+  /** 분석 결과(가려진 원문, 근거, AI 제안) */
+  result: AnalysisResult;
+  /** 가린 쪽 그림과 항목·근거의 자리. 만들지 못했으면 null(원문보기는 글만 보여 준다) */
+  pages: RecordPages | null;
+};
 
 /**
  * 학생부 PDF 를 전형 준비의 평가 기준으로 분석해 결과(가려진 원문, 근거, AI 제안)를 받는다.
@@ -57,6 +69,8 @@ export type AnalysisProgress =
  * 3. 항목을 쪽 순서로 합쳐(mergeRecordSections) 평가 기준과 함께 POST /api/analyze 로 보낸다.
  *    평가 기준은 { version, department, elements } 만 보낸다(모집요강 파일 이름과 변경 사항(guideline)은 분석에 쓰이지 않는다.
  *    배점은 저장 값 확인이 합계를 보므로 들어가지만 서버는 AI 에 보내지 않는다).
+ * 4. 받은 결과(가려진 원문)와 보낸 항목(가리기 전)을 견주어 가린 정보의 자리를 덮은 쪽 그림을 만든다(record.buildPages).
+ *    만들지 못해도 분석은 성공이다(pages 가 null).
  * - onProgress 로 단계가 바뀔 때와 이미지 쪽을 하나 읽을 때마다 알린다.
  * - 실패하면 화면에 보여 줄 문구를 담은 Error 를 던진다. 서버가 준 { error } 문구가 있으면(공백만 있는 문자열 제외) 그대로 쓴다.
  *   PDF 라이브러리의 오류 문구는 쓰지 않는다(lib/recordPdf.ts 가 화면 문구로 바꾼다).
@@ -66,7 +80,7 @@ export async function requestAnalysis(
   request: AnalysisRequest,
   signal?: AbortSignal,
   onProgress?: (progress: AnalysisProgress) => void,
-): Promise<AnalysisResult> {
+): Promise<AnalysisOutcome> {
   onProgress?.({ stage: "reading" });
   const record = await openRecord(request.file, signal);
   try {
@@ -79,7 +93,11 @@ export async function requestAnalysis(
     const { version, department, elements } = request.prepCriteria;
     const data = await postJson("/api/analyze", { sections, prepCriteria: { version, department, elements } }, signal, FALLBACK_ERROR);
     if (!isAnalysisResult(data)) throw new Error(FALLBACK_ERROR);
-    return data;
+
+    onProgress?.({ stage: "rendering" });
+    const pages = await record.buildPages(sections, data, signal);
+    if (signal?.aborted) throw new RequestCanceledError();
+    return { result: data, pages };
   } finally {
     record.close();
   }

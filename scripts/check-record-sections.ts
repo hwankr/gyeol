@@ -2,15 +2,27 @@
 // 실행(저장소 루트에서): node scripts/check-record-sections.ts (npx tsx 로도 된다)
 // 보는 것: 브라우저가 보낸 항목 확인(readRecordSections), 이미지 쪽을 AI 가 읽은 결과 정리(readPageSections),
 // 글자가 있는 쪽의 항목과 이미지 쪽의 항목 합치기(mergeRecordSections), 쪽 그림 확인(isJpegBase64),
-// 이미지 쪽의 항목명이 파서의 항목명과 글자 그대로 같은지(가상 학생부를 파서로 읽어 견준다).
+// 이미지 쪽의 항목명이 파서의 항목명과 글자 그대로 같은지(가상 학생부를 파서로 읽어 견준다),
+// 학생부 서식 정의(lib/recordForm.ts: 별지 제8호 서식의 칸)가 항목 확인의 한도 안이고 파서가 읽은 항목이 모두 서식의 칸인지.
 // 모두 통과하면 "학생부 항목 검사 통과: N건" 을 출력하고 종료 코드 0, 하나라도 어긋나면 어긋난 것을 출력하고 종료 코드 1.
 // Node 로 직접(타입 제거 실행) 돌도록 값 import 는 상대 경로에 .ts 확장자를 붙인다.
 import { readFile } from "node:fs/promises";
 import { parsePdf } from "../lib/pipeline/parsePdf.ts";
 import {
+  RECORD_FORM_OTHER_ID,
+  RECORD_FORM_PARTS,
+  describeRecordFormForAnalysis,
+  describeRecordFormForReading,
+  recordFormGroup,
+  recordFormPart,
+  recordFormPath,
+} from "../lib/recordForm.ts";
+import {
   MAX_PAGE_SECTIONS,
   MAX_RECORD_SECTIONS,
   MAX_RECORD_TEXT_LENGTH,
+  MAX_SECTION_CATEGORY_LENGTH,
+  MAX_SECTION_FIELD_ID_LENGTH,
   MAX_SECTION_TEXT_LENGTH,
   NARRATIVE_CATEGORIES,
   PAGE_CATEGORIES,
@@ -73,14 +85,32 @@ check("항목: 시간이 음수면 거절", readRecordSections([{ ...valid, hour
 check("항목: 시간이 NaN 이면 거절", readRecordSections([{ ...valid, hours: Number.NaN }]) === null);
 
 // ── readPageSections: 이미지 쪽을 AI 가 읽은 결과 정리 ──
-const raw = { category: "세부능력 및 특기사항", grade: 2, subject: " 국어 ", text: " 본문 ", continued: false };
-check("쪽: 앞뒤 공백을 빼고 정리한다", same(readPageSections([raw]), [
-  { category: "세부능력 및 특기사항", grade: 2, subject: "국어", text: "본문", continued: false },
+const raw = { fieldId: "S07.BASE.NOTE.text", grade: 2, subject: " 국어 ", hours: 0, text: " 본문 ", continued: false };
+check("쪽: 앞뒤 공백을 빼고 정리하고, 항목명은 서식의 칸에서 정한다", same(readPageSections([raw]), [
+  { fieldId: "S07.BASE.NOTE.text", category: "세부능력 및 특기사항", grade: 2, subject: "국어", hours: null, text: "본문", continued: false },
 ]));
 check("쪽: 학년 0 은 null, 빈 과목은 null", same(readPageSections([{ ...raw, grade: 0, subject: "" }]), [
-  { category: "세부능력 및 특기사항", grade: null, subject: null, text: "본문", continued: false },
+  { fieldId: "S07.BASE.NOTE.text", category: "세부능력 및 특기사항", grade: null, subject: null, hours: null, text: "본문", continued: false },
 ]));
-check("쪽: 목록에 없는 항목명은 기타", readPageSections([{ ...raw, category: "모르는 항목" }])?.[0]?.category === "기타");
+check("쪽: 서식에 없는 칸은 기타", same(
+  readPageSections([{ ...raw, fieldId: "모르는 칸" }])?.map((section) => [section.fieldId, section.category]),
+  [[RECORD_FORM_OTHER_ID, "기타"]],
+));
+check("쪽: 받은 항목명은 쓰지 않는다(칸의 항목명을 쓴다)", readPageSections([{ ...raw, category: "자율활동" }])?.[0]?.category === "세부능력 및 특기사항");
+check("쪽: 진로 선택 과목·체육·예술의 칸도 항목명은 같다", same(
+  readPageSections([
+    { ...raw, fieldId: "S07.CAREER.NOTE.text" },
+    { ...raw, fieldId: "S07.ART.SCORE", subject: "" },
+    { ...raw, fieldId: "S04.NCS", subject: "" },
+  ])?.map((section) => section.category),
+  ["세부능력 및 특기사항", "교과 성적", "국가직무능력표준 이수상황"],
+));
+check("쪽: 창의적 체험활동 영역의 시간은 남긴다", readPageSections([{ ...raw, fieldId: "S06.CLUB.remarks", hours: 34 }])?.[0]?.hours === 34);
+check("쪽: 시간을 적지 않는 칸의 시간은 버린다", readPageSections([{ ...raw, hours: 34 }])?.[0]?.hours === null);
+check("쪽: 시간 0 은 null", readPageSections([{ ...raw, fieldId: "S06.AUTO.remarks", hours: 0 }])?.[0]?.hours === null);
+check("쪽: 시간이 없어도 된다", readPageSections([{ fieldId: "S06.AUTO.remarks", grade: 1, subject: null, text: "글", continued: false }])?.[0]?.hours === null);
+check("쪽: 시간이 숫자가 아니면 null", readPageSections([{ ...raw, hours: "34" }]) === null);
+check("쪽: 칸이 문자열이 아니면 null", readPageSections([{ ...raw, fieldId: 7 }]) === null);
 check("쪽: 빈 글 항목은 버린다", same(readPageSections([{ ...raw, text: "  " }]), []));
 check("쪽: 빈 배열(빈 쪽)은 통과", same(readPageSections([]), []));
 check("쪽: continued 는 첫 항목에서만 남긴다", same(
@@ -97,10 +127,13 @@ check("쪽: 필드 타입이 다르면 null", readPageSections([{ ...raw, contin
 check("쪽: 학년이 소수면 null", readPageSections([{ ...raw, grade: 2.5 }]) === null);
 
 // ── mergeRecordSections: 합치기 ──
+/** 그 항목명의 칸 가운데 서식에서 맨 먼저 나오는 것으로 이미지 쪽 항목을 만든다 */
 const page = (category: string, text: string, more: Partial<PageSection> = {}): PageSection => ({
+  fieldId: RECORD_FORM_PARTS.find((part) => part.category === category)?.id ?? RECORD_FORM_OTHER_ID,
   category,
   grade: null,
   subject: null,
+  hours: null,
   text,
   continued: false,
   ...more,
@@ -126,6 +159,9 @@ check("합치기: 앞쪽에서 이어지는 글은 앞 항목 뒤에 공백 하�
 check("합치기: 학년이 없으면 같은 묶음의 앞 항목 학년을 쓴다(창의적 체험활동)", merged[2]?.grade === 1);
 check("합치기: 묶음이 다르면 학년을 이어받지 않는다", mergeRecordSections(textSections.slice(0, 2), [{ page: 3, sections: [page("교과 성적", "표")] }])[2]?.grade === null);
 check("합치기: 성적표의 학년을 세부능력 및 특기사항이 이어받는다", merged[4]?.grade === 2 && merged[4]?.subject === "국어");
+check("합치기: 이미지 쪽의 항목은 서식의 칸을 가진다", merged[3]?.fieldId === "S07.BASE.SCORE" && merged[4]?.fieldId === "S07.BASE.NOTE.text");
+check("합치기: 이미지 쪽의 시간을 남긴다", mergeRecordSections([], [{ page: 1, sections: [page("동아리활동", "동아리", { hours: 34 })] }])[0]?.hours === 34);
+check("합치기: 시간이 없으면 hours 를 넣지 않는다", !("hours" in (mergeRecordSections([], [{ page: 1, sections: [page("동아리활동", "동아리")] }])[0] ?? {})));
 check("합치기: 이미지 쪽에 적힌 학년이 있으면 그대로 쓴다", mergeRecordSections(textSections.slice(1, 2), [{ page: 3, sections: [page("동아리활동", "동아리", { grade: 2 })] }])[1]?.grade === 2);
 check("합치기: 받은 값을 바꾸지 않는다", textSections[1]?.text === "첫 문장" && textSections[1]?.id === "s2");
 check("합치기: 표 모양 항목에 이어 붙일 때는 줄을 바꾼다", mergeRecordSections(
@@ -134,7 +170,7 @@ check("합치기: 표 모양 항목에 이어 붙일 때는 줄을 바꾼다", m
 )[0]?.text === "머리글\n국어 | A\n수학 | B");
 check("합치기: 앞에 항목이 없으면 이어지는 글도 새 항목이 된다", same(
   mergeRecordSections([], [{ page: 1, sections: [page("기타", "글", { continued: true })] }]),
-  [{ id: "s1", category: "기타", grade: null, page: 1, text: "글" }],
+  [{ id: "s1", category: "기타", grade: null, page: 1, text: "글", fieldId: RECORD_FORM_OTHER_ID }],
 ));
 check("합치기: 붙인 글이 한도를 넘으면 새 항목으로 둔다", mergeRecordSections(
   [{ id: "s1", category: "자율활동", grade: 1, page: 1, text: "가".repeat(MAX_SECTION_TEXT_LENGTH) }],
@@ -158,6 +194,63 @@ check(
 );
 check("항목명: 서술형 항목명이 모두 이미지 쪽 항목명 목록에 있다", NARRATIVE_CATEGORIES.every((category) => (PAGE_CATEGORIES as readonly string[]).includes(category)));
 check("항목명: 파서가 읽은 항목은 서버 확인을 통과한다", readRecordSections(parsed)?.length === parsed.length);
+
+// ── 학생부 서식 정의 (별지 제8호 서식) ──
+check("서식: 칸 ID 가 겹치지 않는다", new Set(RECORD_FORM_PARTS.map((part) => part.id)).size === RECORD_FORM_PARTS.length);
+check("서식: 칸 ID 와 항목명이 항목 확인의 길이 한도 안이다", RECORD_FORM_PARTS.every(
+  (part) => part.id.length <= MAX_SECTION_FIELD_ID_LENGTH && part.category.trim() !== "" && part.category.length <= MAX_SECTION_CATEGORY_LENGTH,
+));
+check("서식: 번호가 붙은 항목은 1~9 가 모두 있다", same(
+  [...new Set(RECORD_FORM_PARTS.map((part) => part.no))].sort((a, b) => a - b),
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+));
+check("서식: 항목명 목록은 서식의 칸에서 나온다", same(PAGE_CATEGORIES, [...new Set(RECORD_FORM_PARTS.map((part) => part.category))]));
+check("서식: 서술형 항목명은 여섯 가지다", same(NARRATIVE_CATEGORIES, [
+  "자율활동",
+  "동아리활동",
+  "진로활동",
+  "세부능력 및 특기사항",
+  "독서활동상황",
+  "행동특성 및 종합의견",
+]));
+check("서식: 교과학습발달상황은 세 묶음의 성적표와 세부능력 및 특기사항이다", same(
+  RECORD_FORM_PARTS.filter((part) => part.no === 7).map((part) => `${part.group}/${part.category}`),
+  [
+    "/교과 성적",
+    "/세부능력 및 특기사항",
+    "진로 선택 과목/교과 성적",
+    "진로 선택 과목/세부능력 및 특기사항",
+    "체육·예술/교과 성적",
+    "체육·예술/세부능력 및 특기사항",
+  ],
+));
+check("서식: 시간을 적는 칸은 창의적 체험활동의 세 영역이다", same(
+  RECORD_FORM_PARTS.filter((part) => part.hours).map((part) => part.category),
+  ["자율활동", "동아리활동", "진로활동"],
+));
+check("서식: 파서가 읽은 항목은 모두 서식의 칸이고 항목명이 그 칸의 것이다", parsed.every(
+  (section) => recordFormPart(section.fieldId)?.category === section.category,
+));
+check("서식: 서식에서의 자리", same(
+  ["S01", "S04.NCS", "S06.VOLUNTEER", "S07.BASE.SCORE", "S07.CAREER.NOTE.text", "S00.HEADER", "ETC", "없는 칸", undefined].map(recordFormPath),
+  [
+    "1. 인적·학적사항",
+    "4. 자격증 및 인증 취득상황 > 국가직무능력표준 이수상황",
+    "6. 창의적 체험활동상황 > 봉사활동실적",
+    "7. 교과학습발달상황 > 교과 성적",
+    "7. 교과학습발달상황 > 진로 선택 과목 > 세부능력 및 특기사항",
+    "머리 부분 > 인적·학적사항",
+    "기타",
+    null,
+    null,
+  ],
+));
+check("서식: 화면에 더하는 묶음 이름", same(
+  ["S07.CAREER.SCORE", "S07.ART.NOTE.text", "S07.BASE.SCORE", "S06.VOLUNTEER", "S04.NCS", undefined].map(recordFormGroup),
+  ["진로 선택 과목", "체육·예술", null, null, null, null],
+));
+check("서식: AI 에 주는 쪽 읽기 설명에 모든 칸이 있다", RECORD_FORM_PARTS.every((part) => describeRecordFormForReading().includes(`fieldId "${part.id}"`)));
+check("서식: AI 에 주는 분석 설명에 세 성적표의 칸이 있다", ["석차등급", "성취도별 분포비율", "체육·예술"].every((word) => describeRecordFormForAnalysis().includes(word)));
 
 if (failures.length > 0) {
   console.error(`학생부 항목 검사 실패: ${failures.length}건 (전체 ${checks}건)`);

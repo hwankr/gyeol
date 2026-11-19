@@ -1,4 +1,11 @@
 import type { Section } from "@/types/analysis";
+import {
+  RECORD_FORM_CATEGORIES,
+  RECORD_FORM_LINED_CATEGORIES,
+  RECORD_FORM_NARRATIVE_CATEGORIES,
+  RECORD_FORM_OTHER_ID,
+  recordFormPart,
+} from "./recordForm.ts";
 
 // 학생부 항목(Section)을 브라우저와 서버가 주고받을 때 같이 쓰는 것: 개수·길이 제한, 받은 항목 확인, 이미지 쪽을 AI 가 읽은 결과의
 // 모양, 글자가 있는 쪽의 항목과 이미지 쪽의 항목을 한 목록으로 합치기.
@@ -56,50 +63,33 @@ export function isJpegBase64(value: string): boolean {
 }
 
 /**
- * 이미지 쪽을 AI 가 읽을 때 고르는 항목명. 글자가 있는 쪽의 파서(lib/pipeline/parsePdf.ts)가 쓰는 항목명과 글자 그대로 같다
- * (근거 추출·AI 제안·블라인드 처리가 항목명으로 항목을 고른다). 맞는 것이 없는 기록은 "기타" 다.
+ * 학생부 항목의 항목명(category) 전체. 학생부 서식(lib/recordForm.ts: 별지 제8호 서식)의 칸에서 나온다.
+ * AI 가 읽은 쪽의 항목은 서식의 칸(fieldId)을 고르고 항목명은 그 칸의 것이다. 글자가 있는 쪽의 파서(lib/pipeline/parsePdf.ts)가 쓰는
+ * 항목명과 글자 그대로 같다(근거 추출·AI 제안·블라인드 처리가 항목명으로 항목을 고른다). 서식의 어느 칸에도 맞지 않는 기록은 "기타" 다.
  */
-export const PAGE_CATEGORIES = [
-  "인적·학적사항",
-  "출결상황",
-  "수상경력",
-  "자격증 및 인증 취득상황",
-  "학교폭력 조치상황 관리",
-  "자율활동",
-  "동아리활동",
-  "진로활동",
-  "봉사활동실적",
-  "교과 성적",
-  "세부능력 및 특기사항",
-  "독서활동상황",
-  "행동특성 및 종합의견",
-  "기타",
-] as const;
+export const PAGE_CATEGORIES: readonly string[] = RECORD_FORM_CATEGORIES;
 
 /**
  * 서술형 항목의 항목명. 근거 추출과 AI 제안이 항목명이 글자 그대로 같은 항목만 AI 에 보낸다(lib/pipeline/extractEvidence.ts 가
  * 다시 내보낸다). 브라우저는 파서가 학생부 양식을 알아보았는지 볼 때 쓴다(lib/recordPdf.ts).
  */
-export const NARRATIVE_CATEGORIES: readonly string[] = [
-  "자율활동",
-  "동아리활동",
-  "진로활동",
-  "세부능력 및 특기사항",
-  "독서활동상황",
-  "행동특성 및 종합의견",
-];
+export const NARRATIVE_CATEGORIES: readonly string[] = RECORD_FORM_NARRATIVE_CATEGORIES;
 
 /** /api/record-page 에 그림과 함께 보내는 쪽의 글(PDF 에서 뽑은 글자)의 최대 길이. 넘으면 글 없이 그림만 보낸다 */
 export const MAX_PAGE_TEXT_LENGTH = 20_000;
 
 /** 이미지 쪽 하나에서 AI 가 읽은 항목 하나 */
 export type PageSection = {
-  /** 항목명 (PAGE_CATEGORIES 가운데 하나) */
+  /** 서식의 칸 ID (lib/recordForm.ts 의 RECORD_FORM_PARTS 가운데 하나. 어느 칸에도 맞지 않으면 "ETC") */
+  fieldId: string;
+  /** 항목명: 그 칸의 category (PAGE_CATEGORIES 가운데 하나) */
   category: string;
   /** 학년. 이 쪽에서 알 수 없거나 해당 없으면 null */
   grade: number | null;
   /** 과목명(세부능력 및 특기사항) 또는 과목·영역(독서활동상황). 없으면 null */
   subject: string | null;
+  /** 창의적 체험활동 영역의 시간. 시간을 적는 칸이 아니거나 적혀 있지 않으면 null */
+  hours: number | null;
   /** 옮겨 적은 원문 */
   text: string;
   /** 앞쪽에서 시작한 글이 이 쪽으로 넘어와 이어지는 것인지 (그 쪽의 첫 항목만 true 일 수 있다) */
@@ -107,17 +97,9 @@ export type PageSection = {
 };
 
 /**
- * 표 모양 항목: 원문이 줄마다 한 행이다. 앞쪽에서 이어지는 내용을 붙일 때 줄을 바꿔 붙인다(나머지는 공백 하나로 잇는다).
+ * 표·칸 모양 항목: 원문이 줄마다 한 행이다. 앞쪽에서 이어지는 내용을 붙일 때 줄을 바꿔 붙인다(나머지는 공백 하나로 잇는다).
  */
-const TABLE_CATEGORIES: readonly string[] = [
-  "인적·학적사항",
-  "출결상황",
-  "수상경력",
-  "자격증 및 인증 취득상황",
-  "학교폭력 조치상황 관리",
-  "봉사활동실적",
-  "교과 성적",
-];
+const TABLE_CATEGORIES: readonly string[] = RECORD_FORM_LINED_CATEGORIES;
 
 /**
  * 학년을 이어받는 묶음. 이미지 쪽의 항목에 학년이 없고(그 쪽에 학년 표시가 없음) 바로 앞 항목이 같은 묶음이면 앞 항목의 학년을 쓴다.
@@ -182,27 +164,36 @@ export function readRecordSections(value: unknown): Section[] | null {
  * 이미지 쪽을 AI 가 읽은 결과(항목 목록)를 확인해 정리한다. 모양이 다르면 null.
  * AI 응답(서버)과 /api/record-page 응답(브라우저) 양쪽에서 쓴다.
  * - 배열이고 MAX_PAGE_SECTIONS 개 이하(0개도 된다. 빈 쪽).
- * - 항목마다 category·text 는 문자열, continued 는 boolean, grade 는 정수 또는 null, subject 는 문자열 또는 null.
- * 정리: category 가 PAGE_CATEGORIES 에 없으면 "기타", grade 가 1~MAX_SECTION_GRADE 밖이면 null(AI 는 학년을 모를 때 0 을 적는다),
- * subject 는 앞뒤 공백을 빼고 비었으면 null·길면 MAX_SECTION_SUBJECT_LENGTH 까지, text 는 앞뒤 공백을 빼고 비었으면 그 항목을 버리고
- * 길면 MAX_SECTION_TEXT_LENGTH 까지. continued 는 첫 항목에서만 남긴다.
+ * - 항목마다 fieldId·text 는 문자열, continued 는 boolean, grade 는 정수 또는 null, subject 는 문자열 또는 null,
+ *   hours 는 수 또는 null(없어도 된다).
+ * 정리: fieldId 가 서식의 칸(lib/recordForm.ts)이 아니면 "ETC", category 는 그 칸의 항목명(받은 category 는 쓰지 않는다),
+ * grade 가 1~MAX_SECTION_GRADE 밖이면 null(AI 는 학년을 모를 때 0 을 적는다),
+ * subject 는 앞뒤 공백을 빼고 비었으면 null·길면 MAX_SECTION_SUBJECT_LENGTH 까지,
+ * hours 는 시간을 적는 칸(창의적 체험활동의 영역)에서 0 보다 크고 MAX_SECTION_HOURS 이하일 때만 남기고 그 밖에는 null(AI 는 시간이 없을 때 0 을 적는다),
+ * text 는 앞뒤 공백을 빼고 비었으면 그 항목을 버리고 길면 MAX_SECTION_TEXT_LENGTH 까지. continued 는 첫 항목에서만 남긴다.
  */
 export function readPageSections(value: unknown): PageSection[] | null {
   if (!Array.isArray(value) || value.length > MAX_PAGE_SECTIONS) return null;
   const sections: PageSection[] = [];
   for (const [index, item] of value.entries()) {
     if (!isRecord(item)) return null;
-    const { category, grade, subject, text, continued } = item;
-    if (typeof category !== "string" || typeof text !== "string" || typeof continued !== "boolean") return null;
+    const { fieldId, grade, subject, text, continued } = item;
+    const hours = item.hours ?? null;
+    if (typeof fieldId !== "string" || typeof text !== "string" || typeof continued !== "boolean") return null;
     if (grade !== null && !(typeof grade === "number" && Number.isInteger(grade))) return null;
     if (subject !== null && typeof subject !== "string") return null;
+    if (hours !== null && typeof hours !== "number") return null;
     const trimmedText = text.trim().slice(0, MAX_SECTION_TEXT_LENGTH);
     if (trimmedText === "") continue;
     const trimmedSubject = subject === null ? "" : subject.trim().slice(0, MAX_SECTION_SUBJECT_LENGTH);
+    const part = recordFormPart(fieldId) ?? recordFormPart(RECORD_FORM_OTHER_ID);
+    if (part === undefined) return null;
     sections.push({
-      category: (PAGE_CATEGORIES as readonly string[]).includes(category) ? category : "기타",
+      fieldId: part.id,
+      category: part.category,
       grade: isIntegerIn(grade, 1, MAX_SECTION_GRADE) ? grade : null,
       subject: trimmedSubject === "" ? null : trimmedSubject,
+      hours: part.hours && hours !== null && hours > 0 && hours <= MAX_SECTION_HOURS ? hours : null,
       text: trimmedText,
       // 첫 항목이 빈 글이라 버려졌으면 그다음 항목은 쪽의 첫 항목이 아니다(원래 순번으로 본다).
       continued: continued && index === 0,
@@ -223,6 +214,7 @@ type DraftSection = Omit<Section, "id">;
  * - 이미지 쪽의 첫 항목이 앞쪽에서 이어지는 글(continued)이고 앞에 항목이 있으면, 새 항목을 만들지 않고 앞 항목의 원문 뒤에 붙인다
  *   (표 모양 항목은 줄을 바꿔, 나머지는 공백 하나로). 붙인 결과가 MAX_SECTION_TEXT_LENGTH 를 넘으면 붙이지 않고 새 항목으로 둔다.
  * - 이미지 쪽의 항목에 학년이 없고 바로 앞 항목이 같은 묶음(GRADE_GROUPS)이면 앞 항목의 학년을 쓴다.
+ * - 이미지 쪽의 항목은 서식의 칸(fieldId)과, 있으면 시간(hours)을 그대로 가진다.
  * 받은 값은 바꾸지 않는다.
  */
 export function mergeRecordSections(textSections: readonly Section[], readings: readonly PageReading[]): Section[] {
@@ -245,7 +237,7 @@ export function mergeRecordSections(textSections: readonly Section[], readings: 
       merged.push({ ...entry.draft });
       continue;
     }
-    const { category, grade, subject, text, continued } = entry.draft;
+    const { fieldId, category, grade, subject, hours, text, continued } = entry.draft;
     const previous = merged[merged.length - 1];
     if (continued && previous !== undefined && previous.page < entry.page) {
       const joined = `${previous.text}${TABLE_CATEGORIES.includes(previous.category) ? "\n" : " "}${text}`;
@@ -258,7 +250,15 @@ export function mergeRecordSections(textSections: readonly Section[], readings: 
       grade === null && previous !== undefined && previous.grade !== null && sameGradeGroup(previous.category, category)
         ? previous.grade
         : grade;
-    merged.push({ category, grade: inherited, ...(subject !== null ? { subject } : {}), page: entry.page, text });
+    merged.push({
+      category,
+      grade: inherited,
+      ...(subject !== null ? { subject } : {}),
+      page: entry.page,
+      text,
+      fieldId,
+      ...(hours !== null ? { hours } : {}),
+    });
   }
   return merged.map((draft, index) => ({ id: `s${index + 1}`, ...draft }));
 }

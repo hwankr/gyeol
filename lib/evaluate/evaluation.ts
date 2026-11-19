@@ -154,7 +154,7 @@ function parseRecord(value: unknown): EvaluationRecord | null {
 }
 
 /**
- * 올린 지원자의 평가를 남기는 최대 수. 넘으면 번호가 작은 것부터 버린다(올린 지원자는 최근 10건만 남으므로 넉넉한 값이다.
+ * 올린 지원자의 평가를 남기는 최대 수. 넘으면 번호가 작은 것부터 버린다(올린 지원자는 최근 30건만 남으므로 넉넉한 값이다.
  * 목록에서 밀려난 올린 지원자의 평가가 저장소에 끝없이 쌓이지 않게 한다).
  */
 export const MAX_UPLOADED_EVALUATIONS = 50;
@@ -487,9 +487,13 @@ export function summaryPath(code: string): string {
   return `/evaluate/summary?code=${encodeURIComponent(code)}`;
 }
 
-/** 평가하기 · 원문보기 화면 주소 (그 지원자의 학생부 원문과 기준별 근거) */
-export function evaluateOriginalPath(code: string): string {
-  return `/evaluate/original?code=${encodeURIComponent(code)}`;
+/**
+ * 평가하기 · 원문보기 화면 주소 (그 지원자의 학생부 원문과 기준별 근거).
+ * sectionId 를 주면 그 항목을 고른 채로 연다(쪽 그림이 있으면 실제 PDF 의 그 자리를 보여 준다).
+ */
+export function evaluateOriginalPath(code: string, sectionId?: string): string {
+  const base = `/evaluate/original?code=${encodeURIComponent(code)}`;
+  return sectionId === undefined ? base : `${base}&section=${encodeURIComponent(sectionId)}`;
 }
 
 /** 세부 항목 평가 화면 주소. elementId 가 비어 있으면 요소를 적지 않는다(그 화면이 첫 요소를 보여 준다). */

@@ -18,7 +18,7 @@ import {
 //   화면에는 이 페이지를 연 뒤 마지막으로 읽는 데 성공한 값을 보여 준다. 한 번도 읽지 못했으면 메모리에만 둔 것뿐이다.
 //
 // 쓰지 않았거나 쓰기가 실패한 항목은 이 페이지의 메모리에만 둔다(지원자 관리에는 보이고 새로고침하면 사라진다). 메모리에 두는 것도
-// 저장할 때와 같은 정리로 최근 10건까지다(실패가 이어져도 10건을 넘지 않는다). 다음에 저장할 수 있을 때 같이 저장한다.
+// 저장할 때와 같은 정리로 최근 30건까지다(실패가 이어져도 30건을 넘지 않는다). 다음에 저장할 수 있을 때 같이 저장한다.
 // 메모리에만 둔 항목이 있는 동안 학생부 올리기 화면은 "저장하지 못함" 안내를 보여 준다(hasUnsavedUploadedApplicants).
 // 남길 때는 저장소를 그 순간 다시 읽고 그 끝에 더해 쓴다(다른 탭이 그사이 남긴 지원자를 지우지 않게). 코드도 그 순간의 목록으로 정한다.
 // 다른 탭의 변경은 구독하지 않는다(storage 이벤트 없음). 화면이 다시 그려질 때 저장소를 다시 읽으면서 반영된다.
@@ -30,7 +30,7 @@ const listeners = new Set<() => void>();
 /** 마지막으로 읽는 데 성공한(또는 쓴) 저장 문자열(undefined: 이 페이지에서 아직 한 번도 읽지 못함)과 그 목록 */
 let lastRaw: string | null | undefined;
 let lastItems: readonly UploadedApplicant[] = NO_UPLOADED_APPLICANTS;
-/** 저장소에 쓰지 못해 메모리에만 둔 항목 (코드 순서, 10건까지) */
+/** 저장소에 쓰지 못해 메모리에만 둔 항목 (코드 순서, 30건까지) */
 let memoryItems: readonly UploadedApplicant[] = NO_UPLOADED_APPLICANTS;
 /** 마지막으로 만든 화면 목록과 그것을 만든 재료 */
 let composed: {
@@ -48,7 +48,7 @@ export function subscribeUploadedApplicants(listener: () => void): () => void {
 }
 
 /**
- * 화면에 보이는 올린 지원자(코드 순서, 최근 10건까지): 마지막으로 읽은 저장소의 값 + 메모리에만 둔 값. 저장소를 다시 읽는다.
+ * 화면에 보이는 올린 지원자(코드 순서, 최근 30건까지): 마지막으로 읽은 저장소의 값 + 메모리에만 둔 값. 저장소를 다시 읽는다.
  * 읽지 못하면 이 페이지에서 마지막으로 읽은 값을 쓰고, 한 번도 읽지 못했으면 메모리에만 둔 것뿐이다(없으면 빈 목록).
  */
 export function loadUploadedApplicants(): readonly UploadedApplicant[] {
@@ -106,7 +106,7 @@ function writeStored(items: readonly UploadedApplicant[]): boolean {
 }
 
 /**
- * 화면 목록 = 마지막으로 읽은 목록 + 메모리에만 둔 항목 (코드가 겹치면 저장소의 것, 코드 순서, 최근 10건). 재료가 같으면 같은 배열.
+ * 화면 목록 = 마지막으로 읽은 목록 + 메모리에만 둔 항목 (코드가 겹치면 저장소의 것, 코드 순서, 최근 30건). 재료가 같으면 같은 배열.
  * 저장소의 값은 배열 순서대로 읽으므로(손으로 순서를 바꾼 값 등) 여기서 코드 순서로 늘어놓는다.
  */
 function composeVisible(): readonly UploadedApplicant[] {

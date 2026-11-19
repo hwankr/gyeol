@@ -14,8 +14,11 @@ import { SAMPLE_APPLICANT_COUNT, sampleApplicantCode } from "./sampleApplicants.
 /** 지금 저장 형식의 버전 */
 export const UPLOADED_APPLICANTS_VERSION = 1;
 
-/** 올린 지원자를 남기는 최대 수 (넘으면 오래된 것부터 버린다) */
-export const MAX_UPLOADED_APPLICANTS = 10;
+/**
+ * 올린 지원자를 남기는 최대 수 (넘으면 오래된 것부터 버린다). 학생부를 여러 건 한꺼번에 올릴 수 있어 30건이다.
+ * 한 건의 분석 결과가 수만 자라, 더 늘리면 localStorage 의 용량(브라우저마다 500만 자 안팎)에 걸린다.
+ */
+export const MAX_UPLOADED_APPLICANTS = 30;
 
 /** 올린 지원자의 가장 작은 번호 (예시 지원자 다음 번호) */
 const FIRST_UPLOADED_NUMBER = SAMPLE_APPLICANT_COUNT + 1;
@@ -70,7 +73,7 @@ function parseItem(value: unknown): UploadedApplicant | null {
 
 /**
  * 저장소에서 읽은 값(JSON 해석 결과)을 확인한다. 객체가 아니거나 version 이 1 이 아니거나 items 가 배열이 아니면 올린 지원자가 없는 것으로 본다.
- * 항목은 하나씩 확인해(parseItem, 앞의 항목과 코드가 겹치면 뒤의 것을 버림) 통과한 것만 쓰고, 10건을 넘으면 뒤의 10건만 쓴다.
+ * 항목은 하나씩 확인해(parseItem, 앞의 항목과 코드가 겹치면 뒤의 것을 버림) 통과한 것만 쓰고, 30건을 넘으면 뒤의 30건만 쓴다.
  */
 export function parseUploadedApplicants(value: unknown): readonly UploadedApplicant[] {
   if (!isRecord(value) || value.version !== UPLOADED_APPLICANTS_VERSION || !Array.isArray(value.items)) {
@@ -94,7 +97,7 @@ export function serializeUploadedApplicants(items: readonly UploadedApplicant[])
 }
 
 /**
- * 목록 정리: 코드가 겹치면 앞의 것을 남기고, 코드 순서로 늘어놓고, 최근(번호가 큰) 10건만 둔다.
+ * 목록 정리: 코드가 겹치면 앞의 것을 남기고, 코드 순서로 늘어놓고, 최근(번호가 큰) 30건만 둔다.
  * 저장할 때와 화면 목록(저장소의 값 + 메모리에만 둔 값)을 만들 때 쓴다.
  */
 export function arrangeUploadedApplicants(items: readonly UploadedApplicant[]): readonly UploadedApplicant[] {

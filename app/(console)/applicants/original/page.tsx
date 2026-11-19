@@ -53,7 +53,7 @@ function OriginalByCode() {
 }
 
 function Original({ record }: { record: OriginalRecord }) {
-  const view = useOriginalView(record.result);
+  const view = useOriginalView(record.result, record.pagesKey);
   return (
     <OriginalScreen
       {...view}

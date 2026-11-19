@@ -21,7 +21,7 @@ export const PREP_OPINIONS_STORAGE_KEY = "gyeol.prepOpinions";
 export const APPLICANT_REVIEWS_STORAGE_KEY = "gyeol.applicantReviews";
 
 /**
- * 지원자 관리 · 학생부 올리기에서 분석한 학생부(올린 지원자, { version: 1, items: [{ code, at, result }] }, 최근 10건)를 저장하는 localStorage 키.
+ * 지원자 관리 · 학생부 올리기에서 분석한 학생부(올린 지원자, { version: 1, items: [{ code, at, result }] }, 최근 30건)를 저장하는 localStorage 키.
  * result 는 서버가 돌려준 분석 결과(가려진 원문)이고, 파일 이름은 저장하지 않는다.
  */
 export const UPLOADED_APPLICANTS_STORAGE_KEY = "gyeol.uploadedApplicants";

@@ -19,6 +19,8 @@ type PdfDropBoxProps = {
   hint: string;
   /** 걸린 파일의 오류 문구 */
   error: string | null;
+  /** 파일을 여러 개 고를 수 있는지 (학생부 올리기) */
+  multiple?: boolean;
   /** 숨긴 입력란에 더할 속성 (전형 준비의 초점 되돌릴 곳 표시 등) */
   inputProps?: Readonly<Record<string, string>>;
   onInputChange: () => void;
@@ -48,6 +50,7 @@ export function PdfDropBox({
   buttonLabel,
   hint,
   error,
+  multiple = false,
   inputProps,
   onInputChange,
   onInputFocus,
@@ -89,6 +92,7 @@ export function PdfDropBox({
         ref={inputRef}
         type="file"
         accept="application/pdf,.pdf"
+        multiple={multiple}
         disabled={busy}
         className={`absolute h-[1px] w-[1px] opacity-0${busy ? " pointer-events-none" : ""}`}
         onChange={onInputChange}
