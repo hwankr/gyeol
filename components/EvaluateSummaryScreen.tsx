@@ -74,13 +74,18 @@ type EvaluateSummaryScreenProps = {
 /** 내 평가 입력의 점수 표 칸 너비: 항목, AI, 내 점수 */
 const SCORE_GRID_CLASS = "grid grid-cols-[minmax(0,1fr)_36px_104px] items-center gap-x-[8px]";
 
+/** 내 점수 −·+ 버튼. 누를 수 있을 때만 마우스를 올리면 옅은 회색 바탕이 된다(끝 값에 닿은 쪽·제출한 평가는 그대로다). */
 const STEPPER_BUTTON_CLASS =
-  "box-border flex h-[32px] w-[32px] scroll-m-[8px] items-center justify-center border border-[#CFCFCF] bg-white p-0 text-[16px] leading-[normal] text-[#111111] disabled:cursor-default disabled:opacity-[0.45] aria-disabled:cursor-default aria-disabled:text-[#AEAEAE]";
+  "motion-colors box-border flex h-[32px] w-[32px] cursor-pointer scroll-m-[8px] items-center justify-center border border-[#CFCFCF] bg-white p-0 text-[16px] leading-[normal] text-[#111111] hover-on:bg-[#F6F7FB] press-on:bg-[#ECEEF5] disabled:cursor-default disabled:opacity-[0.45] aria-disabled:cursor-default aria-disabled:text-[#AEAEAE]";
+
+/** 글 입력란(수정 사유, 종합 의견)의 테두리: 색이 150ms 에 걸쳐 바뀌고, 쓸 수 있을 때 마우스를 올리면 조금 짙어진다. */
+const FIELD_BORDER_CLASS = "motion-colors border-[#CFCFCF] enabled:hover:border-[#AEAEAE]";
 
 /**
  * 평가하기 · 총평 화면(/evaluate/summary?code=…). 왼쪽 위는 학생 성장 요약과 서류 원문, 그 아래는 항목별 AI 점수와 근거
  * (평가 요소를 고르면 원문의 그 근거가 색 면으로 강조된다), 오른쪽은 내 평가 입력이다.
  * 좁은 화면에서는 상자들이 아래로 내려가 한 줄에 하나씩 쌓인다.
+ * 평가 요소를 고르면 그 요소의 근거가 옅게 나타나고 원문의 색 면이 옮겨 간다. 고르지 않은 줄은 마우스를 올리면 옅은 회색 바탕이 된다.
  */
 export function EvaluateSummaryScreen({ crumbs, headNote, bar, growth, document, basis, mine }: EvaluateSummaryScreenProps) {
   return (
@@ -149,8 +154,10 @@ export function EvaluateSummaryScreen({ crumbs, headNote, bar, growth, document,
                       type="button"
                       aria-pressed={criterion.on}
                       onClick={criterion.onPick}
-                      className={`box-border flex min-h-[40px] w-full scroll-m-[8px] items-center justify-between gap-[8px] rounded-[6px] border-0 px-[10px] py-[6px] text-left text-[14px] leading-[normal] ${
-                        criterion.on ? "bg-[#EEF0FF] font-semibold text-[#001AD0]" : "bg-white font-medium text-[#111111]"
+                      className={`motion-colors box-border flex min-h-[40px] w-full cursor-pointer scroll-m-[8px] items-center justify-between gap-[8px] rounded-[6px] border-0 px-[10px] py-[6px] text-left text-[14px] leading-[normal] ${
+                        criterion.on
+                          ? "bg-[#EEF0FF] font-semibold text-[#001AD0]"
+                          : "bg-white font-medium text-[#111111] hover-on:bg-[#F6F7FB]"
                       }`}
                     >
                       <span className="[overflow-wrap:anywhere]">
@@ -171,30 +178,33 @@ export function EvaluateSummaryScreen({ crumbs, headNote, bar, growth, document,
                 role="group"
                 className="box-border min-w-0 flex-[999_1_320px] border-l border-l-[#E4E4E4] px-[16px] pt-[12px] pb-[16px]"
               >
-                {basis.evidences.map((evidence) => (
-                  <div key={evidence.id} className="mb-[10px]">
-                    <p className="text-[12px] leading-[16px] text-[#505050]">{evidence.source}</p>
-                    <p className="mt-[4px] rounded-[6px] bg-[#F6F7FB] px-[12px] py-[8px] text-[14px] leading-[22px] [overflow-wrap:anywhere] break-keep">
-                      {evidence.text}
-                    </p>
-                    {/* 디자인에는 없는 줄: 올린 지원자의 근거에는 AI 가 적은 이유가 있다(예시 지원자에는 없다). */}
-                    {evidence.reason !== undefined && (
-                      <p className="mt-[4px] px-[12px] text-[12px] leading-[18px] text-[#505050] [overflow-wrap:anywhere] break-keep">
-                        {evidence.reason}
+                {/* 평가 요소를 바꾸면 그 요소의 근거·점수가 옅게 나타난다(고른 요소를 key 로 새로 그린다. 누를 것은 이 안에 없다). */}
+                <div key={basis.criteria.find((criterion) => criterion.on)?.id ?? ""} className="animate-fade-in">
+                  {basis.evidences.map((evidence) => (
+                    <div key={evidence.id} className="mb-[10px]">
+                      <p className="text-[12px] leading-[16px] text-[#505050]">{evidence.source}</p>
+                      <p className="mt-[4px] rounded-[6px] bg-[#F6F7FB] px-[12px] py-[8px] text-[14px] leading-[22px] [overflow-wrap:anywhere] break-keep">
+                        {evidence.text}
                       </p>
-                    )}
+                      {/* 디자인에는 없는 줄: 올린 지원자의 근거에는 AI 가 적은 이유가 있다(예시 지원자에는 없다). */}
+                      {evidence.reason !== undefined && (
+                        <p className="mt-[4px] px-[12px] text-[12px] leading-[18px] text-[#505050] [overflow-wrap:anywhere] break-keep">
+                          {evidence.reason}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  {basis.evidences.length === 0 && (
+                    <p className="mb-[10px] text-[13px] leading-[18px] text-[#505050]">이 항목에 연결된 근거 문장이 없습니다.</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[4px] border-t border-t-[#E4E4E4] pt-[10px] text-[13px] leading-[18px] text-[#505050]">
+                    <span>{basis.confidenceText}</span>
+                    <span>{basis.tagsText}</span>
+                    <span className="ml-auto inline-flex items-baseline gap-[6px]">
+                      AI 점수{" "}
+                      <strong className="text-[22px] leading-[30px] font-bold text-[#111111] tabular-nums">{basis.aiScore}</strong>
+                    </span>
                   </div>
-                ))}
-                {basis.evidences.length === 0 && (
-                  <p className="mb-[10px] text-[13px] leading-[18px] text-[#505050]">이 항목에 연결된 근거 문장이 없습니다.</p>
-                )}
-                <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[4px] border-t border-t-[#E4E4E4] pt-[10px] text-[13px] leading-[18px] text-[#505050]">
-                  <span>{basis.confidenceText}</span>
-                  <span>{basis.tagsText}</span>
-                  <span className="ml-auto inline-flex items-baseline gap-[6px]">
-                    AI 점수{" "}
-                    <strong className="text-[22px] leading-[30px] font-bold text-[#111111] tabular-nums">{basis.aiScore}</strong>
-                  </span>
                 </div>
               </div>
             </div>
@@ -211,9 +221,12 @@ export function EvaluateSummaryScreen({ crumbs, headNote, bar, growth, document,
             <ul className="mt-[6px] rounded-[6px] border border-[#E4E4E4]">
               {mine.details.map((detail, index) => (
                 <li key={detail.id} className={index === 0 ? "" : "border-t border-t-[#E4E4E4]"}>
+                  {/* 올려놓았을 때의 바탕이 목록 상자의 둥근 모서리 밖으로 나가지 않게, 첫 줄·마지막 줄의 바깥 모서리를 상자에 맞춰 둥글린다. */}
                   <Link
                     href={detail.href}
-                    className="flex min-h-[34px] scroll-m-[8px] items-center justify-between gap-[8px] px-[10px] text-[13px] font-medium text-[#111111] no-underline"
+                    className={`motion-colors flex min-h-[34px] scroll-m-[8px] items-center justify-between gap-[8px] px-[10px] text-[13px] font-medium text-[#111111] no-underline hover-on:bg-[#F6F7FB] ${
+                      index === 0 ? "rounded-t-[5px]" : ""
+                    } ${index === mine.details.length - 1 ? "rounded-b-[5px]" : ""}`}
                   >
                     <span className="[overflow-wrap:anywhere]">{detail.name}</span>
                     <span className="flex flex-none items-center gap-[6px]">
@@ -261,7 +274,7 @@ export function EvaluateSummaryScreen({ crumbs, headNote, bar, growth, document,
                   </button>
                   <output
                     aria-label={`${score.name} 내 점수`}
-                    className={`box-border flex h-[32px] w-[40px] items-center justify-center border-y border-y-[#CFCFCF] text-[14px] font-semibold tabular-nums ${
+                    className={`motion-colors box-border flex h-[32px] w-[40px] items-center justify-center border-y border-y-[#CFCFCF] text-[14px] font-semibold tabular-nums ${
                       score.changed ? "text-[#001AD0]" : "text-[#111111]"
                     }`}
                   >
@@ -304,7 +317,7 @@ export function EvaluateSummaryScreen({ crumbs, headNote, bar, growth, document,
                   disabled={mine.locked}
                   onChange={(event) => reason.onChange(event.currentTarget.value)}
                   className={`mt-[4px] box-border h-[34px] w-full scroll-m-[8px] rounded-[6px] border bg-white px-[10px] text-[13px] text-[#111111] placeholder:text-[#767676] disabled:bg-[#F6F7FB] disabled:text-[#505050] ${
-                    reason.missing ? "border-[#BA1A1A]" : "border-[#CFCFCF]"
+                    reason.missing ? "motion-colors border-[#BA1A1A]" : FIELD_BORDER_CLASS
                   }`}
                 />
               </div>
@@ -322,7 +335,7 @@ export function EvaluateSummaryScreen({ crumbs, headNote, bar, growth, document,
               value={mine.opinion}
               disabled={mine.locked}
               onChange={(event) => mine.onOpinionChange(event.currentTarget.value)}
-              className="mt-[6px] box-border block h-[76px] w-full scroll-m-[8px] resize-y rounded-[6px] border border-[#CFCFCF] bg-white px-[10px] py-[8px] text-[13px] leading-[20px] text-[#111111] placeholder:text-[#767676] disabled:bg-[#F6F7FB] disabled:text-[#505050]"
+              className={`mt-[6px] box-border block h-[76px] w-full scroll-m-[8px] resize-y rounded-[6px] border bg-white px-[10px] py-[8px] text-[13px] leading-[20px] text-[#111111] placeholder:text-[#767676] disabled:bg-[#F6F7FB] disabled:text-[#505050] ${FIELD_BORDER_CLASS}`}
             />
             <p role="status" className="mt-[8px] min-h-[18px] text-[12px] leading-[18px] text-[#BA1A1A]">
               {mine.submitHint}

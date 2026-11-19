@@ -274,6 +274,20 @@ npx next start -p 3100      # 빌드한 것을 실행 (http://localhost:3100)
 - 두 선언은 따로다(로그인 화면과 새 화면이 저마다의 CSS 에만 `@font-face` 를 넣는다). 두 선언이 쓰는 파일(Pretendard 400·500·600·700, Mulish)이 같아서 내려받는 주소가 같고 브라우저가 한 번만 받는다.
 - 배경 무늬 타일(75×260)은 `public/login-pattern.svg` 이다.
 
+### 움직임 (화면 전환, 올려놓음·누름, 나타남)
+
+디자인 시안에는 움직임이 없어 정한 것이다. 가만히 있을 때의 모습(치수·색·글자)은 그대로이고, 빠르기·곡선은 `app/globals.css` 한 곳에 있다.
+
+- 화면 전환 (`components/PageTransition.tsx`, React 의 `<ViewTransition>`): 다른 화면으로 갈 때 나가는 화면이 100ms 에 사라지고 들어오는 화면이 6px 아래에서 올라오며 나타난다(합쳐 260ms). 사이드바·상단 바·전형 준비의 머리는 남아 있어 움직이지 않고 그동안에도 눌린다. 로그인 화면과 콘솔 사이는 화면 전체가 220ms 동안 겹쳐 바뀐다. 전형 준비 탭 줄의 파란 밑줄은 전의 탭에서 지금 탭으로 미끄러져 간다.
+  - 경계는 두 겹이다: 콘솔 껍데기 바깥(`app/(console)/layout.tsx`)과 각 화면 내용 바깥(`page.tsx`, 전형 준비의 머리는 `prep/layout.tsx`). React 가 새로 생기거나 사라지는 덩어리의 맨 바깥 경계에만 들어옴·나감을 걸기 때문이다.
+  - 브라우저가 전환 전후의 화면을 그림으로 찍어 움직이므로 실제 요소의 자리는 전환 중에도 제자리다(초점·스크롤 계산과 부딪히지 않는다). 다만 전환 중인 화면 조각은 그동안 눌리지 않는다. 그래서 같은 화면에서 내용만 바꾸는 이동(평가하기의 이전·다음, 세부 항목 평가의 평가 요소 고르기)은 전환 없이 바로 바뀐다(`lib/motion.ts` 의 `SWAP_TRANSITION`). 잇달아 눌러도 누름이 빠지지 않는다.
+  - View Transitions 를 지원하지 않는 브라우저에서는 전환 없이 바로 바뀐다. 처음 불러올 때(새로고침)에도 움직이지 않는다.
+- 올려놓음·누름: 누를 수 있는 것(버튼, 줄, 메뉴, 탭, 이어 붙인 버튼)은 마우스를 올리면 바탕이 `#F6F7FB`(주 버튼은 `#1A2259`), 누르는 동안 `#ECEEF5`(주 버튼은 `#00062E`)가 되고 색은 150ms 에 걸쳐 바뀐다(`motion-colors`). 꺼진 컨트롤(`disabled`, `aria-disabled`)과 이미 고른 것(파란 바탕)은 그대로다. 올려놓음은 마우스가 있는 기기에서만 건다. 초점 표시(outline)는 전환 없이 바로 보인다.
+- 나타남: 화면 안에서 새로 나타나는 것(고른 파일 줄, 실패 문구·안내, 펼친 변경 사항, 고른 지원자의 상세, 고른 평가 요소의 근거·세부 항목, 서류 구분의 문장, 기준의 근거)은 제자리에서 180ms 에 걸쳐 옅게 나타난다. opacity 만 움직이고 자리·크기는 바로 바뀐다(초점을 옮긴 뒤 화면에 보이게 하는 스크롤 계산이 바뀐 직후의 자리를 재기 때문이다. `lib/prep/reveal.ts`, `hooks/usePrepFocusKeeper.ts`).
+- 그 밖: 진행 막대와 진행 고리는 화면에 나타날 때 채워지고 값이 바뀌면 따라 움직인다. `내 배정 보기` 스위치의 동그라미는 미끄러진다. 원문보기에서 근거를 고르면 원문의 그 구절이 잠깐 짙게 나타났다가 제 색으로 가라앉는다. 로그인 화면은 처음 나타날 때 소개와 카드가 12px 아래에서 올라온다(CSS 라서 JS 를 기다리지 않는다).
+- PDF 를 올리는 점선 상자(`components/PdfUpload.tsx`): 가운데 그림은 겹쳐 놓인 종이 두 장과 올리기 표시다. 마우스를 올리면 파란 점선·아주 옅은 파란 바탕이 되고 종이와 화살표가 조금 올라간다. 파일을 끌고 위에 있는 동안에는 옅은 파란 바탕에 종이가 더 올라가고 화살표가 위로 까딱인다. 분석·초안을 기다리는 동안에는 그림이 흐려지고, 상태 글 앞에 돌아가는 표시가 있다.
+- 움직임을 줄이도록 설정한 사람(`prefers-reduced-motion: reduce`)에게는 전환·나타남이 바로 끝난 모습이 되고 화면 전환은 바로 바뀐다. 기다리는 중임을 알리는 돌아가는 표시만 남긴다.
+
 ### 전형 준비 평가 기준·변경 기록 (localStorage)
 
 - 키는 둘이다(`lib/constants.ts`). 저장·불러오기는 `lib/prep/storage.ts`, 값 확인은 `lib/prep/criteria.ts`·`lib/prep/history.ts` 에 있다.
@@ -530,7 +544,7 @@ app/
   layout.tsx              루트 레이아웃 (lang="ko", 문서 제목). 모든 화면이 같이 쓰는 것만 둔다
   page.tsx                로그인 화면 연결부 (useLogin → LoginScreen)
   (console)/              새 화면 묶음 (디자인 적용. 라우트 그룹이라 주소에는 나타나지 않는다)
-    layout.tsx            새 화면 껍데기 연결부 (useConsoleNav → ConsoleShell: 사이드바·상단 바. 검색 입력란·입력 이벤트를 받을 곳·켜고 끄기(useConsoleSearchState)를 context 로 건넴)
+    layout.tsx            새 화면 껍데기 연결부 (useConsoleNav → ConsoleShell: 사이드바·상단 바. 검색 입력란·입력 이벤트를 받을 곳·켜고 끄기(useConsoleSearchState)를 context 로 건넴). 껍데기 바깥의 화면 전환 경계
     prep/layout.tsx       전형 준비 공통 머리 연결부 (usePrepHeader → PrepHeader), 세 탭의 키 반복 규칙(useKeyRepeatGuard)·초점 규칙(usePrepFocusKeeper)
     prep/page.tsx         /prep 모집요강 올리기 연결부 (useGuidelineUpload → GuidelineUploadTab)
     prep/weights/page.tsx /prep/weights 평가·배점 설정 연결부 (usePrepWeights → WeightsTab)
@@ -560,7 +574,8 @@ components/               화면 컴포넌트. props 를 그리고 콜백만 호
   EvaluateSummaryScreen.tsx  총평 화면 (학생 성장 요약 그림, 서류 원문, 항목별 점수와 근거, 내 평가 입력)
   EvaluateDetailScreen.tsx   세부 항목 평가 화면 (서류 원문, 평가 요소 목록, 세부 평가 항목의 1~5 라디오, 평가 완료)
   EvaluateParts.tsx       평가하기 세 화면이 같이 쓰는 조각 (머리, 상태 표시, 지원자 줄, 서류 원문 패널, 보류·재검토 요청 버튼, 지원자 없음 안내)
-  PdfUpload.tsx           PDF 를 올리는 점선 상자와 고른 파일 줄 (모집요강 올리기와 학생부 올리기가 같이 쓴다)
+  PdfUpload.tsx           PDF 를 올리는 점선 상자(가운데 그림 포함)와 고른 파일 줄 (모집요강 올리기와 학생부 올리기가 같이 쓴다)
+  PageTransition.tsx      화면 전환 경계 (<ViewTransition>. 각 화면의 page.tsx, 전형 준비 머리, 콘솔 껍데기를 감싼다)
   RecordUploadScreen.tsx  학생부 올리기 화면 (점선 상자·파일 줄, 분석 시작과 상태 글, 실패 문구, 방금 올린 학생부 안내, 분석에 쓰는 평가 기준)
   OriginalScreen.tsx      원문보기 화면 (지원자 줄, 학생부 원문, 기준별 근거: 근거를 누르면 원문이 그 구절로 스크롤), 원문 없음 안내
 hooks/                    화면 상태
@@ -588,6 +603,7 @@ lib/
   admission.ts            새 화면의 대학·전형·모집 단위·사정관 값 (디자인 값, 모집 인원 30)
   consoleMenu.ts          새 화면의 주 메뉴(주소·갈 곳 없음), 지원자 관리·학생부 올리기·원문보기·평가하기 주소, 로그아웃 주소, 전형 준비 탭
   koreanTime.ts           한국 시간 날짜·시각 글 (오늘 날짜, 기록 시각)
+  motion.ts               화면 전환의 종류 이름 (같은 화면에서 내용만 바꾸는 이동은 전환하지 않음: SWAP_TRANSITION)
   guidelineClient.ts      POST /api/guideline 호출 (file, department), 받은 값 확인
   prep/                   전형 준비 (화면에서 쓰고, 순수 모듈은 /api/guideline 도 쓴다)
     criteria.ts           평가 기준 형식(guideline 포함), 저장 값 확인(parsePrepCriteria), 태그 줄·질문 번호·기록 내용 만들기

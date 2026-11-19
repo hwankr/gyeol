@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ViewTransition } from "react";
 import { ConsoleCrumbs, ConsoleTitle } from "@/components/consoleUi";
 import { ADMISSION } from "@/lib/admission";
 
@@ -19,6 +20,8 @@ type PrepHeaderProps = {
  * 탭과 현재 위치의 "전형 준비" 는 보통 링크(next/link)다. 홈 화면은 없어 "홈" 은 눌러도 아무 일도 없다.
  * 전형 요약의 칸은 폭이 모자라면 아래 줄로 내려가고(flex-wrap), 지금 탭은 파란 글자에 파란 밑줄(2px)이다.
  * 탭 줄의 이름(aria-label)은 탭 본문의 링크가 초점을 넘길 탭을 찾는 데 쓴다(hooks/usePrepHeader.ts 의 handOverFocusToPrepTab).
+ * 파란 밑줄은 지금 탭 안에 따로 그린 줄이다(자리·굵기는 링크의 아래 테두리와 같다). 탭을 옮기면 전의 탭에서 지금 탭으로 미끄러져 간다
+ * (이름이 같은 <ViewTransition> 한 쌍. app/globals.css 의 tab-line). 지금 탭이 아닌 탭은 마우스를 올리면 검은 글자가 된다.
  */
 export function PrepHeader({ prepPath, crumb, today, tabs }: PrepHeaderProps) {
   return (
@@ -59,11 +62,16 @@ export function PrepHeader({ prepPath, crumb, today, tabs }: PrepHeaderProps) {
             key={tab.href}
             href={tab.href}
             aria-current={tab.current ? "page" : undefined}
-            className={`-mb-px scroll-m-[8px] border-b-2 px-[2px] py-[10px] text-[14px] leading-[20px] no-underline ${
-              tab.current ? "border-b-[#001AD0] font-semibold text-[#001AD0]" : "border-b-transparent font-medium text-[#505050]"
+            className={`motion-colors relative -mb-px scroll-m-[8px] border-b-2 border-b-transparent px-[2px] py-[10px] text-[14px] leading-[20px] no-underline ${
+              tab.current ? "font-semibold text-[#001AD0]" : "font-medium text-[#505050] hover-on:text-[#111111]"
             }`}
           >
             {tab.label}
+            {tab.current && (
+              <ViewTransition name="prep-tab-line" share="tab-line" default="none">
+                <span aria-hidden="true" className="absolute inset-x-0 -bottom-[2px] h-[2px] bg-[#001AD0]" />
+              </ViewTransition>
+            )}
           </Link>
         ))}
       </nav>

@@ -1,5 +1,93 @@
 @import "tailwindcss";
 
+/*
+  움직임 값. 화면 전체가 같은 빠르기·같은 곡선으로 움직이게 여기서만 정한다.
+  - ease-soft: 나타나는 것(빨리 나와 천천히 멈춘다). ease-swift: 색·자리 같은 상태 변화.
+  - 화면 안에서 나타나는 것은 opacity 만 움직인다(자리·크기는 바로 바뀐다). 초점을 옮긴 뒤 화면에 보이게 하는 계산
+    (lib/prep/reveal.ts 등)이 요소의 자리를 재기 때문에, 자리를 움직이는 것은 초점을 받지 않는 장식(그림·손잡이·막대)에만 쓴다.
+  - 채움(fill-mode)을 forwards 로 두지 않는다. 끝난 뒤에도 쌓임 맥락이 남아 이어 붙인 버튼의 z-index 순서가 달라지기 때문이다.
+*/
+@theme static {
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-swift: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 화면 안에서 새로 나타나는 것(파일 줄, 안내, 고른 지원자의 상세 등) */
+  --animate-fade-in: fade-in 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* 로그인 카드·소개: 처음 들어올 때 한 번 */
+  --animate-rise-in: rise-in 480ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  /* 진행 막대: 왼쪽에서 채워진다 */
+  --animate-bar-grow: bar-grow 640ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* 진행 고리: 12시 방향에서 채워진다 */
+  --animate-ring-grow: ring-grow 720ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* 점선 상자의 화살표: 파일을 끌고 위에 있는 동안 위로 까딱인다 */
+  --animate-drop-arrow: drop-arrow 900ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  /* 원문에서 고른 근거 구절: 잠깐 짙게 나타났다가 제 색으로 가라앉는다 */
+  --animate-mark-in: mark-in 900ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      translate: 0 12px;
+    }
+  }
+  @keyframes bar-grow {
+    from {
+      scale: 0 1;
+    }
+  }
+  /* 고리 둘레(339.3)보다 긴 빈칸으로 시작해, 채움 길이만 0 에서 제 값으로 늘어난다. */
+  @keyframes ring-grow {
+    from {
+      stroke-dasharray: 0 400;
+    }
+  }
+  @keyframes drop-arrow {
+    50% {
+      translate: 0 -3px;
+    }
+  }
+  @keyframes mark-in {
+    0% {
+      background-color: transparent;
+    }
+    35% {
+      background-color: #b4bdff;
+    }
+  }
+}
+
+/*
+  색이 바뀌는 것(올려놓음·누름·고름)의 전환. 초점 표시(outline)는 넣지 않는다: 초점은 바로 보여야 한다.
+  Tailwind 의 transition-colors 는 outline-color 까지 움직여서 쓰지 않는다.
+*/
+@utility motion-colors {
+  transition-property: color, background-color, border-color, text-decoration-color, opacity, fill, stroke;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-swift);
+}
+
+/*
+  마우스를 올려놓았을 때·누르고 있을 때. 꺼진 컨트롤(disabled, aria-disabled)에는 걸리지 않고,
+  올려놓음은 마우스가 있는 기기에서만 건다(터치 화면에서 누른 뒤 색이 남지 않게).
+*/
+@custom-variant hover-on {
+  @media (hover: hover) {
+    &:hover:not(:disabled, [aria-disabled="true"]) {
+      @slot;
+    }
+  }
+}
+@custom-variant press-on {
+  &:active:not(:disabled, [aria-disabled="true"]) {
+    @slot;
+  }
+}
+
 /* 키보드 초점 표시를 흑백으로 맞춘다 (브라우저 기본 초점 색 대신) */
 :focus-visible {
   outline: 2px solid #000;
@@ -10,4 +98,89 @@
 ::selection {
   background-color: #d4d4d4;
   color: #000;
+}
+
+/*
+  화면 전환 (components/PageTransition.tsx 의 <ViewTransition>). 브라우저가 전환 전후의 화면을 그림으로 찍어 그 그림을 움직이므로
+  실제 요소의 자리는 전환 중에도 새 화면의 제자리다(초점·스크롤 계산과 부딪히지 않는다).
+  - 나가는 화면은 빨리 사라지고(100ms), 들어오는 화면은 조금 늦게 6px 아래에서 올라오며 나타난다(합쳐 260ms).
+  - 사이드바·상단 바·전형 준비의 머리처럼 남아 있는 것은 전환에 참여하지 않는다. 그대로 눌리고, 메뉴의 선택 표시는 보통의 색 전환으로 옮겨 간다.
+  - 전환 중인 화면 조각은 그동안 눌리지 않는다(브라우저 규칙). 그래서 전체를 짧게 두고, 같은 화면에서 지원자·평가 요소만 바꾸는
+    이동(이전·다음 등)은 전환 없이 바로 바꾼다(lib/motion.ts 의 SWAP_TRANSITION).
+*/
+::view-transition {
+  pointer-events: none;
+}
+/* 남아 있는 부분까지 함께 찍힌 경우(브라우저 기본 250ms 겹침)에도 화면 내용의 전환과 비슷한 시간에 끝나게 한다. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 200ms;
+}
+::view-transition-old(.page-out) {
+  animation: 100ms var(--ease-swift) both vt-fade-out;
+}
+::view-transition-new(.page-in) {
+  animation:
+    200ms var(--ease-soft) 60ms both vt-fade-in,
+    260ms var(--ease-soft) both vt-rise;
+}
+/*
+  화면 전체를 덮는 덩어리(로그인 화면, 콘솔 껍데기)끼리 바뀔 때: 올라오지 않고, 나가는 쪽과 들어오는 쪽이 같은 시간 동안 겹쳐 바뀐다.
+  콘솔 껍데기가 통째로 들어오거나 나갈 때에는 그 안의 화면 내용이 따로 움직이지 않는다(components/PageTransition.tsx).
+*/
+::view-transition-old(.page-cover-out) {
+  animation: 220ms var(--ease-swift) both vt-fade-out;
+}
+::view-transition-new(.page-cover-in) {
+  animation: 220ms var(--ease-swift) both vt-fade-in;
+}
+/* 전형 준비 탭 줄의 밑줄: 전의 탭에서 지금 탭으로 미끄러져 간다. */
+::view-transition-group(.tab-line) {
+  animation-duration: 240ms;
+  animation-timing-function: var(--ease-soft);
+}
+::view-transition-old(.tab-line),
+::view-transition-new(.tab-line) {
+  animation: none;
+  mix-blend-mode: normal;
+  height: 100%;
+}
+::view-transition-old(.tab-line) {
+  display: none;
+}
+
+@keyframes vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes vt-rise {
+  from {
+    translate: 0 6px;
+  }
+}
+
+/*
+  움직임을 줄이도록 설정한 사람에게는 움직이지 않는다: 전환·나타남은 바로 끝난 모습이 되고 화면 전환은 바로 바뀐다.
+  기다리는 중임을 알리는 돌아가는 표시(motion-essential)만 남긴다.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *:not(.motion-essential),
+  *:not(.motion-essential)::before,
+  *:not(.motion-essential)::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
 }

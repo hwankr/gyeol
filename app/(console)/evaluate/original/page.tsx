@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { EvaluateMissing } from "@/components/EvaluateParts";
 import { OriginalScreen } from "@/components/OriginalScreen";
+import { PageTransition } from "@/components/PageTransition";
 import { useEvaluationData } from "@/hooks/useEvaluationData";
 import { useOriginalView } from "@/hooks/useOriginalView";
 import { ADMISSION } from "@/lib/admission";
@@ -22,9 +23,11 @@ const HEAD_NOTE = `${ADMISSION.trackFull} · ${ADMISSION.unit}`;
  */
 export default function EvaluateOriginalPage() {
   return (
-    <Suspense fallback={null}>
-      <OriginalByCode />
-    </Suspense>
+    <PageTransition>
+      <Suspense fallback={null}>
+        <OriginalByCode />
+      </Suspense>
+    </PageTransition>
   );
 }
 

@@ -8,6 +8,7 @@ import {
   PANEL_CLASS,
   PANEL_HEAD_CLASS,
   PANEL_TITLE_CLASS,
+  Spinner,
   type ConsoleCrumb,
 } from "@/components/consoleUi";
 import { BUSY_PRIMARY_BUTTON_CLASS, PdfDropBox, PickedFileRow } from "@/components/PdfUpload";
@@ -101,7 +102,10 @@ export function RecordUploadScreen({
             <h2 id="record-upload-title" className={PANEL_TITLE_CLASS}>
               학생부 올리기
             </h2>
-            <Link href={backHref} className="scroll-m-[8px] text-[13px] leading-[18px] font-medium text-[#505050] no-underline">
+            <Link
+              href={backHref}
+              className="motion-colors scroll-m-[8px] text-[13px] leading-[18px] font-medium text-[#505050] no-underline hover-on:text-[#111111]"
+            >
               지원자 목록으로
             </Link>
           </div>
@@ -125,7 +129,7 @@ export function RecordUploadScreen({
               <>
                 <PickedFileRow fileName={fileName} sizeText={fileSizeText} busy={isAnalyzing} onClear={onClearFile} />
 
-                <div className="mt-[12px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+                <div className="mt-[12px] flex animate-fade-in flex-wrap items-center gap-x-[12px] gap-y-[8px]">
                   {/* 기다리는 동안 disabled 대신 aria-disabled 로 두어(누르면 상태 훅이 아무것도 하지 않는다) 초점이 버튼에 남게 한다. */}
                   <button
                     ref={analyzeButtonRef}
@@ -136,7 +140,9 @@ export function RecordUploadScreen({
                   >
                     분석 시작
                   </button>
-                  <p aria-live="polite" className="text-[13px] leading-[18px] text-[#505050]">
+                  {/* 기다리는 동안에는 상태 글 앞에 돌아가는 표시가 있다(분석은 20초 남짓 걸린다). */}
+                  <p aria-live="polite" className="flex items-center gap-[6px] text-[13px] leading-[18px] text-[#505050]">
+                    {statusText !== "" && <Spinner />}
                     {statusText}
                   </p>
                 </div>
@@ -144,12 +150,12 @@ export function RecordUploadScreen({
             )}
 
             {requestError !== null && (
-              <p role="alert" className="mt-[8px] text-[13px] leading-[18px] font-medium text-[#BA1A1A] [overflow-wrap:anywhere]">
+              <p role="alert" className="mt-[8px] animate-fade-in text-[13px] leading-[18px] font-medium text-[#BA1A1A] [overflow-wrap:anywhere]">
                 {requestError}
               </p>
             )}
             {storageNotice !== "" && (
-              <p role="alert" className="mt-[8px] text-[13px] leading-[18px] font-medium text-[#BA1A1A] [overflow-wrap:anywhere]">
+              <p role="alert" className="mt-[8px] animate-fade-in text-[13px] leading-[18px] font-medium text-[#BA1A1A] [overflow-wrap:anywhere]">
                 {storageNotice}
               </p>
             )}
@@ -157,7 +163,7 @@ export function RecordUploadScreen({
             {/* 방금 올린 학생부의 안내는 늘 있는 알림 영역 안에 그려 생길 때 읽히게 한다(없으면 빈 영역이라 모양에 영향이 없다). */}
             <div aria-live="polite">
               {done !== null && (
-                <div className="mt-[12px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px] rounded-[6px] border border-[#E4E4E4] px-[12px] py-[10px] text-[13px] leading-[18px] [overflow-wrap:anywhere]">
+                <div className="mt-[12px] flex animate-fade-in flex-wrap items-center gap-x-[12px] gap-y-[8px] rounded-[6px] border border-[#E4E4E4] px-[12px] py-[10px] text-[13px] leading-[18px] [overflow-wrap:anywhere]">
                   <p className="min-w-0 flex-[1_1_240px] font-medium text-[#111111]">{done.text}</p>
                   <div className="flex flex-none flex-wrap gap-[8px]">
                     {done.evaluateHref !== null && (

@@ -40,6 +40,8 @@ const HINT_ID = "gyeol-login-hint";
  * 로그인 화면 (/). 왼쪽은 로고와 소개, 오른쪽 흰 카드는 계정 선택이다.
  * 화면 폭에 맞춰 늘고 줄며, 좁으면 두 덩어리가 위아래로 쌓이고 내용이 길면 문서가 세로로 스크롤된다.
  * 치수·색·글자는 디자인 값을 그대로 쓴다. 바탕 글자(14px, 줄 높이 20px, #111111)는 바깥 상자에 두고 각 글자가 필요한 값만 바꾼다.
+ * 움직임(디자인 시안에 없어 정한 것): 화면이 나타날 때 소개와 카드가 12px 아래에서 올라오며 나타난다(카드는 90ms 늦게. CSS 라서 JS 를 기다리지 않는다).
+ * "계속" 과 선택 목록은 마우스를 올리면 색이 조금 바뀐다.
  */
 export function LoginScreen({
   universities,
@@ -64,7 +66,7 @@ export function LoginScreen({
       />
 
       <div className="relative box-border min-w-0 flex-[1_1_480px] p-[clamp(32px,6vw,88px)] text-white">
-        <div className="max-w-[480px]">
+        <div className="max-w-[480px] animate-rise-in">
           <GyeolLogo />
           <p className="mt-[32px] text-[16px] leading-[26px]">{INTRO}</p>
           {/* 항목마다 위에 가는 줄을 긋고, 마지막 항목은 아래에도 긋는다. */}
@@ -83,7 +85,7 @@ export function LoginScreen({
       </div>
 
       <main className="relative box-border flex min-w-0 flex-[1_1_480px] items-center justify-center px-[24px] py-[48px]">
-        <div className="box-border w-full max-w-[440px] rounded-[8px] bg-white p-[36px]">
+        <div className="box-border w-full max-w-[440px] animate-rise-in rounded-[8px] bg-white p-[36px] [animation-delay:90ms]">
           <p className="text-[13px] leading-[18px] font-medium text-[#505050]">1 / 3 · 계정 선택</p>
           <h1 className="mt-[6px] text-[26px] leading-[34px] font-bold tracking-[-0.01em]">로그인</h1>
           {/*
@@ -113,7 +115,7 @@ export function LoginScreen({
             <button
               type="submit"
               aria-describedby={HINT_ID}
-              className="mt-[8px] box-border flex h-[48px] w-full cursor-pointer items-center justify-center rounded-[6px] border border-[#000947] bg-[#000947] p-0 text-[15px] font-semibold text-white"
+              className="motion-colors mt-[8px] box-border flex h-[48px] w-full cursor-pointer items-center justify-center rounded-[6px] border border-[#000947] bg-[#000947] p-0 text-[15px] font-semibold text-white hover-on:border-[#1A2259] hover-on:bg-[#1A2259] press-on:border-[#00062E] press-on:bg-[#00062E]"
             >
               계속
             </button>
@@ -149,7 +151,7 @@ function SelectField({ id, label, value, options, onChange, selectRef }: SelectF
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="m-0 box-border h-[44px] w-full rounded-[6px] border border-[#CFCFCF] bg-white px-[12px] py-0 text-[15px] leading-[normal] text-[#111111]"
+        className="motion-colors m-0 box-border h-[44px] w-full cursor-pointer rounded-[6px] border border-[#CFCFCF] bg-white px-[12px] py-0 text-[15px] leading-[normal] text-[#111111] hover:border-[#AEAEAE]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

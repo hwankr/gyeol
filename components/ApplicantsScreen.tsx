@@ -113,6 +113,8 @@ const STATUS_TONE: Record<ApplicantStatus, ChipTone> = {
  * 현재 위치의 "지원자 관리" 는 보통 링크(next/link)라 화면의 JavaScript 가 준비되기 전에도 동작한다. 그 아래 본문(제목 줄, 요약 상자,
  * 걸러 보기 줄, 표, 상세 영역)은 준비되기 전(서버 HTML·hydration)에는 inert 라 초점을 받지 않고 눌리지 않는다(모양은 같다).
  * 준비 전에 들어간 초점이나 누름이 준비되면서 바뀌는 화면(저장한 결정 반영, 상세 스크롤)과 어긋나지 않게 하려는 것이다.
+ * 움직임(디자인 시안에 없어 정한 것): 진행 막대가 왼쪽에서 채워지고, 스위치의 동그라미가 미끄러지고, 고르지 않은 줄·버튼은 마우스를 올리면
+ * 옅은 회색 바탕이 되고, 지원자를 바꾸면 상세 내용이 옅게 나타난다. 자리·크기는 바로 바뀐다(초점을 보이게 하는 스크롤 계산이 자리를 잰다).
  */
 export function ApplicantsScreen({
   applicantsPath,
@@ -209,9 +211,9 @@ export function ApplicantsScreen({
               <strong className={CARD_NUMBER_CLASS}>{review.percent}%</strong>
               <span>검토 완료</span>
             </p>
-            {/* 채움 너비는 검토 완료 비율과 같은 값이다. */}
+            {/* 채움 너비는 검토 완료 비율과 같은 값이다. 화면에 나타날 때 왼쪽에서 채워지고, 값이 바뀌면 너비가 따라 움직인다. */}
             <div aria-hidden="true" className="mt-[8px] h-[6px] overflow-hidden rounded-[3px] bg-[#E4E6EE]">
-              <div className="h-[6px] bg-[#001AD0]" style={{ width: `${review.percent}%` }} />
+              <div className={`h-[6px] bg-[#001AD0] ${BAR_FILL_MOTION_CLASS}`} style={{ width: `${review.percent}%` }} />
             </div>
             <dl className="mt-[8px] flex flex-wrap gap-x-[16px] gap-y-0 text-[13px] leading-[18px] text-[#505050]">
               <div className="flex gap-[6px]">
@@ -247,18 +249,26 @@ export function ApplicantsScreen({
             <span id="mine-label" className="text-[13px] leading-[18px] font-medium text-[#505050]">
               내 배정 보기
             </span>
-            {/* 켜고 끄는 스위치: 켜지면 파란 바탕에 동그라미가 오른쪽, 꺼지면 회색 바탕에 동그라미가 왼쪽이다. */}
+            {/*
+              켜고 끄는 스위치: 켜지면 파란 바탕에 동그라미가 오른쪽, 꺼지면 회색 바탕에 동그라미가 왼쪽이다.
+              동그라미는 왼쪽 끝에 놓고 켜지면 16px 옮긴다(36 − 안쪽 여백 2·2 − 동그라미 16). 옮기는 동안 미끄러지고 바탕색이 따라 바뀐다.
+            */}
             <button
               type="button"
               role="switch"
               aria-checked={mineOnly}
               aria-labelledby="mine-label"
               onClick={onToggleMine}
-              className={`box-border flex h-[20px] w-[36px] cursor-pointer scroll-m-[8px] items-center rounded-[10px] border-0 p-[2px] ${
-                mineOnly ? "justify-end bg-[#001AD0]" : "justify-start bg-[#767676]"
+              className={`motion-colors box-border flex h-[20px] w-[36px] cursor-pointer scroll-m-[8px] items-center rounded-[10px] border-0 p-[2px] ${
+                mineOnly ? "bg-[#001AD0] hover-on:bg-[#0016B0]" : "bg-[#767676] hover-on:bg-[#606060]"
               }`}
             >
-              <span aria-hidden="true" className="h-[16px] w-[16px] rounded-[50%] bg-white" />
+              <span
+                aria-hidden="true"
+                className={`h-[16px] w-[16px] rounded-[50%] bg-white transition-[translate] duration-200 ease-soft ${
+                  mineOnly ? "translate-x-[16px]" : "translate-x-0"
+                }`}
+              />
             </button>
             {/* 디자인에는 없는 링크: 학생부 PDF 를 올려 분석하는 화면으로 간다(올린 학생부는 이 표와 평가하기에 지원자로 나온다). */}
             <Link href={uploadPath} className={`${BUTTON_SECONDARY_CLASS} ml-[8px] h-[32px] scroll-m-[8px] px-[12px]`}>
@@ -304,11 +314,13 @@ export function ApplicantsScreen({
                         type="button"
                         aria-pressed={row.selected}
                         onClick={() => onSelectApplicant(row.code)}
-                        className={`box-border min-h-[48px] w-full cursor-pointer scroll-m-[8px] border-0 px-[20px] py-[6px] text-left text-[14px] leading-[20px] text-[#505050] focus-visible:outline-offset-[-2px]! ${ROW_GRID_CLASS} ${
-                          row.selected ? "bg-[#EEF0FF]" : "bg-white"
+                        className={`motion-colors box-border min-h-[48px] w-full cursor-pointer scroll-m-[8px] border-0 px-[20px] py-[6px] text-left text-[14px] leading-[20px] text-[#505050] focus-visible:outline-offset-[-2px]! ${ROW_GRID_CLASS} ${
+                          row.selected ? "bg-[#EEF0FF]" : "bg-white hover-on:bg-[#F6F7FB]"
                         }`}
                       >
-                        <strong className={`font-semibold tabular-nums ${row.selected ? "text-[#001AD0]" : "text-[#111111]"}`}>
+                        <strong
+                          className={`motion-colors font-semibold tabular-nums ${row.selected ? "text-[#001AD0]" : "text-[#111111]"}`}
+                        >
                           {row.code}
                         </strong>
                         <span className={row.documentProblem ? "font-medium text-[#BA1A1A]" : "font-normal"}>
@@ -397,51 +409,54 @@ export function ApplicantsScreen({
                     aria-label="확인 필요 사항 상세"
                     className="mt-[16px] -mb-[2px] -ml-[4px] box-border max-h-[530px] min-h-[120px] scroll-m-[8px] overflow-y-auto pb-[2px] pl-[4px] [scrollbar-color:#CFCFCF_transparent] [scrollbar-width:thin]"
                   >
-                    <div className={DETAIL_BLOCK_CLASS}>
-                      <h3 className={PANEL_TITLE_CLASS}>서류 확인</h3>
-                      <dl className={COUNT_LIST_CLASS}>
-                        {detail.documentCounts.map((item, index) => (
-                          <CountCell key={item.label} label={item.label} value={item.value} index={index} />
-                        ))}
-                      </dl>
-                      {detail.documentNotice !== null && (
-                        <p className="mt-[8px] text-[13px] leading-[18px] font-medium text-[#BA1A1A]">{detail.documentNotice}</p>
-                      )}
-                    </div>
-                    <div className={DETAIL_BLOCK_CLASS}>
-                      <h3 className={PANEL_TITLE_CLASS}>개인정보 가림 확인</h3>
-                      {/* 종류별 가림 수. 가린 것이 없는 올린 지원자(masks 가 빈 결과)는 칸이 없다(빈 목록을 그리지 않는다). */}
-                      {detail.maskCounts.length > 0 && (
+                    {/* 지원자를 바꾸면 상세 내용이 옅게 나타난다(지원자 코드를 key 로 새로 그린다. 스크롤 영역과 머리의 버튼은 그대로다). */}
+                    <div key={detail.code} className="animate-fade-in">
+                      <div className={DETAIL_BLOCK_CLASS}>
+                        <h3 className={PANEL_TITLE_CLASS}>서류 확인</h3>
                         <dl className={COUNT_LIST_CLASS}>
-                          {detail.maskCounts.map((item, index) => (
-                            <CountCell key={item.label} label={item.label} value={item.count} index={index} />
+                          {detail.documentCounts.map((item, index) => (
+                            <CountCell key={item.label} label={item.label} value={item.value} index={index} />
                           ))}
                         </dl>
-                      )}
-                    </div>
-                    <div className="border-t border-t-[#E4E4E4] pt-[12px] pb-[2px]">
-                      <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[4px]">
-                        <h3 className={PANEL_TITLE_CLASS}>가릴지 확인이 필요한 표현</h3>
-                        <AccentTag>AI 제안</AccentTag>
-                        {/* 화면에 보이는 결정(저장하지 않은 것 포함) 기준으로 아직 정하지 않은 표현 수. 표현이 없으면 적지 않는다. */}
-                        {detail.expressions.length > 0 && (
-                          <span className="ml-auto text-[12px] leading-[16px] text-[#505050]">
-                            {detail.undecided > 0 ? `남은 확인 ${detail.undecided}곳` : "모두 확인함"}
-                          </span>
+                        {detail.documentNotice !== null && (
+                          <p className="mt-[8px] text-[13px] leading-[18px] font-medium text-[#BA1A1A]">{detail.documentNotice}</p>
                         )}
                       </div>
-                      {detail.expressions.length === 0 ? (
-                        <p className="mt-[12px] text-[14px] leading-[20px] text-[#505050]">확인이 필요한 표현이 없습니다.</p>
-                      ) : (
-                        detail.expressions.map((expression, index) => (
-                          <ExpressionReview
-                            key={expression.id}
-                            expression={expression}
-                            first={index === 0}
-                            onDecide={(decision) => onDecide(expression.id, decision)}
-                          />
-                        ))
-                      )}
+                      <div className={DETAIL_BLOCK_CLASS}>
+                        <h3 className={PANEL_TITLE_CLASS}>개인정보 가림 확인</h3>
+                        {/* 종류별 가림 수. 가린 것이 없는 올린 지원자(masks 가 빈 결과)는 칸이 없다(빈 목록을 그리지 않는다). */}
+                        {detail.maskCounts.length > 0 && (
+                          <dl className={COUNT_LIST_CLASS}>
+                            {detail.maskCounts.map((item, index) => (
+                              <CountCell key={item.label} label={item.label} value={item.count} index={index} />
+                            ))}
+                          </dl>
+                        )}
+                      </div>
+                      <div className="border-t border-t-[#E4E4E4] pt-[12px] pb-[2px]">
+                        <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[4px]">
+                          <h3 className={PANEL_TITLE_CLASS}>가릴지 확인이 필요한 표현</h3>
+                          <AccentTag>AI 제안</AccentTag>
+                          {/* 화면에 보이는 결정(저장하지 않은 것 포함) 기준으로 아직 정하지 않은 표현 수. 표현이 없으면 적지 않는다. */}
+                          {detail.expressions.length > 0 && (
+                            <span className="ml-auto text-[12px] leading-[16px] text-[#505050]">
+                              {detail.undecided > 0 ? `남은 확인 ${detail.undecided}곳` : "모두 확인함"}
+                            </span>
+                          )}
+                        </div>
+                        {detail.expressions.length === 0 ? (
+                          <p className="mt-[12px] text-[14px] leading-[20px] text-[#505050]">확인이 필요한 표현이 없습니다.</p>
+                        ) : (
+                          detail.expressions.map((expression, index) => (
+                            <ExpressionReview
+                              key={expression.id}
+                              expression={expression}
+                              first={index === 0}
+                              onDecide={(decision) => onDecide(expression.id, decision)}
+                            />
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -492,6 +507,9 @@ function DeadlineText({ remaining }: { remaining: DeadlineRemaining | null }) {
 
 const DEADLINE_ALERT_CLASS = "font-semibold text-[#BA1A1A]";
 
+/** 진행 막대의 채움: 화면에 나타날 때 왼쪽에서 채워지고(크기만 늘인다), 값이 바뀌면 너비가 따라 움직인다. */
+const BAR_FILL_MOTION_CLASS = "origin-left animate-bar-grow transition-[width] duration-500 ease-soft";
+
 /** 상세 영역의 숫자 칸 하나: 흐린 이름 아래 굵은 값. 줄의 첫 칸(네 칸마다)이 아니면 왼쪽에 세로 선이 있다. */
 function CountCell({ label, value, index }: { label: string; value: string | number; index: number }) {
   return (
@@ -503,9 +521,9 @@ function CountCell({ label, value, index }: { label: string; value: string | num
 }
 
 const DECISION_BUTTON_CLASS =
-  "box-border h-[32px] cursor-pointer scroll-m-[8px] rounded-[6px] border px-[14px] text-[13px] leading-[normal] font-semibold";
-/** 고르지 않은 버튼: 흰 바탕, 회색 테두리 ("가림" 은 검은 글자, "그대로 둠" 은 회색 글자) */
-const DECISION_IDLE_CLASS = "border-[#CFCFCF] bg-white";
+  "motion-colors box-border h-[32px] cursor-pointer scroll-m-[8px] rounded-[6px] border px-[14px] text-[13px] leading-[normal] font-semibold";
+/** 고르지 않은 버튼: 흰 바탕, 회색 테두리 ("가림" 은 검은 글자, "그대로 둠" 은 회색 글자). 마우스를 올리면 옅은 회색 바탕이 된다. */
+const DECISION_IDLE_CLASS = "border-[#CFCFCF] bg-white hover-on:bg-[#F6F7FB] press-on:bg-[#ECEEF5]";
 /** 고른 "가림": 짙은 남색 바탕에 흰 글자 */
 const DECISION_MASK_CLASS = "border-[#000947] bg-[#000947] text-white";
 /** 고른 "그대로 둠": 옅은 파란 바탕에 파란 테두리·글자 */
@@ -537,7 +555,7 @@ function ExpressionReview({
       <p className="text-[12px] leading-[16px] text-[#767676]">{expression.context}</p>
       <p className="mt-[6px] rounded-[6px] bg-[#F6F7FB] px-[12px] py-[8px] text-[15px] leading-[24px] break-keep">
         {expression.before}
-        <strong className={`px-[2px] py-px font-semibold text-[#111111] ${targetClass(decision)}`}>{expression.target}</strong>
+        <strong className={`motion-colors px-[2px] py-px font-semibold text-[#111111] ${targetClass(decision)}`}>{expression.target}</strong>
         {expression.after}
       </p>
       <div className="mt-[8px] flex flex-wrap gap-[8px]">

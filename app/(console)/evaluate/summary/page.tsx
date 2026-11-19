@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { EvaluateMissing } from "@/components/EvaluateParts";
 import { EvaluateSummaryScreen } from "@/components/EvaluateSummaryScreen";
+import { PageTransition } from "@/components/PageTransition";
 import { useEvaluateSummary } from "@/hooks/useEvaluateSummary";
 import { useEvaluationData } from "@/hooks/useEvaluationData";
 import { ADMISSION } from "@/lib/admission";
@@ -17,9 +18,11 @@ import type { EvaluationApplicant } from "@/lib/evaluate/sampleEvaluations";
  */
 export default function EvaluateSummaryPage() {
   return (
-    <Suspense fallback={null}>
-      <SummaryByCode />
-    </Suspense>
+    <PageTransition>
+      <Suspense fallback={null}>
+        <SummaryByCode />
+      </Suspense>
+    </PageTransition>
   );
 }
 

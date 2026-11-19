@@ -4,6 +4,8 @@ import type { ReactNode, Ref } from "react";
 // 새 화면(전형 준비, 지원자 관리, 평가하기)이 같이 쓰는 작은 조각과 클래스 묶음. 치수·색·글자는 디자인 값 그대로다.
 // 색: 글자 #111111, 흐린 글자 #505050·#767676, 선 #E4E4E4, 컨트롤 테두리 #CFCFCF, 표 머리 바탕 #F6F7FB,
 //     강조 #001AD0(바탕 #EEF0FF), 짙은 남색 #000947, 경고 #BA1A1A. 모서리는 컨트롤 6px, 상자 8px.
+// 움직임(디자인 시안에는 없어 정한 것. 값은 app/globals.css): 누를 수 있는 것은 마우스를 올리면 바탕이 #F6F7FB(주 버튼은 #1A2259),
+//     누르는 동안 #ECEEF5(주 버튼은 #00062E)가 되고 색은 150ms 에 걸쳐 바뀐다(motion-colors). 고른 것(파란 바탕)은 올려도 그대로다.
 
 /** 현재 위치 줄의 항목 하나. href 가 없으면 갈 곳이 없는 항목이다(마지막 항목은 지금 화면). */
 export type ConsoleCrumb = {
@@ -53,7 +55,7 @@ function CrumbItem({ item, current, first }: { item: ConsoleCrumb; current: bool
               {item.label}
             </a>
           ) : (
-            <Link href={item.href} className="scroll-m-[8px] text-[#505050] no-underline">
+            <Link href={item.href} className="motion-colors scroll-m-[8px] text-[#505050] no-underline hover-on:text-[#111111]">
               {item.label}
             </Link>
           )}
@@ -110,14 +112,15 @@ export function AccentTag({ children }: { children: ReactNode }) {
  * 이어 붙인 버튼 묶음(걸러 보기, 목록 구분, 서류 구분)의 버튼 하나에 줄 클래스.
  * 첫 버튼은 왼쪽, 마지막 버튼은 오른쪽 모서리만 둥글고, 사이 테두리가 겹치게 둘째부터 왼쪽으로 1px 당긴다. 눌린 버튼은 파란 테두리가
  * 이웃 테두리 위에 보이게 위로 올린다(z-index). 높이·안쪽 여백은 쓰는 쪽이 정한다(h-[32px] px-[12px] 등).
+ * 눌리지 않은 버튼은 마우스를 올리면 바탕이 옅은 회색이 되고, 눌린 버튼이 바뀔 때 색이 150ms 에 걸쳐 옮겨 간다.
  */
 export function segmentClass(index: number, count: number, on: boolean): string {
   const radius = index === 0 ? "rounded-l-[6px]" : index === count - 1 ? "rounded-r-[6px]" : "";
   const pull = index === 0 ? "" : "-ml-px";
   const tone = on
     ? "z-[1] border-[#001AD0] bg-[#EEF0FF] font-semibold text-[#001AD0]"
-    : "z-0 border-[#CFCFCF] bg-white font-medium text-[#505050]";
-  return `relative box-border inline-flex items-center border text-[13px] ${radius} ${pull} ${tone}`;
+    : "z-0 border-[#CFCFCF] bg-white font-medium text-[#505050] hover-on:bg-[#F6F7FB] hover-on:text-[#111111]";
+  return `motion-colors relative box-border inline-flex cursor-pointer items-center border text-[13px] ${radius} ${pull} ${tone}`;
 }
 
 /** 테두리 상자 (표·패널의 바깥 상자) */
@@ -129,14 +132,37 @@ export const PANEL_HEAD_CLASS = "border-b border-b-[#E4E4E4] bg-[#F6F7FB]";
 /** 패널 머리 줄의 제목 글자 (13px, 굵기 600) */
 export const PANEL_TITLE_CLASS = "text-[13px] leading-[18px] font-semibold";
 
-/** 버튼 공통: 글꼴은 물려받고 모서리 6px, 테두리 1px. 높이·안쪽 여백은 쓰는 쪽이 정한다. */
-const BUTTON_BASE = "box-border inline-flex items-center justify-center rounded-[6px] border text-[13px] no-underline";
+/**
+ * 버튼 공통: 글꼴은 물려받고 모서리 6px, 테두리 1px. 높이·안쪽 여백은 쓰는 쪽이 정한다.
+ * 색은 150ms 에 걸쳐 바뀌고(motion-colors) 손가락 커서다. 꺼진 버튼(disabled, aria-disabled)에는 올려놓음·누름 색이 걸리지 않는다.
+ */
+const BUTTON_BASE =
+  "motion-colors box-border inline-flex cursor-pointer items-center justify-center rounded-[6px] border text-[13px] no-underline";
+
+/** 흰 바탕 버튼의 올려놓음·누름 바탕 (보조 버튼, 테두리만 있는 주 버튼) */
+const BUTTON_LIGHT_HOVER = "hover-on:bg-[#F6F7FB] press-on:bg-[#ECEEF5]";
 
 /** 보조 버튼: 흰 바탕, 회색 테두리, 검은 글자 (굵기 500) */
-export const BUTTON_SECONDARY_CLASS = `${BUTTON_BASE} border-[#CFCFCF] bg-white font-medium text-[#111111] disabled:cursor-default disabled:opacity-[0.45]`;
+export const BUTTON_SECONDARY_CLASS = `${BUTTON_BASE} ${BUTTON_LIGHT_HOVER} border-[#CFCFCF] bg-white font-medium text-[#111111] disabled:cursor-default disabled:opacity-[0.45]`;
+
+/** 눌린 채로 있는 보조 버튼(보류·재검토 요청): 파란 테두리, 옅은 파란 바탕, 파란 글자 (굵기 600). 올려도 그대로다. */
+export const BUTTON_PRESSED_CLASS = `${BUTTON_BASE} border-[#001AD0] bg-[#EEF0FF] font-semibold text-[#001AD0] disabled:cursor-default disabled:opacity-[0.45]`;
 
 /** 주 버튼: 짙은 남색 바탕, 흰 글자 (굵기 600). 꺼지면 옅은 회색 바탕에 회색 글자. */
-export const BUTTON_PRIMARY_CLASS = `${BUTTON_BASE} border-[#000947] bg-[#000947] font-semibold text-white disabled:cursor-default disabled:border-[#E4E6EE] disabled:bg-[#E4E6EE] disabled:text-[#505050]`;
+export const BUTTON_PRIMARY_CLASS = `${BUTTON_BASE} border-[#000947] bg-[#000947] font-semibold text-white hover-on:border-[#1A2259] hover-on:bg-[#1A2259] press-on:border-[#00062E] press-on:bg-[#00062E] disabled:cursor-default disabled:border-[#E4E6EE] disabled:bg-[#E4E6EE] disabled:text-[#505050]`;
 
 /** 테두리만 있는 주 버튼(임시저장): 흰 바탕, 남색 테두리·글자 (굵기 600) */
-export const BUTTON_OUTLINE_CLASS = `${BUTTON_BASE} border-[#000947] bg-white font-semibold text-[#000947] disabled:cursor-default disabled:opacity-[0.45]`;
+export const BUTTON_OUTLINE_CLASS = `${BUTTON_BASE} ${BUTTON_LIGHT_HOVER} border-[#000947] bg-white font-semibold text-[#000947] disabled:cursor-default disabled:opacity-[0.45]`;
+
+/**
+ * 기다리는 중 표시: 돌아가는 고리(14px). 장식이라 화면 낭독기에는 숨긴다(옆의 상태 글이 읽힌다).
+ * 움직임을 줄이도록 설정한 사람에게도 돈다(motion-essential): 멈춰 있으면 기다리는 중인지 알 수 없다.
+ */
+export function Spinner() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="motion-essential h-[14px] w-[14px] flex-none animate-spin">
+      <circle cx="8" cy="8" r="6.25" stroke="#E4E6EE" strokeWidth="1.5" />
+      <path d="M14.25 8A6.25 6.25 0 0 0 8 1.75" stroke="#001AD0" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}

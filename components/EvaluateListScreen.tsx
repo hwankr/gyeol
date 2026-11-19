@@ -42,6 +42,8 @@ const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
  * 평가하기 · 평가 대기 목록 화면(/evaluate). 왼쪽은 배정된 지원자 목록(줄 전체가 총평 화면으로 가는 링크),
  * 오른쪽은 평가 진행 현황(고리 그림과 위원별 막대. 사람을 누르면 고리가 그 사람의 비율을 보여 준다).
  * 좁은 화면에서는 진행 현황이 목록 아래로 내려가고, 목록은 상자 안에서 가로로 스크롤된다.
+ * 움직임(디자인 시안에 없어 정한 것): 고리와 막대는 화면에 나타날 때 채워지고, 사람을 고르면 고리의 채움이 그 비율로 움직인다.
+ * 줄과 고르지 않은 사람은 마우스를 올리면 옅은 회색 바탕이 된다.
  */
 export function EvaluateListScreen({
   crumbs,
@@ -91,7 +93,7 @@ export function EvaluateListScreen({
                 type="button"
                 aria-label={sort.label}
                 onClick={sort.onToggle}
-                className={`-ml-[6px] inline-flex h-[28px] scroll-m-[8px] items-center gap-[4px] justify-self-start rounded-[4px] border-0 bg-transparent px-[6px] text-[12px] leading-[normal] font-semibold ${
+                className={`motion-colors -ml-[6px] inline-flex h-[28px] cursor-pointer scroll-m-[8px] items-center gap-[4px] justify-self-start rounded-[4px] border-0 bg-transparent px-[6px] text-[12px] leading-[normal] font-semibold hover-on:bg-[#E9EBF3] ${
                   sort.active ? "text-[#001AD0]" : "text-[#505050]"
                 }`}
               >
@@ -104,7 +106,7 @@ export function EvaluateListScreen({
                 <li key={row.code} className="border-b border-b-[#E4E4E4]">
                   <Link
                     href={row.href}
-                    className={`${ROW_GRID_CLASS} box-border min-h-[52px] scroll-m-[8px] px-[20px] py-[8px] text-[14px] leading-[20px] text-[#505050] no-underline`}
+                    className={`${ROW_GRID_CLASS} motion-colors box-border min-h-[52px] scroll-m-[8px] px-[20px] py-[8px] text-[14px] leading-[20px] text-[#505050] no-underline hover-on:bg-[#F6F7FB]`}
                   >
                     <strong className="font-semibold text-[#001AD0] tabular-nums">{row.code}</strong>
                     <span className="text-[#111111] [overflow-wrap:anywhere]">{row.summary}</span>
@@ -136,6 +138,7 @@ export function EvaluateListScreen({
             <div className="relative mx-auto w-[200px] max-w-full">
               <svg role="img" aria-label={progress.ringAriaLabel} viewBox="0 0 128 128" className="block h-auto w-full">
                 <circle cx="64" cy="64" r={RING_RADIUS} fill="none" stroke="#E4E6EE" strokeWidth="10" />
+                {/* 채움 길이는 style 로 준다(값은 속성으로 줄 때와 같다): 사람을 고르면 CSS 전환으로 그 비율까지 움직인다. */}
                 <circle
                   cx="64"
                   cy="64"
@@ -144,7 +147,8 @@ export function EvaluateListScreen({
                   stroke="#001AD0"
                   strokeWidth="10"
                   transform="rotate(-90 64 64)"
-                  strokeDasharray={`${(progress.ringFraction * RING_LENGTH).toFixed(1)} ${RING_LENGTH.toFixed(1)}`}
+                  className="animate-ring-grow transition-[stroke-dasharray] duration-500 ease-soft"
+                  style={{ strokeDasharray: `${(progress.ringFraction * RING_LENGTH).toFixed(1)} ${RING_LENGTH.toFixed(1)}` }}
                 />
               </svg>
               <div
@@ -162,8 +166,8 @@ export function EvaluateListScreen({
                     type="button"
                     aria-pressed={person.on}
                     onClick={person.onPick}
-                    className={`box-border block w-full scroll-m-[8px] rounded-[6px] border px-[12px] py-[10px] text-left ${
-                      person.on ? "border-[#001AD0] bg-[#EEF0FF]" : "border-[#E4E4E4] bg-white"
+                    className={`motion-colors box-border block w-full cursor-pointer scroll-m-[8px] rounded-[6px] border px-[12px] py-[10px] text-left ${
+                      person.on ? "border-[#001AD0] bg-[#EEF0FF]" : "border-[#E4E4E4] bg-white hover-on:border-[#CFCFCF] hover-on:bg-[#F6F7FB]"
                     }`}
                   >
                     <span className="flex justify-between gap-[12px] text-[13px] leading-[18px] text-[#111111]">
@@ -171,7 +175,10 @@ export function EvaluateListScreen({
                       <span className="tabular-nums">{person.countText}</span>
                     </span>
                     <span aria-hidden="true" className="mt-[8px] block h-[6px] overflow-hidden rounded-[3px] bg-[#E4E6EE]">
-                      <span className="block h-[6px] bg-[#001AD0]" style={{ width: `${person.percent}%` }} />
+                      <span
+                        className="block h-[6px] origin-left animate-bar-grow bg-[#001AD0] transition-[width] duration-500 ease-soft"
+                        style={{ width: `${person.percent}%` }}
+                      />
                     </span>
                   </button>
                 </li>

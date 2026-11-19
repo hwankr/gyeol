@@ -9,6 +9,7 @@ import {
   type ConsoleCrumb,
 } from "@/components/consoleUi";
 import { ApplicantBar, DocumentPanel, EvaluateHead, MarkButtons } from "@/components/EvaluateParts";
+import { SWAP_TRANSITION } from "@/lib/motion";
 
 type DocumentView = Omit<ComponentProps<typeof DocumentPanel>, "className" | "headClassName" | "titleId" | "showLegend">;
 
@@ -58,6 +59,8 @@ type EvaluateDetailScreenProps = {
  * 평가하기 · 세부 항목 평가 화면(/evaluate/detail?code=…&item=…). 왼쪽은 서류 원문(지금 요소의 근거가 강조된다), 가운데는 평가 요소 목록,
  * 오른쪽은 그 요소의 세부 평가 항목(질문마다 1~5점 가운데 하나를 고른다). 모두 응답하면 "평가 완료" 로 응답 평균을 내 점수로 가져가고
  * 총평 화면으로 돌아간다. 좁은 화면에서는 세 단이 아래로 내려가 쌓인다.
+ * 평가 요소를 바꾸는 링크는 같은 화면에서 내용만 바꾸는 이동이라 화면 전환 없이 바로 바뀐다(lib/motion.ts).
+ * 지금 요소가 아닌 줄과 고르지 않은 점수는 마우스를 올리면 옅은 회색 바탕이 된다.
  */
 export function EvaluateDetailScreen({ crumbs, headNote, bar, document, items, rubric }: EvaluateDetailScreenProps) {
   return (
@@ -88,8 +91,9 @@ export function EvaluateDetailScreen({ crumbs, headNote, bar, document, items, r
                 <Link
                   href={item.href}
                   aria-current={item.current ? "true" : undefined}
-                  className={`flex min-h-[40px] scroll-m-[8px] items-center justify-between gap-[8px] rounded-[6px] px-[10px] text-[14px] no-underline ${
-                    item.current ? "bg-[#EEF0FF] font-semibold text-[#001AD0]" : "font-medium text-[#111111]"
+                  transitionTypes={SWAP_TRANSITION}
+                  className={`motion-colors flex min-h-[40px] scroll-m-[8px] items-center justify-between gap-[8px] rounded-[6px] px-[10px] text-[14px] no-underline ${
+                    item.current ? "bg-[#EEF0FF] font-semibold text-[#001AD0]" : "font-medium text-[#111111] hover-on:bg-[#F6F7FB]"
                   }`}
                 >
                   <span className="[overflow-wrap:anywhere]">{item.name}</span>
@@ -149,11 +153,11 @@ export function EvaluateDetailScreen({ crumbs, headNote, bar, document, items, r
                         return (
                           <label
                             key={value}
-                            className={`box-border flex h-[34px] items-center gap-[6px] rounded-[6px] border px-[10px] text-[13px] tabular-nums ${
+                            className={`motion-colors box-border flex h-[34px] items-center gap-[6px] rounded-[6px] border px-[10px] text-[13px] tabular-nums ${
                               on
                                 ? "border-[#001AD0] bg-[#EEF0FF] font-semibold text-[#001AD0]"
-                                : "border-[#CFCFCF] bg-white font-medium text-[#111111]"
-                            } ${rubric.locked ? "opacity-[0.6]" : ""}`}
+                                : `border-[#CFCFCF] bg-white font-medium text-[#111111] ${rubric.locked ? "" : "hover-on:bg-[#F6F7FB]"}`
+                            } ${rubric.locked ? "opacity-[0.6]" : "cursor-pointer"}`}
                           >
                             <input
                               type="radio"
@@ -162,7 +166,7 @@ export function EvaluateDetailScreen({ crumbs, headNote, bar, document, items, r
                               checked={on}
                               disabled={rubric.locked}
                               onChange={() => question.onAnswer(value)}
-                              className="m-0 scroll-m-[8px] accent-[#001AD0]"
+                              className="m-0 scroll-m-[8px] cursor-[inherit] accent-[#001AD0]"
                             />
                             {value}
                           </label>
