@@ -72,6 +72,20 @@
 }
 
 /*
+  콘솔 사이드바를 열고 닫는 전환 (components/ConsoleShell.tsx). 사이드바가 왼쪽으로 밀려 들어가며 옅어지고 본문이 그 자리를 채운다.
+  - 다 닫힌 뒤에 display 가 none 이 되고(allow-discrete), 다시 열 때에는 닫힌 모습(@starting-style)에서 시작한다.
+    allow-discrete 를 모르는 브라우저에서는 움직임 없이 바로 열리고 닫힌다.
+  - 본문의 자리·폭이 함께 움직이는 단 하나의 전환이다. 여닫는 버튼은 상단 바에 남아 초점이 옮겨 가지 않으므로
+    초점을 옮긴 뒤 자리를 재는 계산(위의 설명)과 겹치지 않는다.
+*/
+@utility motion-sidebar {
+  transition-property: flex-basis, flex-grow, grid-template-rows, border-right-width, opacity, display;
+  transition-duration: 240ms;
+  transition-timing-function: var(--ease-soft);
+  transition-behavior: allow-discrete;
+}
+
+/*
   마우스를 올려놓았을 때·누르고 있을 때. 꺼진 컨트롤(disabled, aria-disabled)에는 걸리지 않고,
   올려놓음은 마우스가 있는 기기에서만 건다(터치 화면에서 누른 뒤 색이 남지 않게).
 */

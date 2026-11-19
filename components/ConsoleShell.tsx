@@ -1,7 +1,9 @@
 import Link from "next/link";
 import type { ReactNode, Ref } from "react";
 import { consolePretendard } from "@/components/consoleFonts";
+import { BUTTON_SECONDARY_CLASS } from "@/components/consoleUi";
 import { GyeolLogo } from "@/components/GyeolLogo";
+import type { ConsoleSidebarState } from "@/hooks/useConsoleNav";
 import { ADMISSION } from "@/lib/admission";
 import type { ConsoleMenu } from "@/lib/consoleMenu";
 
@@ -10,6 +12,8 @@ type ConsoleShellProps = {
   menus: (ConsoleMenu & { active: boolean })[];
   /** 로그아웃이 가는 주소 */
   logoutPath: string;
+  /** 사이드바가 열려 있는지와, 상단 바의 여닫는 버튼을 눌렀을 때 */
+  sidebar: SidebarProps;
   /** 상단 바의 검색 입력란. enabled 가 false 인 동안은 기능이 없는 컨트롤(disabled)이다. */
   search: SearchInputProps;
   /** 검색 입력란 (검색을 쓰는 화면을 나갈 때 그 화면이 실제 값을 비운다) */
@@ -27,67 +31,99 @@ type SearchInputProps = {
   onChange: (value: string) => void;
 };
 
+type SidebarProps = {
+  state: ConsoleSidebarState;
+  onToggle: () => void;
+};
+
+/** 사이드바 상자의 id (상단 바의 여닫는 버튼이 aria-controls 로 가리킨다) */
+const SIDEBAR_ID = "console-sidebar";
+
+/**
+ * 사이드바 상자의 상태별 모습. 닫히면 폭이 0 이 되며(사이드바가 본문 위에 놓이는 808px 미만에서는 높이가 0 이 되며) 옅어지고,
+ * 다 닫힌 뒤에 display 가 none 이 된다(motion-sidebar). 다시 열 때에는 닫힌 모습에서 시작한다(starting).
+ * 808px 은 사이드바(248px)와 오른쪽 단(560px)이 한 줄에 놓이는 가장 좁은 폭이다.
+ */
+const SIDEBAR_CLOSED_CLASS = "hidden border-r-0 opacity-0 max-[808px]:grid-rows-[0fr] min-[808px]:flex-[0_0_0px]";
+const SIDEBAR_STATE_CLASS: Record<ConsoleSidebarState, string> = {
+  initial: "grid border-r",
+  closed: SIDEBAR_CLOSED_CLASS,
+  reopened:
+    "grid border-r starting:border-r-0 starting:opacity-0 max-[808px]:starting:grid-rows-[0fr] min-[808px]:starting:flex-[0_0_0px]",
+};
+
 /**
  * 새 화면(전형 준비, 지원자 관리, 평가하기)의 껍데기: 왼쪽 사이드바, 오른쪽 위의 상단 바(검색·계정), 그 아래 본문(<main>).
  * 치수·색·글자는 디자인 값 그대로다. 바깥 상자는 화면 높이 이상이고 줄을 바꿔(flex-wrap) 좁은 화면에서는 오른쪽 단이 사이드바 아래로 내려간다.
  * 최소 폭 제한은 없고 내용이 길면 문서가 세로로 스크롤된다. 본문은 세로로 쌓는 flex 상자라 화면의 마지막 상자가 남는 높이를 채울 수 있다.
  * 다른 주소로 가는 것은 모두 보통 링크(next/link)라서 화면의 JavaScript 가 준비되기 전에 눌러도 그 주소의 문서로 이동한다.
+ * 사이드바는 상단 바 왼쪽 끝의 버튼으로 열고 닫는다. 닫으면 오른쪽 단이 화면 폭을 다 쓴다.
  */
-export function ConsoleShell({ menus, logoutPath, search, searchInputRef, children }: ConsoleShellProps) {
+export function ConsoleShell({ menus, logoutPath, sidebar, search, searchInputRef, children }: ConsoleShellProps) {
   return (
     <div
       className={`${consolePretendard.className} box-border flex min-h-screen flex-wrap bg-white text-[14px] leading-[20px] text-[#111111]`}
     >
-      <div className="box-border flex flex-[1_0_248px] flex-col border-r border-r-[#E4E4E4] px-[12px] pt-[20px] pb-[16px]">
-        {/* 로고 그림 높이 19px 은 바뀌기 전 로고(22px 글자)의 대문자 높이에 맞춘 값이다. 상자 높이 22px 은 그대로라 아래 간격이 바뀌지 않는다. */}
-        <div className="flex h-[22px] items-center px-[12px]">
-          <GyeolLogo className="h-[19px] text-[#000947]" />
-        </div>
-        <div className="mt-[24px] px-[12px]">
-          <p className="text-[14px] leading-[20px] font-semibold">{ADMISSION.university}</p>
-          <p className="mt-[2px] text-[12px] leading-[16px] text-[#767676]">{ADMISSION.systemName}</p>
-        </div>
-        <div className="mt-[16px] px-[12px]">
-          <span id="track-label" className="block text-[12px] leading-[16px] font-medium text-[#767676]">
-            전형 선택
-          </span>
-          {/* 전형이 하나뿐이라 기능이 없는 컨트롤이다(눌리지 않음). 모양은 디자인 그대로다. */}
-          <button
-            type="button"
-            aria-haspopup="listbox"
-            aria-labelledby="track-label track-value"
-            disabled
-            className="mt-[6px] box-border flex h-[36px] w-full cursor-default items-center justify-between rounded-[6px] border border-[#CFCFCF] bg-white pr-[10px] pl-[12px] text-[14px] font-medium text-[#111111]"
-          >
-            <span id="track-value">{ADMISSION.trackShort}</span>
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="#767676"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-[16px] w-[16px]"
+      {/*
+        사이드바를 열고 닫을 때 줄어드는 상자. 안의 내용은 폭 247px(기준 폭 248px 에서 오른쪽 선 1px 을 뺀 값) 아래로 줄지 않고
+        오른쪽 끝에 붙어 있어서(justify-end), 상자가 좁아지면 글이 다시 흐르지 않고 통째로 왼쪽으로 밀려 들어가 잘린다. 오른쪽 선도 상자와 함께 움직인다.
+      */}
+      <div
+        id={SIDEBAR_ID}
+        className={`motion-sidebar box-border flex-[1_0_248px] grid-cols-[minmax(247px,1fr)] grid-rows-[1fr] justify-end overflow-hidden border-r-[#E4E4E4] ${SIDEBAR_STATE_CLASS[sidebar.state]}`}
+      >
+        {/* 위(20px)·아래(16px) 여백은 안쪽 여백이 아니라 로고 줄과 로그아웃의 바깥 여백이다. 좁은 화면에서 닫힐 때 이 상자의 높이가 0 까지 줄어야 해서다. */}
+        <div className="box-border flex min-h-0 flex-col px-[12px]">
+          {/* 로고 그림 높이 19px 은 바뀌기 전 로고(22px 글자)의 대문자 높이에 맞춘 값이다. 상자 높이 22px 은 그대로라 아래 간격이 바뀌지 않는다. */}
+          <div className="mt-[20px] flex h-[22px] flex-none items-center px-[12px]">
+            <GyeolLogo className="h-[19px] text-[#000947]" />
+          </div>
+          <div className="mt-[24px] px-[12px]">
+            <p className="text-[14px] leading-[20px] font-semibold">{ADMISSION.university}</p>
+            <p className="mt-[2px] text-[12px] leading-[16px] text-[#767676]">{ADMISSION.systemName}</p>
+          </div>
+          <div className="mt-[16px] px-[12px]">
+            <span id="track-label" className="block text-[12px] leading-[16px] font-medium text-[#767676]">
+              전형 선택
+            </span>
+            {/* 전형이 하나뿐이라 기능이 없는 컨트롤이다(눌리지 않음). 모양은 디자인 그대로다. */}
+            <button
+              type="button"
+              aria-haspopup="listbox"
+              aria-labelledby="track-label track-value"
+              disabled
+              className="mt-[6px] box-border flex h-[36px] w-full cursor-default items-center justify-between rounded-[6px] border border-[#CFCFCF] bg-white pr-[10px] pl-[12px] text-[14px] font-medium text-[#111111]"
             >
-              <path d="M4 6l4 4 4-4" />
-            </svg>
-          </button>
+              <span id="track-value">{ADMISSION.trackShort}</span>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="#767676"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-[16px] w-[16px]"
+              >
+                <path d="M4 6l4 4 4-4" />
+              </svg>
+            </button>
+          </div>
+          <nav aria-label="주 메뉴" className="mt-[24px] flex flex-col gap-[2px]">
+            {menus.map((menu) => (
+              <MenuLink key={menu.key} menu={menu} />
+            ))}
+          </nav>
+          <Link
+            href={logoutPath}
+            className="motion-colors mt-auto mb-[16px] flex h-[42px] flex-none items-center rounded-[6px] px-[12px] text-[13px] font-medium text-[#767676] no-underline hover-on:bg-[#F6F7FB] hover-on:text-[#111111]"
+          >
+            로그아웃
+          </Link>
         </div>
-        <nav aria-label="주 메뉴" className="mt-[24px] flex flex-col gap-[2px]">
-          {menus.map((menu) => (
-            <MenuLink key={menu.key} menu={menu} />
-          ))}
-        </nav>
-        <Link
-          href={logoutPath}
-          className="motion-colors mt-auto flex h-[42px] items-center rounded-[6px] px-[12px] text-[13px] font-medium text-[#767676] no-underline hover-on:bg-[#F6F7FB] hover-on:text-[#111111]"
-        >
-          로그아웃
-        </Link>
       </div>
       <div className="flex min-w-0 flex-[999_1_560px] flex-col">
-        <TopBar search={search} inputRef={searchInputRef} />
+        <TopBar sidebar={sidebar} search={search} inputRef={searchInputRef} />
         <main className="box-border flex flex-[1_1_auto] flex-col px-[clamp(16px,2.3vw,32px)] pt-[20px] pb-[24px]">
           {children}
         </main>
@@ -207,41 +243,76 @@ const ICON_BUTTON_CLASS =
  * 검색 입력란은 검색을 쓰는 화면(지원자 관리, 평가 대기 목록)이 준비된 뒤에만 켜져 동작하고(글을 칠 때마다 그 화면의 걸러 보기에 반영),
  * 그 전과 그 밖의 화면에서는 기능이 없는 컨트롤(disabled)이다. 모양은 어느 쪽이든 디자인 그대로이고 안내 글자만 화면에 따라 다르다
  * (type="search" 의 브라우저 기본 지우기 표시는 그대로).
+ * 왼쪽 끝의 버튼은 사이드바를 열고 닫는다(시안에 없는 컨트롤이라 보조 버튼 모양을 36px 정사각형으로 썼다). 열려 있든 닫혀 있든 같은 자리에
+ * 남아 있어서 누른 뒤에도 초점이 그대로다. 화면의 JavaScript 가 준비된 뒤에 동작한다.
  */
-function TopBar({ search, inputRef }: { search: SearchInputProps; inputRef: Ref<HTMLInputElement> }) {
+function TopBar({
+  sidebar,
+  search,
+  inputRef,
+}: {
+  sidebar: SidebarProps;
+  search: SearchInputProps;
+  inputRef: Ref<HTMLInputElement>;
+}) {
   return (
     <div className="box-border flex min-h-[60px] flex-wrap items-center justify-between gap-x-[24px] gap-y-[8px] border-b border-b-[#E4E4E4] px-[clamp(16px,2.3vw,32px)] py-[10px]">
-      <label className="motion-colors box-border flex h-[36px] min-w-[200px] flex-[0_1_480px] items-center gap-[8px] rounded-[6px] border border-[#CFCFCF] bg-white px-[12px] has-[input:enabled]:hover:border-[#AEAEAE]">
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 20 20"
-          fill="none"
-          stroke="#767676"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          className="h-[16px] w-[16px] flex-none"
+      {/* 버튼(36px)과 간격(8px)을 더한 폭이라 검색 입력란은 전과 같이 480px 까지 넓어지고 200px 아래로 줄지 않는다. */}
+      <div className="flex flex-[0_1_524px] items-center gap-[8px]">
+        <button
+          type="button"
+          aria-label="사이드바"
+          aria-expanded={sidebar.state !== "closed"}
+          aria-controls={SIDEBAR_ID}
+          onClick={sidebar.onToggle}
+          className={`${BUTTON_SECONDARY_CLASS} h-[36px] w-[36px] flex-none p-0`}
         >
-          <circle cx="8.8" cy="8.8" r="6.3" />
-          <path d="M13.5 13.5 18 18" />
-        </svg>
-        {/*
-          기본은 꺼져(disabled) 있고 검색을 쓰는 화면이 준비되면 켜진다(hooks/useConsoleSearch.ts). 서버 HTML 에서는 어느 주소에서나 꺼져 있다.
-          React 가 값을 쥐지 않는 입력란(defaultValue)이라 사람이 적은 글자를 React 가 덮어쓰지 않는다. 값을 비우는 것은 검색을 쓰는 화면을
-          나갈 때뿐이다(hooks/useApplicants.ts, hooks/useEvaluateList.ts). autoComplete="off" 는 새로고침·뒤로 가기 때 브라우저가 전에 적은
-          글자를 채워 넣지 않게(돌아온 화면이 처음 상태이게) 한다.
-        */}
-        <input
-          ref={inputRef}
-          type="search"
-          aria-label={search.label}
-          placeholder={search.label}
-          autoComplete="off"
-          disabled={!search.enabled}
-          defaultValue=""
-          onChange={(event) => search.onChange(event.currentTarget.value)}
-          className="min-w-0 flex-[1_1_auto] scroll-m-[8px] border-0 bg-transparent text-[14px] text-[#111111] placeholder:text-[#767676] disabled:cursor-default"
-        />
-      </label>
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="#505050"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-[18px] w-[18px]"
+          >
+            <rect x="2.5" y="3.5" width="15" height="13" rx="2.5" />
+            <path d="M7.5 3.5v13" />
+          </svg>
+        </button>
+        <label className="motion-colors box-border flex h-[36px] min-w-[200px] flex-[1_1_0%] items-center gap-[8px] rounded-[6px] border border-[#CFCFCF] bg-white px-[12px] has-[input:enabled]:hover:border-[#AEAEAE]">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="#767676"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            className="h-[16px] w-[16px] flex-none"
+          >
+            <circle cx="8.8" cy="8.8" r="6.3" />
+            <path d="M13.5 13.5 18 18" />
+          </svg>
+          {/*
+            기본은 꺼져(disabled) 있고 검색을 쓰는 화면이 준비되면 켜진다(hooks/useConsoleSearch.ts). 서버 HTML 에서는 어느 주소에서나 꺼져 있다.
+            React 가 값을 쥐지 않는 입력란(defaultValue)이라 사람이 적은 글자를 React 가 덮어쓰지 않는다. 값을 비우는 것은 검색을 쓰는 화면을
+            나갈 때뿐이다(hooks/useApplicants.ts, hooks/useEvaluateList.ts). autoComplete="off" 는 새로고침·뒤로 가기 때 브라우저가 전에 적은
+            글자를 채워 넣지 않게(돌아온 화면이 처음 상태이게) 한다.
+          */}
+          <input
+            ref={inputRef}
+            type="search"
+            aria-label={search.label}
+            placeholder={search.label}
+            autoComplete="off"
+            disabled={!search.enabled}
+            defaultValue=""
+            onChange={(event) => search.onChange(event.currentTarget.value)}
+            className="min-w-0 flex-[1_1_auto] scroll-m-[8px] border-0 bg-transparent text-[14px] text-[#111111] placeholder:text-[#767676] disabled:cursor-default"
+          />
+        </label>
+      </div>
       <div className="flex items-center gap-[4px]">
         <div className="mr-[8px] text-right">
           <div className="text-[13px] leading-[18px] font-semibold">
