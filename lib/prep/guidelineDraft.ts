@@ -67,20 +67,28 @@ function normalizeGroup(value: unknown): PrepGroup | null {
   return { tag, name, questions };
 }
 
+/**
+ * 묶음 목록을 정리한다: 묶음 이름 20자, 태그 12자(공백을 뺀다), 질문 200자로 자르고, 이름·태그가 비거나 남은 질문이 0개인 묶음은 버리고
+ * 묶음 6개·질문 8개까지만 남긴다. 배열이 아니면 빈 배열. 위원 의견으로 만든 공통 기준 초안(lib/prep/consensusDraft.ts)도 같이 쓴다.
+ */
+export function normalizeDraftGroups(value: unknown): PrepGroup[] {
+  const groups: PrepGroup[] = [];
+  if (!Array.isArray(value)) return groups;
+  for (const item of value) {
+    if (groups.length >= PREP_LIMITS.groups) break;
+    const group = normalizeGroup(item);
+    if (group !== null) groups.push(group);
+  }
+  return groups;
+}
+
 /** 요소 하나: 이름(30자)과 묶음(6개까지). 이름이 비거나 남은 묶음이 0개면 null. 배점은 받은 값 그대로(나중에 정한다). */
 function normalizeElement(value: unknown): { name: string; weight: unknown; groups: PrepGroup[] } | null {
   const record = asRecord(value);
   if (record === null) return null;
   const name = cleanText(record.name, PREP_LIMITS.nameLength);
   if (name === "") return null;
-  const groups: PrepGroup[] = [];
-  if (Array.isArray(record.groups)) {
-    for (const item of record.groups) {
-      if (groups.length >= PREP_LIMITS.groups) break;
-      const group = normalizeGroup(item);
-      if (group !== null) groups.push(group);
-    }
-  }
+  const groups = normalizeDraftGroups(record.groups);
   return groups.length === 0 ? null : { name, weight: record.weight, groups };
 }
 

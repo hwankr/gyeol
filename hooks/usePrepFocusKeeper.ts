@@ -28,7 +28,7 @@ function isDisabled(element: HTMLElement): boolean {
 }
 
 /**
- * 전형 준비 세 탭의 초점을 한 곳에서 일반 규칙으로 지킨다(app/(console)/prep/layout.tsx 에서 한 번 부른다). 경로마다 따로 넣지 않는다.
+ * 전형 준비 네 탭의 초점을 한 곳에서 일반 규칙으로 지킨다(app/(console)/prep/layout.tsx 에서 한 번 부른다). 경로마다 따로 넣지 않는다.
  *
  * B. 밀려 나가면 다시 보이게: 본문 안 컨트롤에 키보드 초점 표시가 있는 채로(:focus-visible) 화면 갱신(응답 도착, 저장소 값 반영,
  *    접기·펼치기, 문구·경고·안내가 나타나거나 사라짐, 요소 고르기 등 DOM 이 바뀌는 것 무엇이든) 때문에, 갱신 직전에는 위아래 8px 까지

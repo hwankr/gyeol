@@ -168,6 +168,7 @@ export function useGuidelineUpload() {
         setRequestWarnings(result.warnings);
       } else {
         setPrepDraft({
+          source: "guideline",
           criteria: result.criteria,
           fileName: file.name,
           changes: result.changes,
@@ -183,8 +184,11 @@ export function useGuidelineUpload() {
     setIsGenerating(false);
   }
 
+  // 이 탭의 초안 안내와 변경 사항은 모집요강으로 만든 초안의 것만 쓴다. 위원 의견으로 만든 공통 기준 초안(공통 기준 협의 탭)은
+  // 저장한 기준에서 시작한 것이라 변경 사항이 저장한 기준의 것과 같다.
+  const guidelineDraft = draft?.source === "guideline" ? draft : null;
   // 전년 대비 주요 변경 사항: 초안의 것 → 저장한 평가 기준에 딸린 것 → 기본 내용(디자인 값).
-  const guidelineChanges = draft?.changes ?? saved.guideline?.changes;
+  const guidelineChanges = guidelineDraft?.changes ?? saved.guideline?.changes;
   const changes = guidelineChanges ?? GUIDELINE_CHANGES;
 
   return {
@@ -200,7 +204,10 @@ export function useGuidelineUpload() {
     statusText: isGenerating ? GENERATING_STATUS : "",
     requestError,
     requestWarnings,
-    draftNotice: draft === null ? null : { elementCount: draft.criteria.elements.length, warnings: draft.warnings },
+    draftNotice:
+      guidelineDraft === null
+        ? null
+        : { elementCount: guidelineDraft.criteria.elements.length, warnings: guidelineDraft.warnings },
     changes,
     noChangesNotice: guidelineChanges !== undefined && guidelineChanges.length === 0 ? NO_CHANGES_NOTICE : null,
     changesCollapsed,

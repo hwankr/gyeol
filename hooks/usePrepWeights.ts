@@ -12,6 +12,7 @@ import {
   type PrepCriteria,
   type PrepElement,
 } from "@/lib/prep/criteria";
+import { consensusSaveSummary } from "@/lib/prep/consensusDraft";
 import { DEFAULT_PREP_CRITERIA } from "@/lib/prep/defaultCriteria";
 import { guidelineSaveSummary } from "@/lib/prep/guidelineDraft";
 import { createHistoryEntry } from "@/lib/prep/history";
@@ -47,6 +48,7 @@ const NOTE_VIEWING = "배점을 바꾸려면 수정하기를 누르세요.";
 const NOTE_EDITING = `배점을 수정하고 있습니다. 합계가 ${TOTAL_WEIGHT}일 때 저장할 수 있습니다.`;
 const NOTE_SAVED_WEIGHTS = "변경한 배점을 저장했습니다.";
 const NOTE_SAVED_DRAFT = "모집요강으로 만든 평가 기준을 저장했습니다.";
+const NOTE_SAVED_CONSENSUS = "위원 의견으로 만든 공통 기준을 저장했습니다.";
 /** 저장소에 쓰지 못해 메모리에만 둔 값이 있을 때의 안내 */
 const STORAGE_NOTICE = "브라우저에 저장하지 못했습니다. 새로고침하면 방금 바꾼 값이 사라집니다.";
 
@@ -57,9 +59,11 @@ function totalNoticeText(total: number): string {
     : `합계가 ${TOTAL_WEIGHT}을 ${total - TOTAL_WEIGHT}점 넘었습니다.`;
 }
 
-/** 모집요강 초안이 있을 때 탭 줄 아래에 보여 주는 안내 */
-function draftNoticeText(fileName: string): string {
-  return `모집요강(${fileName})으로 만든 초안입니다. 저장하기 전에는 쓰이지 않습니다.`;
+/** 초안이 있을 때 탭 줄 아래에 보여 주는 안내 (모집요강 초안, 위원 의견으로 만든 공통 기준 초안) */
+function draftNoticeText(draft: PrepDraft): string {
+  return draft.source === "guideline"
+    ? `모집요강(${draft.fileName})으로 만든 초안입니다. 저장하기 전에는 쓰이지 않습니다.`
+    : `위원 ${draft.memberCount}명의 의견으로 만든 공통 기준 초안입니다. 저장하기 전에는 쓰이지 않습니다.`;
 }
 
 /**
@@ -83,7 +87,8 @@ type WeightEdits = { base: PrepCriteria; weights: Readonly<Record<string, number
 /**
  * 전형 준비 · 평가·배점 설정 탭 상태: 저장한 평가 기준(localStorage), 보기/수정 상태와 고치는 중인 배점, 고른 요소,
  * 저장(변경 기록 한 건), 세부 평가 항목 패널의 "크게 보기" 상태.
- * 모집요강으로 만든 초안(lib/prep/storage.ts 의 메모리)이 있으면 저장한 값 대신 초안을 보여 주고 처음부터 수정 상태다.
+ * 초안(모집요강으로 만든 것 또는 위원 의견으로 만든 공통 기준 초안. lib/prep/storage.ts 의 메모리)이 있으면 저장한 값 대신
+ * 초안을 보여 주고 처음부터 수정 상태다.
  * 저장하면 초안이 저장한 평가 기준이 되고, 취소하면 초안을 버린다.
  * 사람이 바꿀 수 있는 것은 배점뿐이다(요소·묶음·질문의 글자는 고칠 수 없다). 배점은 −·+ (1 씩)와 배점 막대로 바꾼다.
  */
@@ -239,7 +244,8 @@ export function usePrepWeights() {
 
   /**
    * 저장: 평가 기준을 저장하고 기록을 한 건 남긴 뒤 보기 상태로 돌아간다. 저장했으면 true.
-   * - 초안: 초안(고친 배점 포함)이 저장한 평가 기준이 되고(모집요강 파일 이름·변경 사항을 붙인다) 초안은 사라진다.
+   * - 초안: 초안(고친 배점 포함)이 저장한 평가 기준이 되고(모집요강 초안이면 파일 이름·변경 사항을 붙인다) 초안은 사라진다.
+   *   기록은 모집요강 초안이면 "모집요강으로 평가 기준을 새로 만듦: …", 위원 의견 초안이면 "위원 의견으로 공통 기준을 만듦: …" 한 건이다.
    *   저장소에 쓰지 못해도 메모리의 평가 기준이 되고 초안은 사라진다(lib/prep/storage.ts).
    * - 저장한 값: 바뀐 요소만 적은 배점 변경 기록. 모집요강에서 온 값(guideline)은 그대로 남는다.
    */
@@ -248,9 +254,12 @@ export function usePrepWeights() {
     const elementsWithWeights = elements.map((element) => ({ ...element, weight: weightOf(element) }));
     if (prepDraft !== null) {
       const next: PrepCriteria = { ...prepDraft.criteria, elements: elementsWithWeights };
-      const summary = guidelineSaveSummary(prepDraft.fileName, elementsWithWeights);
+      const summary =
+        prepDraft.source === "guideline"
+          ? guidelineSaveSummary(prepDraft.fileName, elementsWithWeights)
+          : consensusSaveSummary(prepDraft.memberCount, elementsWithWeights);
       if (savePrepDraft(prepDraft, next, createHistoryEntry(REVIEWER_LABEL, summary, new Date())) === null) return false;
-      setSavedNote(NOTE_SAVED_DRAFT);
+      setSavedNote(prepDraft.source === "guideline" ? NOTE_SAVED_DRAFT : NOTE_SAVED_CONSENSUS);
     } else {
       const next: PrepCriteria = { ...saved, elements: elementsWithWeights };
       const summary = weightChangeSummary(saved, next);
@@ -272,7 +281,7 @@ export function usePrepWeights() {
     ready,
     bodyRef,
     department: base.department,
-    draftNotice: prepDraft === null ? null : draftNoticeText(prepDraft.fileName),
+    draftNotice: prepDraft === null ? null : draftNoticeText(prepDraft),
     modeNote,
     elements: elements.map((element, index) => {
       const weight = weightOf(element);

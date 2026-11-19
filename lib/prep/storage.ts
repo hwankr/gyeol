@@ -1,4 +1,5 @@
 import { PREP_CRITERIA_STORAGE_KEY, PREP_HISTORY_STORAGE_KEY } from "../constants.ts";
+import type { ConsensusPoint } from "./consensusDraft.ts";
 import { PREP_LIMITS, parsePrepCriteria, type PrepCriteria } from "./criteria.ts";
 import { DEFAULT_PREP_CRITERIA } from "./defaultCriteria.ts";
 import type { GuidelineChange } from "./guidelineChanges.ts";
@@ -21,7 +22,8 @@ import { truncateText } from "../criteria/normalize.ts";
 // 다른 탭의 변경은 구독하지 않는다(storage 이벤트 없음). 화면이 다시 그려질 때 저장소를 다시 읽으면서 반영된다.
 // 화면은 useSyncExternalStore 로 읽는다. 내용이 같으면 같은 객체를 돌려준다.
 //
-// 모집요강으로 만든 기준 초안(PrepDraft)은 이 페이지의 메모리에만 둔다(localStorage 에 쓰지 않는다. 새로고침하면 사라진다).
+// 기준 초안(PrepDraft)은 이 페이지의 메모리에만 둔다(localStorage 에 쓰지 않는다. 새로고침하면 사라진다).
+// 초안은 한 번에 하나이고 두 가지다: 모집요강으로 만든 초안(source "guideline")과 위원 의견으로 만든 공통 기준 초안(source "consensus").
 // 전형 준비의 탭을 오가도 남고, 평가·배점 설정에서 저장하면(savePrepDraft) 저장한 평가 기준이 되며 초안은 사라진다.
 // 취소하면(discardPrepDraft) 버린다. 서버 렌더링에는 초안이 없다(화면의 getServerSnapshot 은 null).
 
@@ -49,7 +51,8 @@ let composed: {
 } | null = null;
 
 /** 모집요강으로 만든 기준 초안 (저장하기 전에는 어디에도 쓰이지 않는다) */
-export type PrepDraft = {
+export type GuidelinePrepDraft = {
+  source: "guideline";
   /** 초안 평가 기준 (모집 단위, 요소, AI 가 준 배점 또는 똑같이 나눈 배점) */
   criteria: PrepCriteria;
   /** 초안을 만든 모집요강 파일 이름 (화면에 보여 주고, 저장할 때 guideline.fileName 이 된다. AI 에는 보내지 않는다) */
@@ -59,6 +62,25 @@ export type PrepDraft = {
   /** 정리하면서 붙인 경고와 AI 의 경고 (받은 문장 그대로) */
   warnings: readonly string[];
 };
+
+/**
+ * 위원 의견으로 만든 공통 기준 초안 (저장하기 전에는 어디에도 쓰이지 않는다).
+ * 저장한 평가 기준에서 시작해 세부 평가 항목과 배점만 고친 것이라 요소의 id·이름·순서와 guideline 은 저장한 기준과 같다.
+ */
+export type ConsensusPrepDraft = {
+  source: "consensus";
+  /** 초안 평가 기준 (AI 가 제안한 배점. 평가·배점 설정에서 협의해 고친다) */
+  criteria: PrepCriteria;
+  /** 의견을 낸 위원 수 (화면 안내와 기록 내용에 쓴다) */
+  memberCount: number;
+  /** 의견 정리: 모인 의견과 더 협의할 점 (0~6건) */
+  points: readonly ConsensusPoint[];
+  /** 정리하면서 붙인 경고와 AI 의 경고 (받은 문장 그대로) */
+  warnings: readonly string[];
+};
+
+/** 기준 초안: 모집요강으로 만든 것 또는 위원 의견으로 만든 것 */
+export type PrepDraft = GuidelinePrepDraft | ConsensusPrepDraft;
 
 /** 지금 초안 (없으면 null). 이 페이지의 메모리에만 있다. */
 let draft: PrepDraft | null = null;
@@ -119,9 +141,12 @@ export function loadPrepDraft(): PrepDraft | null {
   return draft;
 }
 
-/** 새 초안을 둔다(있던 초안은 바뀐다). 파일 이름은 저장할 수 있는 길이(255자)로 자른다. */
+/** 새 초안을 둔다(있던 초안은 바뀐다). 모집요강 초안의 파일 이름은 저장할 수 있는 길이(255자)로 자른다. */
 export function setPrepDraft(next: PrepDraft): void {
-  draft = { ...next, fileName: truncateText(next.fileName.trim(), PREP_LIMITS.fileNameLength) };
+  draft =
+    next.source === "guideline"
+      ? { ...next, fileName: truncateText(next.fileName.trim(), PREP_LIMITS.fileNameLength) }
+      : next;
   notify();
 }
 
@@ -133,8 +158,9 @@ export function discardPrepDraft(): void {
 }
 
 /**
- * 초안을 저장한 평가 기준으로 삼는다(savePrepCriteria 와 같은 순서·실패 처리). criteria 는 고친 배점이 들어간 초안 평가 기준이고,
- * 저장하는 값에는 guideline(파일 이름, 변경 사항)을 붙인다. 저장소에 쓰지 못해도 그 값은 메모리의 평가 기준이 되고 초안은 사라진다.
+ * 초안을 저장한 평가 기준으로 삼는다(savePrepCriteria 와 같은 순서·실패 처리). criteria 는 고친 배점이 들어간 초안 평가 기준이다.
+ * 모집요강 초안이면 저장하는 값에 guideline(파일 이름, 변경 사항)을 붙이고, 위원 의견 초안이면 초안 평가 기준에 딸린 guideline
+ * (바탕이 된 저장 기준의 것. 없을 수 있다)을 그대로 둔다. 저장소에 쓰지 못해도 그 값은 메모리의 평가 기준이 되고 초안은 사라진다.
  * expected 가 지금 초안이 아니면(그사이 버렸거나 새로 만들었으면) 아무것도 하지 않고 null 을 돌려준다(두 번 눌러 기록이 두 번 남지 않게).
  * 저장했으면 저장소에 다 썼는지(true/false).
  */
@@ -144,12 +170,12 @@ export function savePrepDraft(
   entry: PrepHistoryEntry,
 ): boolean | null {
   if (draft === null || draft !== expected) return null;
-  const next: PrepCriteria = {
-    version: 1,
-    department: criteria.department,
-    elements: criteria.elements,
-    guideline: { fileName: expected.fileName, changes: expected.changes },
-  };
+  const guideline =
+    expected.source === "guideline" ? { fileName: expected.fileName, changes: expected.changes } : criteria.guideline;
+  const next: PrepCriteria =
+    guideline === undefined
+      ? { version: 1, department: criteria.department, elements: criteria.elements }
+      : { version: 1, department: criteria.department, elements: criteria.elements, guideline };
   draft = null;
   // savePrepCriteria 가 알림을 보낸다(초안이 사라진 것도 같은 알림으로 반영된다).
   return savePrepCriteria(next, entry);
