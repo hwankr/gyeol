@@ -1,7 +1,9 @@
 import { PREP_CRITERIA_STORAGE_KEY, PREP_HISTORY_STORAGE_KEY } from "../constants.ts";
-import { parsePrepCriteria, type PrepCriteria } from "./criteria.ts";
+import { PREP_LIMITS, parsePrepCriteria, type PrepCriteria } from "./criteria.ts";
 import { DEFAULT_PREP_CRITERIA } from "./defaultCriteria.ts";
+import type { GuidelineChange } from "./guidelineChanges.ts";
 import { NO_HISTORY, arrangeHistory, parsePrepHistory, type PrepHistoryEntry } from "./history.ts";
+import { truncateText } from "../criteria/normalize.ts";
 
 // 전형 준비의 평가 기준과 기준 변경 기록을 브라우저 localStorage 에 JSON 으로 저장하고 불러온다. 브라우저에서만 호출한다.
 //
@@ -18,6 +20,10 @@ import { NO_HISTORY, arrangeHistory, parsePrepHistory, type PrepHistoryEntry } f
 // - 메모리에만 둔 값이 있는 동안 화면은 "저장하지 못함" 안내를 보여 준다(hasUnsavedPrepChanges). 다음 저장이 성공하면 사라진다.
 // 다른 탭의 변경은 구독하지 않는다(storage 이벤트 없음). 화면이 다시 그려질 때 저장소를 다시 읽으면서 반영된다.
 // 화면은 useSyncExternalStore 로 읽는다. 내용이 같으면 같은 객체를 돌려준다.
+//
+// 모집요강으로 만든 기준 초안(PrepDraft)은 이 페이지의 메모리에만 둔다(localStorage 에 쓰지 않는다. 새로고침하면 사라진다).
+// 전형 준비의 탭을 오가도 남고, 평가·배점 설정에서 저장하면(savePrepDraft) 저장한 평가 기준이 되며 초안은 사라진다.
+// 취소하면(discardPrepDraft) 버린다. 서버 렌더링에는 초안이 없다(화면의 getServerSnapshot 은 null).
 
 const listeners = new Set<() => void>();
 
@@ -42,7 +48,22 @@ let composed: {
   list: readonly PrepHistoryEntry[];
 } | null = null;
 
-/** 평가 기준·기록이 바뀔 때 알림을 받는다. 구독을 끝내는 함수를 돌려준다. */
+/** 모집요강으로 만든 기준 초안 (저장하기 전에는 어디에도 쓰이지 않는다) */
+export type PrepDraft = {
+  /** 초안 평가 기준 (모집 단위, 요소, AI 가 준 배점 또는 똑같이 나눈 배점) */
+  criteria: PrepCriteria;
+  /** 초안을 만든 모집요강 파일 이름 (화면에 보여 주고, 저장할 때 guideline.fileName 이 된다. AI 에는 보내지 않는다) */
+  fileName: string;
+  /** 모집요강의 전년 대비 변경 사항 (0~6건) */
+  changes: readonly GuidelineChange[];
+  /** 정리하면서 붙인 경고와 AI 의 경고 (받은 문장 그대로) */
+  warnings: readonly string[];
+};
+
+/** 지금 초안 (없으면 null). 이 페이지의 메모리에만 있다. */
+let draft: PrepDraft | null = null;
+
+/** 평가 기준·기록·초안이 바뀔 때 알림을 받는다. 구독을 끝내는 함수를 돌려준다. */
 export function subscribePrepStorage(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
@@ -91,6 +112,47 @@ export function savePrepCriteria(next: PrepCriteria, entry: PrepHistoryEntry): b
 
   notify();
   return criteriaSaved && historySaved;
+}
+
+/** 지금 초안. 없으면 null. */
+export function loadPrepDraft(): PrepDraft | null {
+  return draft;
+}
+
+/** 새 초안을 둔다(있던 초안은 바뀐다). 파일 이름은 저장할 수 있는 길이(255자)로 자른다. */
+export function setPrepDraft(next: PrepDraft): void {
+  draft = { ...next, fileName: truncateText(next.fileName.trim(), PREP_LIMITS.fileNameLength) };
+  notify();
+}
+
+/** 초안을 버린다. 없으면 아무것도 하지 않는다. */
+export function discardPrepDraft(): void {
+  if (draft === null) return;
+  draft = null;
+  notify();
+}
+
+/**
+ * 초안을 저장한 평가 기준으로 삼는다(savePrepCriteria 와 같은 순서·실패 처리). criteria 는 고친 배점이 들어간 초안 평가 기준이고,
+ * 저장하는 값에는 guideline(파일 이름, 변경 사항)을 붙인다. 저장소에 쓰지 못해도 그 값은 메모리의 평가 기준이 되고 초안은 사라진다.
+ * expected 가 지금 초안이 아니면(그사이 버렸거나 새로 만들었으면) 아무것도 하지 않고 null 을 돌려준다(두 번 눌러 기록이 두 번 남지 않게).
+ * 저장했으면 저장소에 다 썼는지(true/false).
+ */
+export function savePrepDraft(
+  expected: PrepDraft,
+  criteria: PrepCriteria,
+  entry: PrepHistoryEntry,
+): boolean | null {
+  if (draft === null || draft !== expected) return null;
+  const next: PrepCriteria = {
+    version: 1,
+    department: criteria.department,
+    elements: criteria.elements,
+    guideline: { fileName: expected.fileName, changes: expected.changes },
+  };
+  draft = null;
+  // savePrepCriteria 가 알림을 보낸다(초안이 사라진 것도 같은 알림으로 반영된다).
+  return savePrepCriteria(next, entry);
 }
 
 /** 평가 기준 저장소를 읽는다. 읽으면 "마지막으로 읽은 값"을 바꾸고 ok: true, 읽지 못하면 그 값을 그대로 두고 ok: false. */

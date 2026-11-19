@@ -1,4 +1,11 @@
+import type { RefObject } from "react";
+import { prepBodyProps } from "@/lib/prep/focusMarks";
+
 type HistoryTabProps = {
+  /** 탭이 준비됐는지 (준비 전에는 본문이 inert. 모양은 그대로) */
+  ready: boolean;
+  /** 탭 본문 요소 (준비 여부를 이 요소가 문서에 붙었는지로 정한다) */
+  bodyRef: RefObject<HTMLElement | null>;
   /** 최신순 기록. 브라우저 저장소를 읽기 전(서버 렌더링·hydration 중)에는 undefined 라 제목만 그린다. */
   entries: { id: string; at: string; timeText: string; actor: string; summary: string }[] | undefined;
 };
@@ -7,9 +14,11 @@ type HistoryTabProps = {
  * 전형 준비 · 기준 변경 기록 탭(/prep/history). 디자인은 탭 아래가 비어 있어 내용은 코디네이터가 정한 모양이다:
  * 흰 상자 하나에 제목과 최신순 목록(시각·바꾼 사람, 내용). 기록이 없으면 안내 문장.
  */
-export function HistoryTab({ entries }: HistoryTabProps) {
+export function HistoryTab({ ready, bodyRef, entries }: HistoryTabProps) {
   return (
     <section
+      ref={bodyRef}
+      {...prepBodyProps(ready)}
       aria-labelledby="history-title"
       className="mt-[18px] rounded-[6px] bg-white pt-[19px] px-[25px] pb-[22px]"
     >

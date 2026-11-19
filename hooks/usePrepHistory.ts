@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { usePrepTabReady } from "@/hooks/usePrepTabReady";
 import { formatSeoulDateTime } from "@/lib/koreanTime";
 import type { PrepHistoryEntry } from "@/lib/prep/history";
 import { loadPrepHistory, subscribePrepStorage } from "@/lib/prep/storage";
@@ -11,12 +12,15 @@ function getServerSnapshot(): undefined {
 
 /** 전형 준비 · 기준 변경 기록 탭 상태: 최신순 기록(50건까지). 시각은 한국 시간 글로 바꿔 둔다. */
 export function usePrepHistory() {
+  const { ready, bodyRef } = usePrepTabReady<HTMLElement>();
   const entries = useSyncExternalStore<readonly PrepHistoryEntry[] | undefined>(
     subscribePrepStorage,
     loadPrepHistory,
     getServerSnapshot,
   );
   return {
+    ready,
+    bodyRef,
     entries: entries?.map((entry) => ({
       id: entry.id,
       at: entry.at,

@@ -1,5 +1,8 @@
+import type { GuidelineChange } from "./guidelineChanges.ts";
+
 // 전형 준비 · 평가·배점 설정의 평가 기준 형식, 저장 값 확인, 화면용 계산.
 // 이 화면만 쓰는 형식이라 types/analysis.ts 가 아니라 여기에 둔다. 브라우저와 Node 어디서나 돈다(순수 함수).
+// /api/guideline(서버)도 응답 형식과 정리 결과 확인에 같이 쓴다.
 
 /** 묶음 하나: 요소 이름 아래 "#태그" 로 그리는 태그, 패널의 알약 모양 제목(이름), 질문 목록 */
 export type PrepGroup = {
@@ -16,11 +19,24 @@ export type PrepElement = {
   groups: readonly PrepGroup[];
 };
 
-/** 모집 단위 하나의 평가 기준. localStorage 에 이 모양 그대로 JSON 으로 저장한다. */
+/**
+ * 모집요강으로 만든 평가 기준에 딸린 값: 만든 모집요강 파일 이름과 그 모집요강의 전년 대비 변경 사항(0~6건).
+ * 모집요강 초안을 저장하면 채워지고, 그 뒤 배점만 고쳐 저장해도 그대로 남는다.
+ */
+export type PrepGuideline = {
+  fileName: string;
+  changes: readonly GuidelineChange[];
+};
+
+/**
+ * 모집 단위 하나의 평가 기준. localStorage 에 이 모양 그대로 JSON 으로 저장한다.
+ * guideline 은 선택 필드다(T1 형식의 값에는 없다. version 은 1 그대로).
+ */
 export type PrepCriteria = {
   version: 1;
   department: string;
   elements: readonly PrepElement[];
+  guideline?: PrepGuideline;
 };
 
 /** 저장 값의 한도. 길이는 앞뒤 공백을 뺀 글자 수로 잰다. */
@@ -34,6 +50,11 @@ export const PREP_LIMITS = {
   groupNameLength: 20,
   questions: 8,
   questionLength: 200,
+  /** guideline: 파일 이름, 변경 사항 건수, 변경 사항 제목·내용 길이 */
+  fileNameLength: 255,
+  changes: 6,
+  changeTitleLength: 40,
+  changeBodyLength: 300,
 } as const;
 
 /** 배점의 범위와 합계 */
@@ -73,6 +94,30 @@ function parseGroup(value: unknown): PrepGroup | null {
   return { tag, name, questions };
 }
 
+function parseChange(value: unknown): GuidelineChange | null {
+  const record = asRecord(value);
+  if (record === null) return null;
+  const title = boundedText(record.title, PREP_LIMITS.changeTitleLength);
+  const body = boundedText(record.body, PREP_LIMITS.changeBodyLength);
+  return title === null || body === null ? null : { title, body };
+}
+
+/** guideline 필드 확인: 객체이고 fileName 1~255자, changes 는 0~6건의 배열, 제목 1~40자·내용 1~300자. 벗어나면 null. */
+function parseGuideline(value: unknown): PrepGuideline | null {
+  const record = asRecord(value);
+  if (record === null) return null;
+  const fileName = boundedText(record.fileName, PREP_LIMITS.fileNameLength);
+  const rawChanges = record.changes;
+  if (fileName === null || !Array.isArray(rawChanges) || rawChanges.length > PREP_LIMITS.changes) return null;
+  const changes: GuidelineChange[] = [];
+  for (const item of rawChanges) {
+    const change = parseChange(item);
+    if (change === null) return null;
+    changes.push(change);
+  }
+  return { fileName, changes };
+}
+
 function parseElement(value: unknown): PrepElement | null {
   const record = asRecord(value);
   if (record === null) return null;
@@ -95,6 +140,7 @@ function parseElement(value: unknown): PrepElement | null {
  * 저장소에서 읽은 값(JSON.parse 결과)이 평가 기준 모양·한도에 맞는지 확인한다. 맞으면 문자열의 앞뒤 공백을 뺀 값을, 하나라도
  * 벗어나면 null 을 돌려준다(일부만 살리지 않는다). 확인: version 1, department 1~50자, 요소 1~6개, 요소 id 1~64자이고 서로 다름,
  * 이름 1~30자, 배점 0~100 정수이고 합이 100, 요소마다 묶음 1~6개, 태그 1~12자, 묶음 이름 1~20자, 묶음마다 질문 1~8개, 질문 1~200자.
+ * guideline 은 키가 없으면 통과하고, 있으면 파일 이름 1~255자·변경 사항 0~6건(제목 1~40자, 내용 1~300자)이어야 한다.
  */
 export function parsePrepCriteria(value: unknown): PrepCriteria | null {
   const record = asRecord(value);
@@ -111,7 +157,10 @@ export function parsePrepCriteria(value: unknown): PrepCriteria | null {
     elements.push(element);
   }
   if (totalWeight(elements.map((element) => element.weight)) !== TOTAL_WEIGHT) return null;
-  return { version: 1, department, elements };
+  if (record.guideline === undefined) return { version: 1, department, elements };
+  const guideline = parseGuideline(record.guideline);
+  if (guideline === null) return null;
+  return { version: 1, department, elements, guideline };
 }
 
 /** 배점 합계 */

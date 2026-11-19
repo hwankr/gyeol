@@ -29,7 +29,7 @@ export function PrepHeader({ prepPath, crumb, today, tabs }: PrepHeaderProps) {
           </li>
           <CrumbArrow />
           <li>
-            <Link href={prepPath} className="text-[#505050] no-underline">
+            <Link href={prepPath} className="scroll-m-[8px] text-[#505050] no-underline">
               전형 준비
             </Link>
           </li>
@@ -79,7 +79,7 @@ export function PrepHeader({ prepPath, crumb, today, tabs }: PrepHeaderProps) {
             key={tab.href}
             href={tab.href}
             aria-current={tab.current ? "page" : undefined}
-            className={`-mb-[2px] border-b-4 px-[6px] pb-[9px] text-[20px] leading-[28px] tracking-[-0.02em] text-[#111111] no-underline ${
+            className={`-mb-[2px] scroll-m-[8px] border-b-4 px-[6px] pb-[9px] text-[20px] leading-[28px] tracking-[-0.02em] text-[#111111] no-underline ${
               tab.current ? "border-b-[#111111] font-extrabold" : "border-b-transparent font-medium"
             }`}
           >
