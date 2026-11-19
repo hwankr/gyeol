@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePrepTabReady } from "@/hooks/usePrepTabReady";
 import { REVIEWER_LABEL } from "@/lib/admission";
 import {
@@ -8,7 +8,6 @@ import {
   numberedGroups,
   tagsLine,
   totalWeight,
-  weightBarPercent,
   weightChangeSummary,
   type PrepCriteria,
   type PrepElement,
@@ -43,14 +42,34 @@ function getServerDraft(): PrepDraft | null {
   return null;
 }
 
-/** 배점 합계가 100 이 아닐 때의 안내 (수정 상태에서만) */
-const TOTAL_NOTICE = `배점 합계가 ${TOTAL_WEIGHT}이 되어야 저장할 수 있습니다.`;
+/** 수정하기·저장하기 왼쪽의 안내 한 줄: 보기 상태, 수정 상태, 방금 저장한 뒤(배점 저장, 초안 저장) */
+const NOTE_VIEWING = "배점을 바꾸려면 수정하기를 누르세요.";
+const NOTE_EDITING = `배점을 수정하고 있습니다. 합계가 ${TOTAL_WEIGHT}일 때 저장할 수 있습니다.`;
+const NOTE_SAVED_WEIGHTS = "변경한 배점을 저장했습니다.";
+const NOTE_SAVED_DRAFT = "모집요강으로 만든 평가 기준을 저장했습니다.";
 /** 저장소에 쓰지 못해 메모리에만 둔 값이 있을 때의 안내 */
 const STORAGE_NOTICE = "브라우저에 저장하지 못했습니다. 새로고침하면 방금 바꾼 값이 사라집니다.";
+
+/** 배점 합계가 100 이 아닐 때의 안내 (수정 상태에서만): 모자라면 더 줄 점수, 넘으면 넘은 점수 */
+function totalNoticeText(total: number): string {
+  return total < TOTAL_WEIGHT
+    ? `합계가 ${TOTAL_WEIGHT}이 되도록 ${TOTAL_WEIGHT - total}점을 더 배정하세요.`
+    : `합계가 ${TOTAL_WEIGHT}을 ${total - TOTAL_WEIGHT}점 넘었습니다.`;
+}
 
 /** 모집요강 초안이 있을 때 탭 줄 아래에 보여 주는 안내 */
 function draftNoticeText(fileName: string): string {
   return `모집요강(${fileName})으로 만든 초안입니다. 저장하기 전에는 쓰이지 않습니다.`;
+}
+
+/**
+ * 배점 막대(range 입력란)의 눈금 끝: 2 × 100 ÷ 요소 수를 정수로 올린 값이고 100 을 넘지 않는다.
+ * 요소가 넷이면 0~50 이라 디자인과 같다(30점이면 손잡이가 60% 자리). 막대로는 눈금 끝까지만 줄 수 있고, 그보다 큰 배점은 −·+ 로 맞춘다
+ * (그때 손잡이는 끝에 머문다).
+ */
+function weightSliderMax(elementCount: number): number {
+  if (elementCount <= 0) return MAX_WEIGHT;
+  return Math.min(MAX_WEIGHT, Math.ceil((2 * TOTAL_WEIGHT) / elementCount));
 }
 
 /** 배점 조절 버튼의 id. 순서(0 부터)와 종류로 만든다(요소 id 에는 id 로 쓰기 어려운 글자가 있을 수 있어 쓰지 않는다). */
@@ -63,10 +82,10 @@ type WeightEdits = { base: PrepCriteria; weights: Readonly<Record<string, number
 
 /**
  * 전형 준비 · 평가·배점 설정 탭 상태: 저장한 평가 기준(localStorage), 보기/수정 상태와 고치는 중인 배점, 고른 요소,
- * 저장(변경 기록 한 건), 세부 평가 항목 패널의 스크롤과 "크게 보기" 창.
+ * 저장(변경 기록 한 건), 세부 평가 항목 패널의 "크게 보기" 상태.
  * 모집요강으로 만든 초안(lib/prep/storage.ts 의 메모리)이 있으면 저장한 값 대신 초안을 보여 주고 처음부터 수정 상태다.
  * 저장하면 초안이 저장한 평가 기준이 되고, 취소하면 초안을 버린다.
- * 사람이 바꿀 수 있는 것은 배점뿐이다(요소·묶음·질문의 글자는 고칠 수 없다).
+ * 사람이 바꿀 수 있는 것은 배점뿐이다(요소·묶음·질문의 글자는 고칠 수 없다). 배점은 −·+ (1 씩)와 배점 막대로 바꾼다.
  */
 export function usePrepWeights() {
   const { ready, bodyRef } = usePrepTabReady<HTMLDivElement>();
@@ -79,38 +98,36 @@ export function usePrepWeights() {
   const [edits, setEdits] = useState<WeightEdits | null>(null);
   /** 고른 요소 id. null 이면 첫 요소. */
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  /** 세부 평가 항목 패널의 묶음·질문 스크롤 영역 */
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-  /** "크게 보기" 창과 그 창을 여는 버튼, 창의 닫기 버튼 */
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const expandButtonRef = useRef<HTMLButtonElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  /** "크게 보기" 창의 제목. 창을 열면 여기에 초점을 두어 맨 위부터 읽게 한다. */
-  const dialogTitleRef = useRef<HTMLHeadingElement>(null);
-  /** 고른 요소(떠 있는 카드)의 화살표 버튼 */
-  const selectedArrowRef = useRef<HTMLButtonElement>(null);
-  /** 요소를 고른 버튼에 초점이 있었으면, 다시 그린 뒤 새 카드의 화살표 버튼으로 초점을 옮긴다. */
-  const moveFocusToArrowRef = useRef(false);
+  /** 세부 평가 항목을 크게 보는 중인지 (왼쪽 요소 목록을 숨기고 패널을 상자 폭 전체로 넓힌다. 질문 글자도 커진다) */
+  const [big, setBig] = useState(false);
+  /** 방금 저장한 뒤의 안내 문구. 저장하면 채우고 다시 수정 상태에 들어가면 비운다. */
+  const [savedNote, setSavedNote] = useState<string | null>(null);
+  /** 고른 요소의 이름 버튼 */
+  const selectedNameButtonRef = useRef<HTMLButtonElement>(null);
+  /** 요소를 고른 버튼에 초점이 있었으면, 다시 그린 뒤 그 버튼이 보이게 한다. */
+  const revealSelectedRef = useRef(false);
   /** 수정하기·취소 버튼(같은 자리에서 글자만 바뀐다) */
   const editButtonRef = useRef<HTMLButtonElement>(null);
   /** 저장하기·취소를 누른 버튼에 초점이 있었으면, 다시 그린 뒤 수정하기 버튼에 초점을 두고 보이게 한다. */
   const focusEditButtonRef = useRef(false);
   /** 초점이 있던 배점 조절 버튼이 0·100 에 닿아 눌리지 않게 되면, 다시 그린 뒤 초점을 옮길 같은 요소의 반대쪽 버튼 id */
   const focusStepButtonRef = useRef<string | null>(null);
+  /** 크게 보기·작게 보기 버튼(같은 자리에서 글자만 바뀐다) */
+  const bigButtonRef = useRef<HTMLButtonElement>(null);
+  /** 크게 보기·작게 보기를 누른 버튼에 초점이 있었으면, 다시 그린 뒤 그 버튼이 보이게 한다. */
+  const revealBigButtonRef = useRef(false);
 
   // 이 화면의 수명 관리 (hooks/useUpload.ts 와 같은 방식).
   // cacheComponents 에서는 다른 화면으로 가도 이 화면이 숨겨질 뿐 상태가 남는다. 숨겨지거나 언마운트될 때 cleanup 에서
-  // 고치던 배점을 버리고 보기 상태(저장된 값)·첫 요소 선택으로 되돌리고, 열린 창을 닫고 패널 스크롤을 맨 위로 돌린다.
+  // 고치던 배점을 버리고 보기 상태(저장된 값)·첫 요소 선택·작게 보기로 되돌리고, 방금 저장했다는 안내를 지운다.
   // 저장한 값과 메모리에만 둔 값, 초안(lib/prep/storage.ts)은 되돌리지 않는다. 초안이 있으면 다시 보일 때 초안의 배점으로 수정 상태다.
   useLayoutEffect(() => {
-    const scrollArea = scrollAreaRef.current;
-    const dialog = dialogRef.current;
     return () => {
       setEditingSaved(false);
       setEdits(null);
       setSelectedId(null);
-      dialog?.close();
-      if (scrollArea !== null) scrollArea.scrollTop = 0;
+      setBig(false);
+      setSavedNote(null);
     };
   }, []);
 
@@ -121,17 +138,15 @@ export function usePrepWeights() {
   const selected = elements.find((element) => element.id === selectedId) ?? elements[0];
   const selectedIndex = elements.indexOf(selected);
 
-  // 이름 버튼으로 요소를 고르면 그 버튼은 카드의 제목 글자로 바뀌어 사라진다. 초점이 그 버튼에 있었다면 body 로 빠지지 않게
-  // 새로 고른 요소의 화살표 버튼으로 옮긴다. 초점 표시는 :focus-visible 규칙대로 키보드일 때만 보인다.
-  // 화살표 버튼은 이름보다 아래에 있어 화면 아래쪽 끝에서 고르면 가려질 수 있으므로, 초점은 스크롤 없이 준 뒤 배치가 끝난 위치를 재서
-  // 초점 표시까지 가려졌을 때만 보일 만큼 세로로 스크롤한다(revealVertically). 요소를 고를 때만 돈다(처음 열 때·다시 보일 때는 표시가 없음).
+  // 요소를 고르면 오른쪽 패널의 내용이 바뀌어 문서 높이가 달라진다. 문서가 짧아져 브라우저가 스크롤 위치를 문서 끝에 맞추면 누른 이름
+  // 버튼이 화면 아래로 밀려날 수 있다. 이름 버튼은 고른 뒤에도 그 자리에 남으므로(눌린 상태만 바뀐다) 초점은 그대로이고, 그 버튼에
+  // 초점이 있는 채로 눌렀으면(키보드든 마우스든) 배치가 끝난 위치를 재서 초점 표시까지 가려졌을 때만 보일 만큼 세로로 스크롤한다
+  // (revealVertically). 요소를 고를 때만 돈다(처음 열 때·다시 보일 때는 표시가 없음).
   useLayoutEffect(() => {
-    if (!moveFocusToArrowRef.current) return;
-    moveFocusToArrowRef.current = false;
-    const arrow = selectedArrowRef.current;
-    if (arrow === null) return;
-    arrow.focus({ preventScroll: true });
-    revealVertically(arrow, FOCUS_REVEAL_MARGIN);
+    if (!revealSelectedRef.current) return;
+    revealSelectedRef.current = false;
+    const button = selectedNameButtonRef.current;
+    if (button !== null && document.activeElement === button) revealVertically(button, FOCUS_REVEAL_MARGIN);
   }, [selected.id]);
 
   // 저장하기·취소를 키보드(또는 초점이 간 누름)로 눌렀으면, 저장하기가 눌리지 않게 되어 초점이 body 로 빠지지 않도록
@@ -157,6 +172,16 @@ export function usePrepWeights() {
     revealVertically(button, FOCUS_REVEAL_MARGIN);
   });
 
+  // 크게 보기·작게 보기를 누르면 왼쪽 요소 목록이 사라지거나 다시 나타난다. 두 단이 위아래로 쌓이는 좁은 화면에서는 목록이 패널 위에
+  // 있어서 패널(과 이 버튼)이 목록 높이만큼 위아래로 움직인다. 버튼은 그 자리에 남아 초점은 그대로이고, 그 버튼에 초점이 있는 채로
+  // 눌렀으면(키보드든 마우스든) 다시 그린 뒤 초점 표시까지 가려졌을 때만 보일 만큼 세로로 스크롤한다.
+  useLayoutEffect(() => {
+    if (!revealBigButtonRef.current) return;
+    revealBigButtonRef.current = false;
+    const button = bigButtonRef.current;
+    if (button !== null && document.activeElement === button) revealVertically(button, FOCUS_REVEAL_MARGIN);
+  }, [big]);
+
   /** 지금 기준을 고치는 중인 배점 (보기 상태이거나 고치던 기준이 바뀌었으면 쓰지 않는다) */
   const currentEdits = editing && edits !== null && edits.base === base ? edits.weights : null;
 
@@ -173,14 +198,13 @@ export function usePrepWeights() {
   /** 요소를 고른다. hadFocus 는 누른 버튼에 초점이 있었는지(키보드로 눌렀거나, 누르면서 초점이 간 경우) */
   function selectElement(id: string, hadFocus = false) {
     if (id === selected.id) return;
-    moveFocusToArrowRef.current = hadFocus;
+    revealSelectedRef.current = hadFocus;
     setSelectedId(id);
-    // 요소를 바꾸면 세부 평가 항목 목록은 맨 위부터 보여 준다.
-    if (scrollAreaRef.current !== null) scrollAreaRef.current.scrollTop = 0;
   }
 
   function startEditing() {
     setEdits(null);
+    setSavedNote(null);
     setEditingSaved(true);
   }
 
@@ -203,6 +227,17 @@ export function usePrepWeights() {
   }
 
   /**
+   * 배점 막대를 움직여 배점을 value 로 정한다(정수로 맞추고 0~100 으로 자른다). 초점은 막대에 그대로 있다
+   * (막대로 0·100 에 닿아 −·+ 가 눌리지 않게 되어도 초점이 있는 곳은 막대라 옮길 것이 없다).
+   */
+  function setWeight(id: string, value: number) {
+    if (!editing || !Number.isFinite(value)) return;
+    if (!elements.some((item) => item.id === id)) return;
+    const next = Math.min(MAX_WEIGHT, Math.max(MIN_WEIGHT, Math.round(value)));
+    setEdits({ base, weights: { ...currentEdits, [id]: next } });
+  }
+
+  /**
    * 저장: 평가 기준을 저장하고 기록을 한 건 남긴 뒤 보기 상태로 돌아간다. 저장했으면 true.
    * - 초안: 초안(고친 배점 포함)이 저장한 평가 기준이 되고(모집요강 파일 이름·변경 사항을 붙인다) 초안은 사라진다.
    *   저장소에 쓰지 못해도 메모리의 평가 기준이 되고 초안은 사라진다(lib/prep/storage.ts).
@@ -215,22 +250,30 @@ export function usePrepWeights() {
       const next: PrepCriteria = { ...prepDraft.criteria, elements: elementsWithWeights };
       const summary = guidelineSaveSummary(prepDraft.fileName, elementsWithWeights);
       if (savePrepDraft(prepDraft, next, createHistoryEntry(REVIEWER_LABEL, summary, new Date())) === null) return false;
+      setSavedNote(NOTE_SAVED_DRAFT);
     } else {
       const next: PrepCriteria = { ...saved, elements: elementsWithWeights };
       const summary = weightChangeSummary(saved, next);
       if (summary === null) return false;
       savePrepCriteria(next, createHistoryEntry(REVIEWER_LABEL, summary, new Date()));
+      setSavedNote(NOTE_SAVED_WEIGHTS);
     }
     setEdits(null);
     setEditingSaved(false);
     return true;
   }
 
+  /**
+   * 수정하기·저장하기 왼쪽의 안내. 저장소에 쓰지 못해 메모리에만 둔 값이 있으면(storageNotice 가 보이는 동안) 저장했다고 적지 않는다.
+   */
+  const modeNote = editing ? NOTE_EDITING : savedNote !== null && !hasUnsaved ? savedNote : NOTE_VIEWING;
+
   return {
     ready,
     bodyRef,
     department: base.department,
     draftNotice: prepDraft === null ? null : draftNoticeText(prepDraft.fileName),
+    modeNote,
     elements: elements.map((element, index) => {
       const weight = weightOf(element);
       return {
@@ -240,30 +283,29 @@ export function usePrepWeights() {
         name: element.name,
         tagsLine: tagsLine(element),
         weight,
-        barPercent: weightBarPercent(weight, elements.length),
         canDecrease: editing && weight > MIN_WEIGHT,
         canIncrease: editing && weight < MAX_WEIGHT,
       };
     }),
     selectedIndex,
     detail: { name: selected.name, groups: numberedGroups(selected) },
+    weightRange: { min: MIN_WEIGHT, max: weightSliderMax(elements.length), step: 1 },
     total,
     totalMax: TOTAL_WEIGHT,
     editing,
     canSave,
-    totalNotice: editing && total !== TOTAL_WEIGHT ? TOTAL_NOTICE : null,
+    totalNotice: editing && total !== TOTAL_WEIGHT ? totalNoticeText(total) : null,
     storageNotice: hasUnsaved ? STORAGE_NOTICE : null,
-    scrollAreaRef,
-    dialogRef,
-    expandButtonRef,
-    closeButtonRef,
-    dialogTitleRef,
-    selectedArrowRef,
+    big,
+    selectedNameButtonRef,
     editButtonRef,
+    bigButtonRef,
     onSelectElement: selectElement,
     /** 배점 −·+. hadFocus 는 누른 버튼에 초점이 있었는지 */
     onDecrease: (id: string, hadFocus: boolean) => changeWeight(id, -1, hadFocus),
     onIncrease: (id: string, hadFocus: boolean) => changeWeight(id, 1, hadFocus),
+    /** 배점 막대를 움직였을 때. value 는 막대의 새 값 */
+    onSetWeight: setWeight,
     /** 수정하기·취소. hadFocus 는 누른 버튼에 초점이 있었는지 (취소 뒤 내용이 움직여 그 버튼이 가려졌으면 보이게 한다) */
     onToggleEditing: (hadFocus: boolean) => {
       if (editing) {
@@ -279,25 +321,10 @@ export function usePrepWeights() {
       focusEditButtonRef.current = hadFocus;
       if (!save()) focusEditButtonRef.current = false;
     },
-    /**
-     * 창을 연다. showModal 은 창 안의 첫 컨트롤(맨 끝의 닫기)에 초점을 두며 창을 아래로 스크롤하므로, 곧바로 제목(tabIndex -1)으로
-     * 초점을 옮기고 창 스크롤을 맨 위로 돌려 처음부터 읽게 한다. 다음 Tab 은 닫기로 간다.
-     */
-    onOpenDialog: () => {
-      const dialog = dialogRef.current;
-      if (dialog === null) return;
-      dialog.showModal();
-      dialogTitleRef.current?.focus({ preventScroll: true });
-      dialog.scrollTop = 0;
-    },
-    onCloseDialog: () => dialogRef.current?.close(),
-    /** 창이 닫히면(닫기·Esc) 초점을 "크게 보기" 버튼으로 돌린다. */
-    onDialogClose: () => expandButtonRef.current?.focus(),
-    /** 창 안에서 Tab 은 창 밖으로 나가지 않는다(창 안의 컨트롤은 닫기 버튼 하나다). */
-    onDialogKeyDown: (event: KeyboardEvent<HTMLDialogElement>) => {
-      if (event.key !== "Tab") return;
-      event.preventDefault();
-      closeButtonRef.current?.focus();
+    /** 크게 보기·작게 보기. hadFocus 는 누른 버튼에 초점이 있었는지 (있었으면 다시 그린 뒤 그 버튼이 보이게 한다) */
+    onToggleBig: (hadFocus: boolean) => {
+      revealBigButtonRef.current = hadFocus;
+      setBig((value) => !value);
     },
   };
 }

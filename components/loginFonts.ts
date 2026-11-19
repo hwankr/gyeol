@@ -6,14 +6,15 @@ import localFont from "next/font/local";
 // 대체 글꼴은 디자인 순서 그대로 두려고 next/font 가 만드는 Arial 대체 글꼴(adjustFontFallback)을 끈다.
 
 /**
- * 본문 글꼴 Pretendard (굵기 300·400·700). 디자인 파일의 글꼴을 그대로 쓴다.
- * 파일 하나가 약 760KB 라서 미리 불러오기(preload)는 끈다. CSS 가 문서 머리에 있어 곧바로 내려받기 시작하고,
+ * 본문 글꼴 Pretendard (굵기 400·500·600·700). 디자인 파일의 글꼴을 그대로 쓴다.
+ * 파일 하나가 약 780KB 라서 미리 불러오기(preload)는 끈다. CSS 가 문서 머리에 있어 곧바로 내려받기 시작하고,
  * 그동안은 대체 글꼴로 글자를 먼저 보여 준다(swap).
  */
 export const pretendard = localFont({
   src: [
-    { path: "../fonts/pretendard/Pretendard-300.woff2", weight: "300", style: "normal" },
     { path: "../fonts/pretendard/Pretendard-400.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/pretendard/Pretendard-500.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/pretendard/Pretendard-600.woff2", weight: "600", style: "normal" },
     { path: "../fonts/pretendard/Pretendard-700.woff2", weight: "700", style: "normal" },
   ],
   display: "swap",

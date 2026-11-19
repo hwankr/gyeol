@@ -173,37 +173,24 @@ export function tagsLine(element: PrepElement): string {
   return element.groups.map((group) => `#${group.tag}`).join(" ");
 }
 
-/** 세부 평가 항목의 묶음 하나 (화면용): 이름, 알약 바탕색(번갈아 light·dark), 번호를 붙인 질문 */
+/** 세부 평가 항목의 묶음 하나 (화면용): 이름, 번호를 붙인 질문 */
 export type NumberedGroup = {
   name: string;
-  tone: "light" | "dark";
   questions: { number: number; text: string }[];
 };
 
-/** 세부 평가 항목 번호는 그 요소 안에서 묶음을 넘어 이어진다(1~4, 5~6 …). 알약 바탕색은 첫째부터 light·dark 를 번갈아 쓴다. */
+/** 세부 평가 항목 번호는 그 요소 안에서 묶음을 넘어 이어진다(1~4, 5~6 …). */
 export function numberedGroups(element: PrepElement): NumberedGroup[] {
   const groups: NumberedGroup[] = [];
   let next = 1;
-  element.groups.forEach((group, index) => {
+  for (const group of element.groups) {
     groups.push({
       name: group.name,
-      tone: index % 2 === 0 ? "light" : "dark",
       questions: group.questions.map((text, offset) => ({ number: next + offset, text })),
     });
     next += group.questions.length;
-  });
+  }
   return groups;
-}
-
-/**
- * 배점 막대의 채움 너비·손잡이 위치(%). 눈금의 끝은 2 × 100 ÷ 요소 수다(요소가 넷이면 0~50: 30점 → 60%).
- * 0~100% 로 자른다(요소가 여섯이면 눈금이 0~33.3 이라 34점 이상은 100%).
- */
-export function weightBarPercent(weight: number, elementCount: number): number {
-  if (elementCount <= 0) return 0;
-  // weight ÷ (2 × 100 ÷ 요소 수) × 100 을 곱셈 먼저 계산해 39.00000000000001 같은 소수 오차를 줄인다.
-  const percent = (weight * elementCount * 100) / (2 * TOTAL_WEIGHT);
-  return Math.min(100, Math.max(0, percent));
 }
 
 /**

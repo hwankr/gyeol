@@ -25,3 +25,6 @@ export const APPLICANT_REVIEWS_STORAGE_KEY = "gyeol.applicantReviews";
  * result 는 서버가 돌려준 분석 결과(가려진 원문)이고, 파일 이름은 저장하지 않는다.
  */
 export const UPLOADED_APPLICANTS_STORAGE_KEY = "gyeol.uploadedApplicants";
+
+/** 평가하기 · 내 평가({ version: 1, records: { "<코드>": 평가 } })를 저장하는 localStorage 키 */
+export const EVALUATIONS_STORAGE_KEY = "gyeol.evaluations";
