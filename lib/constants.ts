@@ -16,3 +16,6 @@ export const PREP_CRITERIA_STORAGE_KEY = "gyeol.prepCriteria";
 
 /** 전형 준비 · 기준 변경 기록(PrepHistoryEntry[])을 저장하는 localStorage 키 */
 export const PREP_HISTORY_STORAGE_KEY = "gyeol.prepHistory";
+
+/** 지원자 관리 · 가릴지 확인이 필요한 표현의 결정({ version: 1, reviews })을 저장하는 localStorage 키 */
+export const APPLICANT_REVIEWS_STORAGE_KEY = "gyeol.applicantReviews";

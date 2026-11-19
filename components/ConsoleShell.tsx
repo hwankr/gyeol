@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { consoleMulish, consolePretendard } from "@/components/consoleFonts";
 import { ADMISSION } from "@/lib/admission";
 import type { ConsoleMenu } from "@/lib/consoleMenu";
@@ -9,8 +9,21 @@ type ConsoleShellProps = {
   menus: (ConsoleMenu & { active: boolean })[];
   /** 로그아웃이 가는 주소 */
   logoutPath: string;
+  /** 상단 바의 검색 입력란. enabled 가 false 인 동안은 기능이 없는 컨트롤(disabled)이다. */
+  search: SearchInputProps;
+  /** 검색 입력란 (지원자 관리 화면을 나갈 때 그 화면이 실제 값을 비운다) */
+  searchInputRef: Ref<HTMLInputElement>;
+  /** 본문(<main>) 아래 안쪽 여백을 0 으로 할지 (지원자 관리 화면. 전형 준비는 23px) */
+  flushBottom: boolean;
   /** 상단 바 아래에 그릴 화면 내용 */
   children: ReactNode;
+};
+
+type SearchInputProps = {
+  /** 검색이 동작하는지. 지원자 관리 화면이 준비돼 보이는 동안만 true 다(서버 HTML·hydration 때와 그 밖의 화면에서는 false). */
+  enabled: boolean;
+  /** 글을 칠 때마다 (지우기 표시를 눌렀을 때 포함). 입력란의 지금 값 전체를 넘긴다. */
+  onChange: (value: string) => void;
 };
 
 /**
@@ -20,7 +33,7 @@ type ConsoleShellProps = {
  * 줄 높이는 디자인(브라우저 기본 normal)에 맞춰 바깥 상자에서 normal 로 되돌린다.
  * 다른 주소로 가는 것은 모두 보통 링크(next/link)라서 화면의 JavaScript 가 준비되기 전에 눌러도 그 주소의 문서로 이동한다.
  */
-export function ConsoleShell({ menus, logoutPath, children }: ConsoleShellProps) {
+export function ConsoleShell({ menus, logoutPath, search, searchInputRef, flushBottom, children }: ConsoleShellProps) {
   return (
     <div
       className={`${consolePretendard.className} box-border flex min-h-screen flex-wrap bg-[#F3F3F3] leading-[normal] text-[#111111]`}
@@ -77,8 +90,12 @@ export function ConsoleShell({ menus, logoutPath, children }: ConsoleShellProps)
           로그아웃
         </Link>
       </div>
-      <main className="box-border min-w-0 flex-[999_1_560px] pt-[35px] pr-[clamp(16px,3.9vw,56px)] pb-[23px] pl-[clamp(20px,5.4vw,78px)]">
-        <TopBar />
+      <main
+        className={`box-border min-w-0 flex-[999_1_560px] pt-[35px] pr-[clamp(16px,3.9vw,56px)] pl-[clamp(20px,5.4vw,78px)] ${
+          flushBottom ? "pb-0" : "pb-[23px]"
+        }`}
+      >
+        <TopBar search={search} inputRef={searchInputRef} />
         {children}
       </main>
     </div>
@@ -203,8 +220,12 @@ const MENU_ICON_PATHS: Record<ConsoleMenu["key"], ReactNode> = {
   ),
 };
 
-/** 본문 첫 줄: 검색 입력란, 소속·사정관, 프로필 그림, 내보내기·알림 버튼. 검색·내보내기·알림은 기능이 없는 컨트롤이다(눌리지 않음). */
-function TopBar() {
+/**
+ * 본문 첫 줄: 검색 입력란, 소속·사정관, 프로필 그림, 내보내기·알림 버튼. 내보내기·알림은 기능이 없는 컨트롤이다(눌리지 않음).
+ * 검색 입력란은 지원자 관리 화면이 준비된 뒤에만 켜져 동작하고(글을 칠 때마다 걸러 보기에 반영), 그 전과 그 밖의 화면에서는 기능이 없는
+ * 컨트롤(disabled)이다. 모양은 어느 쪽이든 디자인 그대로다(안내 글자·지우기 버튼을 더하지 않는다. type="search" 의 브라우저 기본 지우기 표시는 그대로).
+ */
+function TopBar({ search, inputRef }: { search: SearchInputProps; inputRef: Ref<HTMLInputElement> }) {
   return (
     <div className="-ml-[19px] flex flex-wrap items-center justify-between gap-x-[24px] gap-y-[12px]">
       <label className="box-border flex h-[40px] min-w-[200px] flex-[0_1_603px] items-center gap-[10px] rounded-[20px] bg-white pr-[20px] pl-[22px]">
@@ -220,12 +241,22 @@ function TopBar() {
           <circle cx="8.8" cy="8.8" r="6.3" />
           <path d="M13.5 13.5 18 18" />
         </svg>
-        {/* 안쪽 여백(1px 2px)은 디자인이 정하지 않아 브라우저 기본값이 쓰인 것을 그대로 맞춘다. */}
+        {/*
+          안쪽 여백(1px 2px)은 디자인이 정하지 않아 브라우저 기본값이 쓰인 것을 그대로 맞춘다.
+          기본은 꺼져(disabled) 있고 지원자 관리 화면이 준비되면 켜진다(hooks/useConsoleSearch.ts). 서버 HTML 에서는 어느 주소에서나 꺼져 있다.
+          React 가 값을 쥐지 않는 입력란(defaultValue)이라 사람이 적은 글자를 React 가 덮어쓰지 않는다. 값을 비우는 것은 지원자 관리 화면을
+          나갈 때뿐이다(hooks/useApplicants.ts). autoComplete="off" 는 새로고침·뒤로 가기 때 브라우저가 전에 적은 글자를 채워 넣지 않게
+          (돌아온 화면이 처음 상태이게) 한다.
+        */}
         <input
+          ref={inputRef}
           type="search"
           aria-label="검색"
-          disabled
-          className="min-w-0 flex-[1_1_auto] cursor-default border-0 bg-transparent px-[2px] py-px text-[15px] text-[#111111]"
+          autoComplete="off"
+          disabled={!search.enabled}
+          defaultValue=""
+          onChange={(event) => search.onChange(event.currentTarget.value)}
+          className="min-w-0 flex-[1_1_auto] scroll-m-[8px] border-0 bg-transparent px-[2px] py-px text-[15px] text-[#111111] disabled:cursor-default"
         />
       </label>
       <div className="flex items-center">

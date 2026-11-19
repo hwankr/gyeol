@@ -7,11 +7,14 @@ export type ConsoleMenu = {
   href: string | null;
 };
 
-// 지원자 관리는 화면이 생기면(T2) /applicants 로 잇는다. 평가하기는 지금의 업로드 화면으로 간다.
+/** 지원자 관리 화면의 주소 (주 메뉴, 현재 위치 줄의 "지원자 관리") */
+export const APPLICANTS_PATH = "/applicants";
+
+// 평가하기는 지금의 업로드 화면으로 간다.
 export const CONSOLE_MENUS: readonly ConsoleMenu[] = [
   { key: "home", label: "홈", href: null },
   { key: "prep", label: "전형 준비", href: "/prep" },
-  { key: "applicants", label: "지원자 관리", href: null },
+  { key: "applicants", label: "지원자 관리", href: APPLICANTS_PATH },
   { key: "evaluate", label: "평가하기", href: "/upload" },
   { key: "decision", label: "선발 결정", href: null },
   { key: "settings", label: "이력·설정", href: null },
