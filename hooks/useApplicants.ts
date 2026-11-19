@@ -29,6 +29,8 @@ import {
   subscribeApplicantReviews,
 } from "@/lib/applicants/reviewStorage";
 import { SAMPLE_APPLICANTS } from "@/lib/applicants/sampleApplicants";
+import { NO_UPLOADED_APPLICANTS, uploadedToApplicant, type UploadedApplicant } from "@/lib/applicants/uploaded";
+import { loadUploadedApplicants, subscribeUploadedApplicants } from "@/lib/applicants/uploadedStorage";
 import { APPLICANTS_PATH } from "@/lib/consoleMenu";
 import { sampleResult } from "@/lib/mock/sampleResult";
 import { saveResult } from "@/lib/resultStorage";
@@ -41,6 +43,12 @@ function getServerReviews(): ApplicantReviews {
 
 function getServerUnsaved(): boolean {
   return false;
+}
+
+// 올린 지원자(업로드 화면에서 분석한 학생부)도 같은 방식이다. 서버 렌더링과 hydration 중에는 없는 모습(예시 314명)으로 그리고,
+// 브라우저에서 localStorage 를 읽은 뒤 예시 지원자 뒤에 코드 순서로 더해진다.
+function getServerUploaded(): readonly UploadedApplicant[] {
+  return NO_UPLOADED_APPLICANTS;
 }
 
 // 접수 마감의 남은 날은 브라우저에서 화면이 뜬 뒤에 채운다(hooks/usePrepHeader.ts 의 오늘 날짜와 같은 방식).
@@ -64,10 +72,11 @@ function getServerRemaining(): null {
 }
 
 // 화면이 준비됐는지. 서버 HTML 과 hydration 중에는 false, 브라우저에서 다시 그릴 때부터 true 다(useSyncExternalStore 의 서버 값과
-// 브라우저 값). hydration 뒤 브라우저 값으로 다시 그리는 바로 그 렌더링에서 저장소(가림 결정)도 다시 읽으므로, true 가 되는 화면에는
-// 저장한 결정이 이미 반영돼 있다(저장된 결정 때문에 줄이 사라지거나 선택이 옮겨 가는 첫 갱신과 같은 렌더링). 준비 전에는 본문을 조작할 수
-// 없게(inert) 한다. 브라우저에서는 늘 true 라 다른 화면에 다녀오거나(cacheComponents) 개발 모드 StrictMode 가 effect 를 다시 돌려도
-// 다시 false 가 되지 않는다(다시 보일 때는 그 렌더링에서 저장소를 다시 읽어 그린다).
+// 브라우저 값). hydration 뒤 브라우저 값으로 다시 그리는 바로 그 렌더링에서 저장소(가림 결정, 올린 지원자)도 다시 읽으므로, true 가 되는
+// 화면에는 저장한 결정과 올린 지원자가 이미 반영돼 있다(저장된 결정 때문에 줄이 사라지거나 선택이 옮겨 가는 첫 갱신, 올린 지원자가 나타나
+// 줄 수가 바뀌는 첫 갱신과 같은 렌더링). 준비 전에는 본문을 조작할 수 없게(inert) 한다. 브라우저에서는 늘 true 라 다른 화면에
+// 다녀오거나(cacheComponents) 개발 모드 StrictMode 가 effect 를 다시 돌려도 다시 false 가 되지 않는다(다시 보일 때는 그 렌더링에서
+// 저장소를 다시 읽어 그린다).
 function getClientReady(): boolean {
   return true;
 }
@@ -89,8 +98,8 @@ const INITIAL_MINE_ONLY = true;
 /** 상태·결정까지 붙인 지원자 한 줄 */
 type ApplicantEntry = { applicant: Applicant; status: ApplicantStatus; decisions: ApplicantDecisions };
 
-function toEntries(reviews: ApplicantReviews): ApplicantEntry[] {
-  return SAMPLE_APPLICANTS.map((applicant) => {
+function toEntries(applicants: readonly Applicant[], reviews: ApplicantReviews): ApplicantEntry[] {
+  return applicants.map((applicant) => {
     const decisions = reviews[applicant.code] ?? NO_DECISIONS;
     return { applicant, status: applicantStatus(applicant, decisions), decisions };
   });
@@ -106,13 +115,16 @@ function visibleEntries(entries: readonly ApplicantEntry[], filter: ApplicantFil
   );
 }
 
-/** 처음 선택: 저장한 결정이 없는 처음 상태에서 보이는 첫 줄 (서버 렌더링과 같은 값) */
+/**
+ * 처음 선택: 저장한 결정과 올린 지원자가 없는 처음 상태에서 보이는 첫 줄 (서버 렌더링과 같은 값).
+ * 올린 지원자는 상태가 "완료" 라 처음 걸러 보기("확인 필요")에는 보이지 않으므로 이 값을 바꾸지 않는다.
+ */
 const INITIAL_SELECTED: string | null =
-  visibleEntries(toEntries(NO_REVIEWS), INITIAL_FILTER, INITIAL_MINE_ONLY, "")[0]?.applicant.code ?? null;
+  visibleEntries(toEntries(SAMPLE_APPLICANTS, NO_REVIEWS), INITIAL_FILTER, INITIAL_MINE_ONLY, "")[0]?.applicant.code ?? null;
 
 /** 저장소에 쓰지 못해 메모리에만 둔 결정이 있을 때의 안내 */
 const STORAGE_NOTICE = "브라우저에 저장하지 못했습니다. 새로고침하면 방금 정한 내용이 사라집니다.";
-/** 원문보기에서 샘플 결과를 sessionStorage 에 저장하지 못했을 때의 안내 */
+/** 원문보기에서 결과(예시 지원자는 샘플 결과, 올린 지원자는 그 결과)를 sessionStorage 에 저장하지 못했을 때의 안내 */
 const ORIGINAL_NOTICE = "브라우저에 결과를 저장하지 못해 원문을 열 수 없습니다.";
 
 /** 초점을 옮긴 요소의 위아래로 함께 보여야 하는 범위(px): 초점 표시(2px 띄움 + 2px 선) 4px 와 여유 (hooks/usePrepWeights.ts 와 같은 값) */
@@ -149,14 +161,16 @@ function revealVertically(element: HTMLElement, margin: number) {
 }
 
 /**
- * 지원자 관리 화면 상태: 예시 지원자(lib/applicants/sampleApplicants.ts)와 저장한 가림 결정(localStorage)으로 상태·숫자를 계산하고,
- * 걸러 보기·내 배정 보기·검색(상단 바), 지원자 선택, 저장하지 않은 가림 결정, 저장, 원문보기(샘플 결과로 이동)를 다룬다.
+ * 지원자 관리 화면 상태: 예시 지원자(lib/applicants/sampleApplicants.ts)와 올린 지원자(업로드 화면에서 분석한 학생부,
+ * lib/applicants/uploadedStorage.ts), 저장한 가림 결정(localStorage)으로 상태·숫자를 계산하고, 걸러 보기·내 배정 보기·검색(상단 바),
+ * 지원자 선택, 저장하지 않은 가림 결정, 저장, 원문보기(예시 지원자는 샘플 결과, 올린 지원자는 그 결과로 이동)를 다룬다.
  */
 export function useApplicants() {
   const router = useRouter();
   const search = useConsoleSearch();
   const reviews = useSyncExternalStore(subscribeApplicantReviews, loadApplicantReviews, getServerReviews);
   const hasUnsaved = useSyncExternalStore(subscribeApplicantReviews, hasUnsavedApplicantReviews, getServerUnsaved);
+  const uploaded = useSyncExternalStore(subscribeUploadedApplicants, loadUploadedApplicants, getServerUploaded);
   const remaining = useSyncExternalStore(subscribeNothing, getRemaining, getServerRemaining);
   const ready = useSyncExternalStore(subscribeNothing, getClientReady, getServerReady);
   const [filter, setFilter] = useState<ApplicantFilter>(INITIAL_FILTER);
@@ -234,7 +248,12 @@ export function useApplicants() {
     };
   }, [inputRef, listenerRef, setInputEnabled]);
 
-  const entries = useMemo(() => toEntries(reviews), [reviews]);
+  /** 지원자 = 예시 314명 + 올린 지원자(코드 순서). 올린 지원자에게는 가릴지 확인이 필요한 표현이 없어 저장한 결정이 붙지 않는다. */
+  const applicants = useMemo(
+    () => (uploaded.length === 0 ? SAMPLE_APPLICANTS : [...SAMPLE_APPLICANTS, ...uploaded.map(uploadedToApplicant)]),
+    [uploaded],
+  );
+  const entries = useMemo(() => toEntries(applicants, reviews), [applicants, reviews]);
   const counts = useMemo(() => statusCounts(entries.map((entry) => entry.status)), [entries]);
   const visible = useMemo(() => visibleEntries(entries, filter, mineOnly, query), [entries, filter, mineOnly, query]);
 
@@ -361,13 +380,14 @@ export function useApplicants() {
   }
 
   /**
-   * 원문보기: 예시 지원자에게는 학생부 원문이 없으므로, 업로드 화면의 "샘플 데이터로 보기" 와 똑같이 미리 만든 샘플 결과를 저장하고
-   * 결과 화면으로 간다(AI 를 부르지 않는다). 저장하지 못하면(sessionStorage 막힘 등) 빈 결과 화면으로 가지 않도록 이동하지 않고
-   * 상세 영역에 안내를 보여 준다.
+   * 원문보기: 올린 지원자는 그 지원자의 분석 결과를, 예시 지원자는 학생부 원문이 없으므로 업로드 화면의 "샘플 데이터로 보기" 와 똑같이
+   * 미리 만든 샘플 결과를 저장하고 결과 화면으로 간다(AI 를 부르지 않는다). 저장하지 못하면(sessionStorage 막힘 등) 빈 결과 화면으로
+   * 가지 않도록 이동하지 않고 상세 영역에 안내를 보여 준다.
    */
   function openOriginal() {
+    if (selected === undefined) return;
     try {
-      saveResult(sampleResult);
+      saveResult(selected.applicant.original ?? sampleResult);
     } catch {
       setOriginalFailed(true);
       return;

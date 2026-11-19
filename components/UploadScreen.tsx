@@ -1,13 +1,19 @@
-import { useRef } from "react";
+import Link from "next/link";
+import { useRef, type RefObject } from "react";
 import { Area } from "@/components/Area";
 import { CriteriaExamples } from "@/components/CriteriaExamples";
 import { NewDepartmentForm, type NewDepartmentFormProps } from "@/components/NewDepartmentForm";
+import { APPLICANTS_PATH, PREP_PATH } from "@/lib/consoleMenu";
 import { SERVICE_NAME } from "@/lib/constants";
 import type { CriteriaExample } from "@/lib/criteria/examples";
 import type { Criterion } from "@/types/analysis";
 
 type UploadScreenProps = {
-  /** 학과 선택 목록: 코드에 적힌 학과 → 저장한 학과 → "새 학과 기준 만들기" */
+  /** 화면이 준비됐는지 (서버 HTML·hydration 에서는 false: "상단" 영역 아래 본문을 조작할 수 없다) */
+  ready: boolean;
+  /** "상단" 영역 아래 본문 (준비됐는지를 이 요소가 문서에 붙었는지로 정한다) */
+  bodyRef: RefObject<HTMLDivElement | null>;
+  /** 학과 선택 목록: 전형 준비 → 코드에 적힌 학과 → 저장한 학과 → "새 학과 기준 만들기" */
   departments: { id: string; department: string }[];
   /** 선택한 항목의 값 (학과 기준 id. "새 학과 기준 만들기"는 그 항목의 값) */
   criteriaId: string;
@@ -39,10 +45,17 @@ type UploadScreenProps = {
   onSelectFile: (file: File | null) => void;
   onStart: () => void;
   onViewSample: () => void;
+  /** 상단의 새 링크로 같은 탭에서 다른 화면으로 가는 이동이 시작될 때 (기다리는 분석을 취소한다) */
+  onLeave: () => void;
 };
 
-/** 업로드 화면 (/upload) */
+/**
+ * 업로드 화면 (/upload). "상단" 영역 아래 본문(평가 기준, 학생부 PDF 업로드, 기준 문장 예시)은 준비되기 전(서버 HTML·hydration)에는
+ * inert 라 초점을 받지 않고 눌리지 않는다(모양은 같다). "상단" 영역의 링크는 inert 밖이라 준비 전에도 그 주소의 문서로 간다.
+ */
 export function UploadScreen({
+  ready,
+  bodyRef,
   departments,
   criteriaId,
   isNewDepartment,
@@ -64,6 +77,7 @@ export function UploadScreen({
   onSelectFile,
   onStart,
   onViewSample,
+  onLeave,
 }: UploadScreenProps) {
   /** 숨겨 둔 파일 입력. "파일 업로드" 버튼이 이 입력의 파일 선택 창을 연다. */
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -71,11 +85,28 @@ export function UploadScreen({
   return (
     <main className="flex flex-col gap-3 p-3">
       <Area name="상단">
-        <h1 className="text-lg font-bold">{SERVICE_NAME}</h1>
+        {/*
+          새 화면으로 돌아가는 보통 링크(next/link). JS 가 준비되기 전에 눌러도 그 주소의 문서로 간다.
+          onNavigate 는 같은 탭의 클라이언트 이동에서만 불린다(새 탭으로 여는 누름에서는 불리지 않는다).
+        */}
+        <div className="flex items-center gap-6">
+          <h1 className="text-lg font-bold">{SERVICE_NAME}</h1>
+          <nav aria-label="다른 화면" className="flex items-center gap-4">
+            <Link href={PREP_PATH} onNavigate={onLeave} className="underline">
+              전형 준비
+            </Link>
+            <Link href={APPLICANTS_PATH} onNavigate={onLeave} className="underline">
+              지원자 관리
+            </Link>
+          </nav>
+        </div>
       </Area>
 
-      {/* 왼쪽 단(평가 기준, 학생부 PDF 업로드) 오른쪽에 예시를 나란히 둔다. 왼쪽 단은 720px, 예시 영역은 남은 폭을 쓴다. */}
-      <div className="flex items-start gap-3">
+      {/*
+        왼쪽 단(평가 기준, 학생부 PDF 업로드) 오른쪽에 예시를 나란히 둔다. 왼쪽 단은 720px, 예시 영역은 남은 폭을 쓴다.
+        준비 전에는 inert 다(hooks/useUpload.ts 의 ready).
+      */}
+      <div ref={bodyRef} className="flex items-start gap-3" inert={!ready}>
         <div className="flex w-[720px] shrink-0 flex-col gap-3">
           <Area name="평가 기준">
             <div className="flex flex-col gap-3">

@@ -2,12 +2,14 @@ import type { DepartmentCriteria } from "@/types/analysis";
 import { DEPARTMENT_CRITERIA_STORAGE_KEY } from "./constants.ts";
 import { DEPARTMENT_CRITERIA_LIST } from "./criteria/index.ts";
 import { parseDepartmentCriteria } from "./criteria/normalize.ts";
+import { PREP_CRITERIA_ID } from "./prep/analysisCriteria.ts";
 
 // 확정한 학과 기준(저장한 학과)을 브라우저 localStorage 에 DepartmentCriteria[] JSON 으로 저장하고 불러온다. 브라우저에서만 호출한다.
 //
 // 읽기와 쓰기는 모두 try/catch 로 감싼다. 저장소 읽기 결과는 둘로 나눈다.
 // - 읽음: 값이 없거나 깨졌으면(JSON·배열이 아님) "저장한 학과 없음", 정상이면 그 목록. 배열의 원소는 parseDepartmentCriteria 로
 //   하나씩 확인해 통과한 것만 쓰고, 코드에 적힌 학과와 id 가 같거나 앞의 원소와 id 가 겹치는 것은 버린다.
+//   id 가 전형 준비 항목의 값("prep", lib/prep/analysisCriteria.ts)인 것도 버린다(업로드 화면의 학과 선택에서 값이 겹치지 않게).
 // - 읽지 못함: getItem 이나 localStorage 접근 자체가 예외를 던짐. 저장소에 무엇이 있는지 모르므로 이때는 저장소에 쓰지 않는다
 //   (덮어쓰면 이미 저장된 학과가 사라진다). 확정·삭제는 이 페이지의 메모리에만 반영하고 "저장하지 못함"을 돌려준다.
 //
@@ -182,7 +184,7 @@ function parseSavedList(raw: string): readonly DepartmentCriteria[] {
   const seen = new Set<string>();
   for (const item of value) {
     const parsed = parseDepartmentCriteria(item);
-    if (parsed === null || isBuiltInId(parsed.id) || seen.has(parsed.id)) continue;
+    if (parsed === null || isBuiltInId(parsed.id) || parsed.id === PREP_CRITERIA_ID || seen.has(parsed.id)) continue;
     seen.add(parsed.id);
     list.push(parsed);
   }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Ref } from "react";
 import { Area } from "@/components/Area";
+import { APPLICANTS_PATH } from "@/lib/consoleMenu";
 import { SERVICE_NAME } from "@/lib/constants";
 import type {
   CriterionTab,
@@ -51,9 +52,14 @@ export function ResultScreen({
             <h1 className="text-lg font-bold">{SERVICE_NAME}</h1>
             <p className="min-w-0 [overflow-wrap:anywhere]">학과: {department}</p>
           </div>
-          <Link href="/upload" className="shrink-0 underline">
-            다른 학생부 업로드
-          </Link>
+          <div className="flex shrink-0 items-center gap-6">
+            <Link href="/upload" className="underline">
+              다른 학생부 업로드
+            </Link>
+            <Link href={APPLICANTS_PATH} className="underline">
+              지원자 관리
+            </Link>
+          </div>
         </div>
       </Area>
 

@@ -1,3 +1,5 @@
+import type { AnalysisResult } from "@/types/analysis";
+
 // 지원자 관리 화면의 지원자 형식과 화면 숫자·문구를 만드는 순수 함수. 화면에서만 쓴다.
 // 숫자(접수 건수, 걸러 보기 수, 경쟁률, 검토 완료 비율·건수, 검토 대기 건수)는 모두 지금 데이터에서 계산한다(상수로 적지 않는다).
 
@@ -48,6 +50,11 @@ export type Applicant = {
   assignee: string;
   /** 처음 상태 (저장한 결정이 없을 때) */
   initialStatus: ApplicantStatus;
+  /**
+   * 원문보기로 여는 분석 결과. 업로드 화면에서 분석한 학생부(올린 지원자, lib/applicants/uploaded.ts)만 그 결과가 있고,
+   * 예시 지원자는 없다(원문보기는 미리 만든 샘플 결과를 연다).
+   */
+  original?: AnalysisResult;
 };
 
 /** 표와 상세 제목의 코드: 디자인대로 A 와 - 사이에 공백을 넣는다 ("A-0133" → "A -0133"). */

@@ -454,14 +454,17 @@ export function ApplicantsScreen({
                       <p className="mt-[8px] text-[13px] leading-[18px] font-medium text-[#BA1A1A]">{detail.documentNotice}</p>
                     )}
                     <h3 className={`mt-[19px] ${DETAIL_TITLE_CLASS}`}>개인정보 가림 확인</h3>
-                    <ul className="mt-[8px] ml-[1px] flex flex-wrap gap-x-[37px] gap-y-[8px] text-center">
-                      {detail.maskCounts.map((item) => (
-                        <li key={item.label} className="flex flex-col items-center">
-                          <strong className="text-[26px] leading-[30px] font-extrabold">{item.count}</strong>
-                          <span className="mt-[3px] text-[11px] leading-[14px] font-medium text-[#767676]">{item.label}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    {/* 종류별 가림 수. 가린 것이 없는 올린 지원자(masks 가 빈 결과)는 칸이 없다(빈 목록을 그리지 않는다). */}
+                    {detail.maskCounts.length > 0 && (
+                      <ul className="mt-[8px] ml-[1px] flex flex-wrap gap-x-[37px] gap-y-[8px] text-center">
+                        {detail.maskCounts.map((item) => (
+                          <li key={item.label} className="flex flex-col items-center">
+                            <strong className="text-[26px] leading-[30px] font-extrabold">{item.count}</strong>
+                            <span className="mt-[3px] text-[11px] leading-[14px] font-medium text-[#767676]">{item.label}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     <div className="mt-[25px] flex flex-wrap items-center gap-x-[17px] gap-y-[4px]">
                       <h3 className={DETAIL_TITLE_CLASS}>가릴지 확인이 필요한 표현</h3>
                       <span className="rounded-[10px] bg-[#DEE0FF] px-[13px] text-[11px] leading-[19px] font-semibold text-[#111111]">

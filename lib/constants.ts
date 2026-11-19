@@ -19,3 +19,9 @@ export const PREP_HISTORY_STORAGE_KEY = "gyeol.prepHistory";
 
 /** 지원자 관리 · 가릴지 확인이 필요한 표현의 결정({ version: 1, reviews })을 저장하는 localStorage 키 */
 export const APPLICANT_REVIEWS_STORAGE_KEY = "gyeol.applicantReviews";
+
+/**
+ * 지원자 관리 · 업로드 화면에서 분석한 학생부(올린 지원자, { version: 1, items: [{ code, at, result }] }, 최근 10건)를 저장하는 localStorage 키.
+ * result 는 서버가 돌려준 분석 결과(가려진 원문)이고, 파일 이름은 저장하지 않는다.
+ */
+export const UPLOADED_APPLICANTS_STORAGE_KEY = "gyeol.uploadedApplicants";
