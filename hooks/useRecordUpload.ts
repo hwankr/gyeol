@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePrepTabReady } from "@/hooks/usePrepTabReady";
 import { ADMISSION } from "@/lib/admission";
-import { requestAnalysis } from "@/lib/analyzeClient";
+import { requestAnalysis, type AnalysisProgress } from "@/lib/analyzeClient";
 import { RequestCanceledError } from "@/lib/apiClient";
 import { MAX_UPLOADED_APPLICANTS, NO_UPLOADED_APPLICANTS, type UploadedApplicant } from "@/lib/applicants/uploaded";
 import {
@@ -13,7 +13,7 @@ import {
 import { APPLICANTS_PATH, applicantOriginalPath } from "@/lib/consoleMenu";
 import { summaryPath } from "@/lib/evaluate/evaluation";
 import { assessmentFor } from "@/lib/evaluate/uploadedEvaluation";
-import { checkPdfFile, formatFileSize, takeInputFile } from "@/lib/pdfPick";
+import { checkRecordPdfFile, formatFileSize, takeInputFile } from "@/lib/pdfPick";
 import { tagsLine, type PrepCriteria } from "@/lib/prep/criteria";
 import { DEFAULT_PREP_CRITERIA } from "@/lib/prep/defaultCriteria";
 import { revealVertically } from "@/lib/prep/reveal";
@@ -21,6 +21,21 @@ import { loadPrepCriteria, subscribePrepStorage } from "@/lib/prep/storage";
 
 /** 분석을 기다리는 동안의 상태 글 (근거 추출과 AI 제안을 같이 부른다. 가상 학생부로 20초쯤 걸렸다) */
 const ANALYZING_STATUS = "학생부를 분석하는 중… 30초쯤 걸립니다.";
+
+/** 브라우저에서 PDF 를 읽는 동안의 상태 글 (PDF 파일은 서버로 보내지 않는다) */
+const READING_STATUS = "학생부 PDF 를 읽는 중…";
+
+/**
+ * 기다리는 동안의 상태 글. 단계는 lib/analyzeClient.ts 가 알려 준다: PDF 읽기 → (AI 가 읽어야 하는 쪽이 있으면) 쪽별 읽기 → 분석.
+ * 쪽별 읽기는 글자가 없는 쪽(스캔본)이나 파서가 양식을 알아보지 못한 학생부에서만 거치고, 쪽마다 AI 를 한 번 부른다.
+ */
+function statusText(progress: AnalysisProgress | null): string {
+  if (progress === null || progress.stage === "reading") return READING_STATUS;
+  if (progress.stage === "pages") {
+    return `AI 가 학생부를 쪽별로 읽는 중… ${progress.done}/${progress.total}쪽 (몇 분 걸릴 수 있습니다)`;
+  }
+  return ANALYZING_STATUS;
+}
 
 /** 예상하지 못한 실패 (lib/analyzeClient.ts 가 문구를 담아 던지지 않은 경우) */
 const ANALYZE_ERROR = "분석에 실패했습니다. 다시 시도해 주세요.";
@@ -70,7 +85,8 @@ function doneText(done: DoneNotice): string {
 
 /**
  * 지원자 관리 · 학생부 올리기 화면 상태: 고른 학생부 PDF(이름·크기)와 삭제, 걸린 파일의 오류 문구, 파일을 끌고 상자 위에 있는지,
- * 분석 시작(POST /api/analyze, 전형 준비의 평가 기준을 함께 보낸다), 분석 결과를 올린 지원자로 남기기, 방금 올린 학생부의 안내,
+ * 분석 시작(브라우저에서 PDF 를 읽어 항목을 POST /api/analyze 로 보낸다. 전형 준비의 평가 기준을 함께 보낸다. PDF 파일은 서버로
+ * 보내지 않는다. lib/analyzeClient.ts), 기다리는 동안의 단계별 상태 글, 분석 결과를 올린 지원자로 남기기, 방금 올린 학생부의 안내,
  * 분석에 쓰는 평가 기준(전형 준비에서 저장한 값) 보여 주기.
  * 분석이 끝나도 다른 화면으로 가지 않는다(이어서 다른 학생부를 올릴 수 있다). 올린 학생부는 지원자 관리와 평가하기에 지원자로 나온다.
  */
@@ -85,6 +101,8 @@ export function useRecordUpload() {
   /** 파일을 끌고 점선 상자 위에 있는지 (상자를 파랗게 강조한다) */
   const [isDragOver, setIsDragOver] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  /** 기다리는 동안 분석이 어디까지 왔는지 (상태 글에 쓴다). 기다리지 않을 때는 null */
+  const [progress, setProgress] = useState<AnalysisProgress | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [done, setDone] = useState<DoneNotice | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -120,6 +138,7 @@ export function useRecordUpload() {
       setFileError(null);
       setIsDragOver(false);
       setIsAnalyzing(false);
+      setProgress(null);
       setRequestError(null);
       setDone(null);
     };
@@ -149,7 +168,7 @@ export function useRecordUpload() {
 
   /** 고른 파일을 확인·표시한다. 전에 보이던 실패 문구와 안내는 지운다(새 파일에는 맞지 않는다). */
   function showFile(picked: File) {
-    const checked = checkPdfFile(picked);
+    const checked = checkRecordPdfFile(picked);
     setFile(checked.file);
     setFileError(checked.fileError);
     setRequestError(null);
@@ -182,6 +201,7 @@ export function useRecordUpload() {
     const isCurrent = () => !controller.signal.aborted && generationRef.current === generation;
 
     setIsAnalyzing(true);
+    setProgress(null);
     setRequestError(null);
     setDone(null);
 
@@ -189,7 +209,10 @@ export function useRecordUpload() {
     // 이 화면이 아직 다시 그려지지 않은 경우). 저장하지 않은 모집요강 초안은 쓰지 않는다.
     const prep = loadPrepCriteria();
     try {
-      const result = await requestAnalysis({ prepCriteria: prep, file }, controller.signal);
+      // 단계가 바뀌거나 쪽을 하나 읽을 때마다 상태 글을 바꾼다. 더 이상 유효하지 않은 요청의 알림은 버린다.
+      const result = await requestAnalysis({ prepCriteria: prep, file }, controller.signal, (next) => {
+        if (isCurrent()) setProgress(next);
+      });
       if (!isCurrent()) return;
       const evicted = loadUploadedApplicants().length >= MAX_UPLOADED_APPLICANTS;
       // 파일 이름은 남기지 않는다(학생 이름이 들어 있는 경우가 많다). 저장소에 쓰지 못하면 메모리에만 남고 안내가 나온다(unsaved).
@@ -214,6 +237,7 @@ export function useRecordUpload() {
     }
     requestRef.current = null;
     setIsAnalyzing(false);
+    setProgress(null);
   }
 
   return {
@@ -233,7 +257,7 @@ export function useRecordUpload() {
     // 기다리는 동안에는 끌어다 놓은 파일을 받지 않으므로 상자를 강조하지 않는다.
     isDragOver: isDragOver && !isAnalyzing,
     isAnalyzing,
-    statusText: isAnalyzing ? ANALYZING_STATUS : "",
+    statusText: isAnalyzing ? statusText(progress) : "",
     requestError,
     storageNotice: unsaved ? STORAGE_NOTICE : "",
     /** 방금 올린 학생부의 안내. 평가 대기 목록에 나오면 총평으로 가는 링크가 있다. */

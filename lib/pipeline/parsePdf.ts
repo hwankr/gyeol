@@ -3,12 +3,18 @@
  *
  * 대상: 글자 정보가 들어 있는 텍스트 PDF (가상 합성 학생부 양식).
  * 스캔본이나 정부24 출력본처럼 쪽 전체가 이미지인 PDF는 글자를 읽을 수 없어 오류를 냅니다.
+ * (학생부 올리기 화면은 그런 쪽과, 이 파서가 양식을 알아보지 못한 학생부를 AI 가 읽게 합니다. lib/recordPdf.ts)
  *
  * 방식: 글자마다 좌표를 읽어 (1) 같은 높이의 글자를 한 줄로 묶고
  * (2) 표 머리글의 가로 위치로 칸을 나누고 (3) 줄 간격으로 행과 문단을 나눕니다.
  * 항목은 번호가 아니라 제목 글자("창의적 체험활동상황" 등)로 찾습니다.
+ *
+ * 쓰는 곳: 학생부 올리기 화면이 브라우저에서 부르고(lib/recordPdf.ts → parsePdfDocument. PDF 파일은 서버로 보내지 않는다),
+ * 스크립트(scripts/check-parse.ts 등)가 Node 에서 부릅니다(parsePdf, parsePdfWithReport).
+ * Node 로 직접(타입 제거 실행) 돌릴 수 있게 값 import 는 외부 패키지뿐입니다.
  */
 import { getDocumentProxy } from "unpdf";
+import type { PDFDocumentProxy } from "unpdf/pdfjs";
 import type { Section } from "@/types/analysis";
 
 /* ------------------------------------------------------------------ */
@@ -101,12 +107,15 @@ const tidy = (s: string) => s.replace(/[ \t]+/g, " ").trim();
 /* 1단계: 쪽마다 글자를 줄과 칸 조각으로 묶기                          */
 /* ------------------------------------------------------------------ */
 
-async function readLines(data: Uint8Array): Promise<{ lines: Line[]; ignored: IgnoredLine[]; pages: number }> {
-  const pdf = await getDocumentProxy(data);
+async function readLines(
+  pdf: PDFDocumentProxy,
+  skipPages: ReadonlySet<number> | undefined,
+): Promise<{ lines: Line[]; ignored: IgnoredLine[]; pages: number }> {
   const lines: Line[] = [];
   const ignored: IgnoredLine[] = [];
 
   for (let pageNo = 1; pageNo <= pdf.numPages; pageNo++) {
+    if (skipPages?.has(pageNo)) continue;
     const page = await pdf.getPage(pageNo);
     const height = page.getViewport({ scale: 1 }).height;
     const content = await page.getTextContent();
@@ -188,12 +197,31 @@ function detectKind(header: string[]): TableKind | null {
 export async function parsePdfWithReport(input: ArrayBuffer | Uint8Array): Promise<ParseReport> {
   // pdf.js가 버퍼를 가져가므로 복사본을 넘긴다
   const data = input instanceof Uint8Array ? new Uint8Array(input) : new Uint8Array(input.slice(0));
-  const { lines, ignored, pages } = await readLines(data);
+  return parsePdfDocument(await getDocumentProxy(data));
+}
+
+export type ParseDocumentOptions = {
+  /** 읽지 않을 쪽(1부터). 글자가 없어 그림으로 읽는 쪽을 건너뛸 때 쓴다 */
+  skipPages?: ReadonlySet<number>;
+  /** 읽은 줄이 하나도 없을 때 오류를 내지 않고 항목이 없는 결과를 돌려준다 */
+  allowEmpty?: boolean;
+};
+
+/**
+ * 열어 둔 PDF 문서(pdf.js 문서)에서 학생부 항목을 읽는다. 문서는 닫지 않는다(연 쪽이 닫는다).
+ * 읽은 줄이 하나도 없으면 오류를 낸다(allowEmpty 면 항목이 없는 결과).
+ */
+export async function parsePdfDocument(pdf: PDFDocumentProxy, options: ParseDocumentOptions = {}): Promise<ParseReport> {
+  const { lines, ignored, pages } = await readLines(pdf, options.skipPages);
 
   const stats = { total: 0, sections: 0, labels: 0, structure: 0, ignored: 0 };
   for (const line of ignored) stats.ignored += count(line.text);
 
   if (!lines.length) {
+    if (options.allowEmpty) {
+      stats.total = stats.ignored;
+      return { sections: [], ignored, warnings: [], stats };
+    }
     throw new Error(
       `PDF ${pages}쪽에서 글자를 찾지 못했습니다. 스캔본이나 이미지로 된 PDF는 지원하지 않습니다. 글자가 들어 있는 텍스트 PDF를 올려주세요.`,
     );

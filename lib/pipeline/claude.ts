@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-// Claude API 호출 공용 모듈. 근거 추출(extractEvidence.ts), AI 제안(assessRecord.ts), 모집요강 초안 생성(generateGuidelineDraft.ts)이 같이 쓴다.
-// 클라이언트 생성, 60초 제한, stop_reason 확인, 글 블록을 JSON 으로 읽기, 오류 분류와 로그를 한곳에서 한다.
+// Claude API 호출 공용 모듈. 근거 추출(extractEvidence.ts), AI 제안(assessRecord.ts), 모집요강 초안 생성(generateGuidelineDraft.ts),
+// 학생부 이미지 쪽 읽기(readRecordPage.ts)가 같이 쓴다.
+// 클라이언트 생성, 제한 시간(기본 60초), stop_reason 확인, 글 블록을 JSON 으로 읽기, 오류 분류와 로그를 한곳에서 한다.
 //
 // 이 파일은 서버에서만 가져온다(API 라우트와 그 라우트가 쓰는 lib/pipeline 모듈, scripts/make-sample.ts).
 // 화면 코드에서 가져오면 SDK 가 브라우저 번들에 들어가므로 가져오지 않는다.
@@ -11,8 +12,8 @@ import Anthropic from "@anthropic-ai/sdk";
 /** 사용할 모델. 사용자가 이 모델 하나로 정했으므로 서버 측 fallbacks 는 쓰지 않는다. */
 const MODEL = "claude-opus-5-5";
 
-/** AI 호출 제한 시간(밀리초). 재시도하지 않으므로 전체 대기 시간도 이 값을 넘지 않는다. */
-const TIMEOUT_MS = 60_000;
+/** AI 호출 제한 시간의 기본값(밀리초). 재시도하지 않으므로 전체 대기 시간도 이 값을 넘지 않는다. 호출마다 timeoutMs 로 바꿀 수 있다. */
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 /** 생각 깊이. 이 모델은 thinking 을 끌 수 없고(항상 adaptive) effort 로만 조절한다. 기본값(medium)에 기대지 않고 호출마다 명시한다. */
 export type Effort = NonNullable<Anthropic.OutputConfig["effort"]>;
@@ -20,13 +21,17 @@ export type Effort = NonNullable<Anthropic.OutputConfig["effort"]>;
 /** 기능과 상관없이 같은 화면 문구. SDK 의 원래 오류 메시지는 화면에 넣지 않고, 원인은 서버 로그에만 남긴다. */
 const COMMON_MESSAGES = {
   noApiKey: "서버에 AI API 키(AI_API_KEY)가 설정되지 않았습니다.",
-  timeout: "AI 응답이 60초 안에 오지 않았습니다. 다시 시도해 주세요.",
   invalidApiKey: "서버의 AI API 키가 올바르지 않거나 사용할 수 없습니다. 관리자에게 알려 주세요.",
   rateLimited: "AI 호출 한도를 넘었습니다. 잠시 후 다시 시도해 주세요.",
   callFailed: "AI 호출에 실패했습니다. 잠시 후 다시 시도해 주세요.",
   truncated: "AI 응답이 너무 길어 중간에 끊겼습니다. 다시 시도해 주세요.",
   invalidResponse: "AI 응답을 해석하지 못했습니다. 다시 시도해 주세요.",
 } as const;
+
+/** 제한 시간 안에 응답이 오지 않았을 때의 화면 문구 (기본 제한 시간이면 "AI 응답이 60초 안에 오지 않았습니다. …") */
+function timeoutMessage(timeoutMs: number): string {
+  return `AI 응답이 ${Math.round(timeoutMs / 1000)}초 안에 오지 않았습니다. 다시 시도해 주세요.`;
+}
 
 /**
  * AI 호출 실패. message 는 화면에 그대로 보여 줄 한국어 문구다.
@@ -63,6 +68,10 @@ export type ClaudeJsonRequest = {
   system: string;
   /** 자료 (toTaggedJson 으로 감싼 JSON) */
   userMessage: string;
+  /** 자료로 함께 보내는 그림(JPEG, base64). user 메시지에서 글보다 앞에 놓는다. 없으면 글만 보낸다. */
+  images?: readonly { mediaType: "image/jpeg"; base64: string }[];
+  /** 제한 시간(밀리초). 없으면 60초. 시간 초과 문구의 초 수도 이 값을 따른다. */
+  timeoutMs?: number;
   /** structured outputs 로 강제하는 응답 모양 (JSON schema) */
   schema: Record<string, unknown>;
   /** AI 가 거절했을 때 화면에 보여 줄 문구. 기능마다 다르다. */
@@ -82,24 +91,39 @@ export type ClaudeJsonResponse = {
 
 /**
  * Claude API 를 한 번 부르고 응답의 글 블록을 JSON 으로 읽어 돌려준다.
- * - 스트리밍 없이, 재시도 없이(maxRetries 0), 응답 본문을 읽는 시간까지 합쳐 60초 제한.
+ * - 스트리밍 없이, 재시도 없이(maxRetries 0), 응답 본문을 읽는 시간까지 합쳐 제한 시간(timeoutMs, 기본 60초) 안에 끝낸다.
+ * - images 가 있으면 user 메시지를 그림 블록들 + 글 블록으로 보낸다(없으면 지금까지처럼 글 하나).
  * - thinking 은 지정하지 않고(이 모델은 항상 adaptive) effort 를 명시한다. 응답 모양은 structured outputs 로 강제한다.
  * - 호출 실패·시간 초과·응답 모양 이상·거절·잘린 응답·JSON 해석 실패는 원인을 "[logTag] …" 로그 한 줄로 남기고
  *   화면 문구를 담은 AiCallError 를 던진다. 로그에는 상태·종류·시간·토큰 수만 남기고 요청·응답 본문은 남기지 않는다.
  */
 export async function callClaudeJson(request: ClaudeJsonRequest): Promise<ClaudeJsonResponse> {
   const { logTag } = request;
+  const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   // logLevel "off": SDK 자체 로그를 끈다. ANTHROPIC_LOG=debug 가 설정돼 있어도 SDK 가 요청·응답 본문
   // (학생부 원문, 학과가 적은 문장 등)을 로그로 내보내지 않게 한다. 앱의 [logTag] 로그(개수·시간·상태)는 그대로 남는다.
   const client = new Anthropic({
     apiKey: request.apiKey,
-    timeout: TIMEOUT_MS,
+    timeout: timeoutMs,
     maxRetries: 0,
     logLevel: "off",
   });
-  // SDK 의 timeout 은 응답 헤더가 올 때까지만 잰다. 본문을 읽는 시간까지 합쳐 60초를 넘지 않도록 신호도 함께 건다.
-  const signal = AbortSignal.timeout(TIMEOUT_MS);
+  // SDK 의 timeout 은 응답 헤더가 올 때까지만 잰다. 본문을 읽는 시간까지 합쳐 제한 시간을 넘지 않도록 신호도 함께 건다.
+  const signal = AbortSignal.timeout(timeoutMs);
   const startedAt = performance.now();
+  // 그림이 있으면 그림 블록을 글보다 앞에 놓는다(글이 그림을 "위 이미지"라고 가리킨다). 없으면 글 하나(문자열)로 보낸다.
+  const userContent: Anthropic.MessageParam["content"] =
+    request.images === undefined || request.images.length === 0
+      ? request.userMessage
+      : [
+          ...request.images.map(
+            (image): Anthropic.ImageBlockParam => ({
+              type: "image",
+              source: { type: "base64", media_type: image.mediaType, data: image.base64 },
+            }),
+          ),
+          { type: "text", text: request.userMessage },
+        ];
 
   let response: Anthropic.Message;
   try {
@@ -113,12 +137,12 @@ export async function callClaudeJson(request: ClaudeJsonRequest): Promise<Claude
           format: { type: "json_schema", schema: request.schema },
         },
         system: request.system,
-        messages: [{ role: "user", content: request.userMessage }],
+        messages: [{ role: "user", content: userContent }],
       },
-      { signal, timeout: TIMEOUT_MS, maxRetries: 0 },
+      { signal, timeout: timeoutMs, maxRetries: 0 },
     );
   } catch (error) {
-    throw toAiCallError(logTag, error, signal, secondsSince(startedAt));
+    throw toAiCallError(logTag, error, signal, secondsSince(startedAt), timeoutMs);
   }
   const seconds = secondsSince(startedAt);
 
@@ -209,9 +233,9 @@ type ErrorKind =
   | "api"
   | "unknown";
 
-/** 오류 종류별 서버 로그 문장과 화면 문구 */
+/** 오류 종류별 서버 로그 문장과 화면 문구. 시간 초과의 화면 문구는 제한 시간에 따라 달라 따로 만든다(timeoutMessage). */
 const ERROR_KINDS: Record<ErrorKind, { log: string; message: string }> = {
-  timeout: { log: "AI 호출 시간 초과", message: COMMON_MESSAGES.timeout },
+  timeout: { log: "AI 호출 시간 초과", message: "" },
   authentication: { log: "AI API 키 인증 실패", message: COMMON_MESSAGES.invalidApiKey },
   rate_limit: { log: "AI 호출 한도 초과", message: COMMON_MESSAGES.rateLimited },
   connection: { log: "AI 서버에 연결하지 못함", message: COMMON_MESSAGES.callFailed },
@@ -224,16 +248,22 @@ const ERROR_KINDS: Record<ErrorKind, { log: string; message: string }> = {
  * AI 호출 중 생긴 오류를 화면용 문구의 AiCallError 로 바꾼다.
  * SDK 의 오류 클래스로 나누고(메시지 문자열은 보지 않는다), 원인은 서버 로그에만 남긴다.
  */
-function toAiCallError(logTag: string, error: unknown, signal: AbortSignal, seconds: number): AiCallError {
+function toAiCallError(
+  logTag: string,
+  error: unknown,
+  signal: AbortSignal,
+  seconds: number,
+  timeoutMs: number,
+): AiCallError {
   const kind = classifyError(error, signal);
   console.error(
     `[${logTag}] ${ERROR_KINDS[kind].log} (종류 ${kind}${describeError(error)}, ${formatSeconds(seconds)})`,
   );
-  return new AiCallError(ERROR_KINDS[kind].message);
+  return new AiCallError(kind === "timeout" ? timeoutMessage(timeoutMs) : ERROR_KINDS[kind].message);
 }
 
 function classifyError(error: unknown, signal: AbortSignal): ErrorKind {
-  // 60초 신호가 울렸거나 SDK 가 응답 헤더를 기다리다 시간이 다 된 경우
+  // 제한 시간 신호가 울렸거나 SDK 가 응답 헤더를 기다리다 시간이 다 된 경우
   if (signal.aborted || error instanceof Anthropic.APIConnectionTimeoutError) return "timeout";
   if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
     return "authentication";
