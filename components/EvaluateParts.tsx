@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Ref } from "react";
 import {
   BUTTON_OUTLINE_CLASS,
+  BUTTON_PRESSED_CLASS,
   BUTTON_SECONDARY_CLASS,
   ConsoleCrumbs,
   ConsoleTitle,
@@ -16,6 +17,7 @@ import {
 import { EVALUATE_PATH } from "@/lib/consoleMenu";
 import type { EvaluationStatus } from "@/lib/evaluate/evaluation";
 import type { DocumentArea } from "@/lib/evaluate/sampleEvaluations";
+import { SWAP_TRANSITION } from "@/lib/motion";
 
 // 평가하기 세 화면(평가 대기 목록, 총평, 세부 항목 평가)이 같이 쓰는 조각. 치수·색·글자는 디자인 값 그대로다.
 
@@ -89,6 +91,7 @@ const STEP_LINK_CLASS = `${BUTTON_SECONDARY_CLASS} h-[32px] scroll-m-[8px] px-[1
  * 지원자 줄: 돌아가기, 지원자 코드, AI 한 줄 요약, 상태, 안내 글, 평가 순서의 앞뒤 지원자, 임시저장.
  * 앞뒤 지원자는 보통 링크다. 첫·마지막 지원자에서는 갈 곳이 없는 쪽을 href 없는 <a> 로 그린다(초점을 받지 않고 흐리게 보인다).
  * 안내 글은 바뀔 때 화면 낭독기가 읽도록 role="status" 다.
+ * 이전·다음은 같은 화면에서 지원자만 바꾸는 이동이라 화면 전환 없이 바로 바뀐다(잇달아 눌러도 누름이 빠지지 않는다. lib/motion.ts).
  */
 export function ApplicantBar({
   backHref,
@@ -144,22 +147,22 @@ export function ApplicantBar({
 function StepLink({ href, label, linkRef }: { href: string | null; label: string; linkRef?: Ref<HTMLAnchorElement> }) {
   if (href === null) {
     return (
-      <a aria-disabled="true" className={`${STEP_LINK_CLASS} cursor-default opacity-[0.45]`}>
+      <a aria-disabled="true" className={`${STEP_LINK_CLASS} opacity-[0.45] aria-disabled:cursor-default`}>
         {label}
       </a>
     );
   }
   return (
-    <Link ref={linkRef} href={href} className={STEP_LINK_CLASS}>
+    <Link ref={linkRef} href={href} transitionTypes={SWAP_TRANSITION} className={STEP_LINK_CLASS}>
       {label}
     </Link>
   );
 }
 
-/** 원문 조각의 강조: 지금 고른 평가 요소의 근거는 색 면과 실선 밑줄, 다른 요소의 근거는 점선 밑줄 */
+/** 원문 조각의 강조: 지금 고른 평가 요소의 근거는 색 면과 실선 밑줄, 다른 요소의 근거는 점선 밑줄. 평가 요소를 바꾸면 색 면이 150ms 에 걸쳐 옮겨 간다. */
 const SEGMENT_CLASS = {
-  selected: "bg-[#DCE0FF] underline decoration-[#001AD0] decoration-solid underline-offset-[4px]",
-  other: "underline decoration-[#505050] decoration-dotted underline-offset-[4px]",
+  selected: "motion-colors bg-[#DCE0FF] underline decoration-[#001AD0] decoration-solid underline-offset-[4px]",
+  other: "motion-colors underline decoration-[#505050] decoration-dotted underline-offset-[4px]",
   none: "",
 } as const;
 
@@ -210,7 +213,7 @@ export function DocumentPanel({
           type="button"
           aria-pressed={maskReported}
           onClick={onToggleMaskReport}
-          className="inline-flex scroll-m-[8px] items-center gap-[4px] rounded-[4px] border-0 bg-transparent p-0 text-[12px] font-medium text-[#BA1A1A]"
+          className="inline-flex cursor-pointer scroll-m-[8px] items-center gap-[4px] rounded-[4px] border-0 bg-transparent p-0 text-[12px] font-medium text-[#BA1A1A] hover-on:underline"
         >
           <svg
             aria-hidden="true"
@@ -252,8 +255,12 @@ export function DocumentPanel({
           tabIndex={0}
           className="mt-[12px] max-h-[max(360px,60vh)] scroll-m-[8px] overflow-y-auto"
         >
+          {/* 서류 구분을 바꾸면 그 구분의 문장들이 옅게 나타난다(문장마다 새로 그려지는 것에 건다. 자리는 바로 잡힌다). */}
           {passages.map((passage, index) => (
-            <div key={passage.id} className={`border-t border-t-[#E4E4E4] pt-[12px] ${index === 0 ? "" : "mt-[12px]"}`}>
+            <div
+              key={passage.id}
+              className={`animate-fade-in border-t border-t-[#E4E4E4] pt-[12px] ${index === 0 ? "" : "mt-[12px]"}`}
+            >
               <p className="text-[12px] leading-[16px] font-semibold text-[#505050]">{passage.source}</p>
               <p className="mt-[6px] text-[14px] leading-[24px] [overflow-wrap:anywhere] break-keep whitespace-pre-line">
                 {passage.segments.map((segment) => (
@@ -307,9 +314,7 @@ export function MarkButtons({ marks, locked }: MarkButtonsProps) {
           aria-pressed={mark.on}
           disabled={locked}
           onClick={mark.onToggle}
-          className={`${BUTTON_SECONDARY_CLASS} h-[34px] scroll-m-[8px] px-[10px] leading-[normal] ${
-            mark.on ? "border-[#001AD0] bg-[#EEF0FF] font-semibold text-[#001AD0]" : ""
-          }`}
+          className={`${mark.on ? BUTTON_PRESSED_CLASS : BUTTON_SECONDARY_CLASS} h-[34px] scroll-m-[8px] px-[10px] leading-[normal]`}
         >
           {mark.label}
         </button>

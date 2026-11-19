@@ -86,6 +86,8 @@ const DETAIL_GUIDE = "1~5점의 척도 평가로 진행됩니다.";
  * 없어, 고른 요소는 이름을 파란 글자(#001AD0)로 적고 패널 머리 줄의 꼬리표에도 그 이름을 적는다(색만으로 구분하지 않는다).
  * "크게 보기" 를 누르면 왼쪽 단을 그리지 않고 패널이 상자 폭 전체를 쓰며 질문 글자가 16px 이 된다(버튼 글자는 "작게 보기").
  * 디자인에 없어 정한 것: 모집요강 초안 안내(탭 줄 아래 16px, 옅은 파란 바탕), 저장소에 저장하지 못했을 때의 안내(버튼 줄 아래 8px, 빨간 글자).
+ * 움직임: 요소를 고르거나 크게·작게 보기를 바꾸면 세부 평가 항목이 옅게 나타난다(opacity 만. 자리·크기는 바로 바뀐다:
+ * hooks/usePrepFocusKeeper.ts 가 바뀐 직후의 자리를 잰다). 요소 이름은 마우스를 올리면 파란 글자가 된다.
  */
 export function WeightsTab({
   ready,
@@ -120,7 +122,7 @@ export function WeightsTab({
       {draftNotice !== null && (
         <p
           {...prepBodyProps(ready)}
-          className="mt-[16px] rounded-[6px] bg-[#EEF0FF] px-[12px] py-[8px] text-[13px] leading-[18px] font-medium text-[#001AD0] [overflow-wrap:anywhere]"
+          className="mt-[16px] animate-fade-in rounded-[6px] bg-[#EEF0FF] px-[12px] py-[8px] text-[13px] leading-[18px] font-medium text-[#001AD0] [overflow-wrap:anywhere]"
         >
           {draftNotice}
         </p>
@@ -152,7 +154,7 @@ export function WeightsTab({
         </div>
         {/* 크게 보는 중에도(왼쪽 단이 없어도) 보이도록 두 단 상자 밖에 둔다. */}
         {storageNotice !== null && (
-          <p role="alert" className="mt-[8px] text-[13px] leading-[18px] font-medium text-[#BA1A1A]">
+          <p role="alert" className="mt-[8px] animate-fade-in text-[13px] leading-[18px] font-medium text-[#BA1A1A]">
             {storageNotice}
           </p>
         )}
@@ -203,7 +205,7 @@ export function WeightsTab({
                 </p>
                 <span className="text-[13px] leading-[18px] font-medium text-[#505050]">합계</span>
                 <p
-                  className={`text-[22px] leading-[30px] font-bold tabular-nums ${
+                  className={`motion-colors text-[22px] leading-[30px] font-bold tabular-nums ${
                     total === totalMax ? "text-[#111111]" : "text-[#BA1A1A]"
                   }`}
                 >
@@ -239,7 +241,7 @@ export function WeightsTab({
               aria-pressed={big}
               {...(big ? FOCUS_FALLBACK_PROPS : {})}
               onClick={(event) => onToggleBig(event.currentTarget === document.activeElement)}
-              className="ml-auto box-border inline-flex h-[28px] scroll-m-[8px] cursor-pointer items-center gap-[4px] rounded-[6px] border border-[#CFCFCF] bg-white px-[8px] text-[12px] leading-[normal] font-medium text-[#111111]"
+              className="motion-colors ml-auto box-border inline-flex h-[28px] scroll-m-[8px] cursor-pointer items-center gap-[4px] rounded-[6px] border border-[#CFCFCF] bg-white px-[8px] text-[12px] leading-[normal] font-medium text-[#111111] hover-on:bg-[#F6F7FB] press-on:bg-[#ECEEF5]"
             >
               {big ? "작게 보기" : "크게 보기"}
               <svg
@@ -258,7 +260,10 @@ export function WeightsTab({
           </div>
           <div className="px-[20px] pt-[16px] pb-[20px] break-keep">
             <p className="text-[13px] leading-[18px] text-[#505050]">{DETAIL_GUIDE}</p>
-            <DetailGroups groups={detail.groups} big={big} />
+            {/* 고른 요소나 크기가 바뀌면 새로 그려(key) 옅게 나타난다. 누를 것은 이 안에 없다. */}
+            <div key={`${elements[selectedIndex]?.id ?? ""}:${big ? "big" : "small"}`} className="animate-fade-in">
+              <DetailGroups groups={detail.groups} big={big} />
+            </div>
           </div>
         </section>
       </div>
@@ -277,7 +282,7 @@ const HOLD_REPEAT_PROPS = { [HOLD_REPEAT_ATTRIBUTE]: HOLD_REPEAT_VALUE };
 
 /** 배점 −·+ 버튼: 36px 정사각형, 회색 테두리. 꺼지면(보기 상태, 0·100 에 닿음) 흐려진다. 바깥쪽 모서리는 쓰는 쪽이 정한다. */
 const STEP_BUTTON_CLASS =
-  "box-border flex h-[36px] w-[36px] flex-none scroll-m-[8px] cursor-pointer items-center justify-center border border-[#CFCFCF] bg-white p-0 disabled:cursor-default disabled:opacity-[0.4]";
+  "motion-colors box-border flex h-[36px] w-[36px] flex-none scroll-m-[8px] cursor-pointer items-center justify-center border border-[#CFCFCF] bg-white p-0 hover-on:bg-[#F6F7FB] press-on:bg-[#ECEEF5] disabled:cursor-default disabled:opacity-[0.4]";
 
 type ElementRowProps = Pick<
   WeightsTabProps,
@@ -318,7 +323,7 @@ function ElementRow({
               aria-label={`${element.name} 세부 평가 항목 보기`}
               aria-pressed={selected}
               onClick={(event) => onSelectElement(element.id, event.currentTarget === document.activeElement)}
-              className={`scroll-m-[8px] cursor-pointer text-left ${selected ? "text-[#001AD0]" : ""}`}
+              className={`motion-colors scroll-m-[8px] cursor-pointer text-left ${selected ? "text-[#001AD0]" : "hover-on:text-[#001AD0]"}`}
             >
               {element.name}
             </button>

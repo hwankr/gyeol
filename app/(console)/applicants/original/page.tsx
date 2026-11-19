@@ -3,6 +3,7 @@
 import { Suspense, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { OriginalMissing, OriginalScreen } from "@/components/OriginalScreen";
+import { PageTransition } from "@/components/PageTransition";
 import { useOriginalView } from "@/hooks/useOriginalView";
 import { ADMISSION } from "@/lib/admission";
 import { SAMPLE_ORIGINAL_NOTE, originalRecordOf, type OriginalRecord } from "@/lib/applicants/original";
@@ -25,9 +26,11 @@ function getServerUploaded(): readonly UploadedApplicant[] {
  */
 export default function ApplicantOriginalPage() {
   return (
-    <Suspense fallback={null}>
-      <OriginalByCode />
-    </Suspense>
+    <PageTransition>
+      <Suspense fallback={null}>
+        <OriginalByCode />
+      </Suspense>
+    </PageTransition>
   );
 }
 

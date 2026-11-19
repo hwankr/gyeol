@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { EvaluateDetailScreen } from "@/components/EvaluateDetailScreen";
 import { EvaluateMissing } from "@/components/EvaluateParts";
+import { PageTransition } from "@/components/PageTransition";
 import { useEvaluateDetail } from "@/hooks/useEvaluateDetail";
 import { useEvaluationData } from "@/hooks/useEvaluationData";
 import { ADMISSION } from "@/lib/admission";
@@ -17,9 +18,11 @@ import type { EvaluationApplicant } from "@/lib/evaluate/sampleEvaluations";
  */
 export default function EvaluateDetailPage() {
   return (
-    <Suspense fallback={null}>
-      <DetailByCode />
-    </Suspense>
+    <PageTransition>
+      <Suspense fallback={null}>
+        <DetailByCode />
+      </Suspense>
+    </PageTransition>
   );
 }
 

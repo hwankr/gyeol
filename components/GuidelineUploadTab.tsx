@@ -6,6 +6,7 @@ import {
   PANEL_CLASS,
   PANEL_HEAD_CLASS,
   PANEL_TITLE_CLASS,
+  Spinner,
 } from "@/components/consoleUi";
 import { PdfDropBox, PickedFileRow } from "@/components/PdfUpload";
 import { FOCUS_FALLBACK_PROPS, prepBodyProps } from "@/lib/prep/focusMarks";
@@ -75,6 +76,8 @@ const CHANGES_LIST_ID = "guideline-changes-list";
  * 디자인에 없어 같은 모양새로 정한 것: 파일 줄 아래의 "기준 초안 만들기" 줄과 상태 글, 실패 문구, 초안 안내와 경고 목록,
  * 기다리는 동안의 꺼진 모양(상자 안 버튼 모양·기준 초안 만들기·삭제), 변경 사항이 0건일 때의 문장.
  * 처음 모습(고른 파일·초안 없음)에는 아무것도 더해지지 않는다.
+ * 새로 나타나는 것(파일 줄, 버튼 줄, 실패 문구, 초안 안내, 펼친 변경 사항)은 제자리에서 옅게 나타난다(opacity 만. 자리는 바로 잡힌다).
+ * 기다리는 동안에는 상태 글 앞에 돌아가는 표시가 있다.
  */
 export function GuidelineUploadTab({
   ready,
@@ -139,7 +142,7 @@ export function GuidelineUploadTab({
             <>
               <PickedFileRow fileName={fileName} sizeText={fileSizeText} busy={isGenerating} onClear={onClearFile} />
 
-              <div className="mt-[12px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+              <div className="mt-[12px] flex animate-fade-in flex-wrap items-center gap-x-[12px] gap-y-[8px]">
                 {/*
                   기다리는 동안 disabled 대신 aria-disabled 로 두어(누르면 상태 훅이 아무것도 하지 않는다) 초점이 버튼에 남게 한다.
                   모양은 주 버튼이고, 기다리는 동안에는 꺼진 주 버튼 모양(옅은 회색 바탕, 회색 글자)에 기본 화살표 커서다.
@@ -152,7 +155,8 @@ export function GuidelineUploadTab({
                 >
                   기준 초안 만들기
                 </button>
-                <p aria-live="polite" className="text-[13px] leading-[18px] text-[#505050]">
+                <p aria-live="polite" className="flex items-center gap-[6px] text-[13px] leading-[18px] text-[#505050]">
+                  {statusText !== "" && <Spinner />}
                   {statusText}
                 </p>
               </div>
@@ -162,7 +166,7 @@ export function GuidelineUploadTab({
           {requestError !== null && (
             <div
               role="alert"
-              className="mt-[8px] text-[13px] leading-[18px] font-medium text-[#BA1A1A] [overflow-wrap:anywhere]"
+              className="mt-[8px] animate-fade-in text-[13px] leading-[18px] font-medium text-[#BA1A1A] [overflow-wrap:anywhere]"
             >
               <p>{requestError}</p>
               <WarningList warnings={requestWarnings} />
@@ -172,7 +176,7 @@ export function GuidelineUploadTab({
           {/* 초안 안내는 늘 있는 알림 영역 안에 그려 초안이 생길 때 읽히게 한다(초안이 없으면 빈 영역이라 모양에 영향이 없다). */}
           <div aria-live="polite">
             {draftNotice !== null && (
-              <div className="mt-[12px] rounded-[6px] border border-[#E4E4E4] px-[12px] py-[10px] text-[13px] leading-[18px] [overflow-wrap:anywhere]">
+              <div className="mt-[12px] animate-fade-in rounded-[6px] border border-[#E4E4E4] px-[12px] py-[10px] text-[13px] leading-[18px] [overflow-wrap:anywhere]">
                 <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
                   <p className="min-w-0 flex-[1_1_240px] font-medium text-[#111111]">
                     기준 초안을 만들었습니다 (평가 요소 {draftNotice.elementCount}개). 평가·배점 설정에서 확인하고 저장해 주세요.
@@ -202,11 +206,14 @@ export function GuidelineUploadTab({
             전년 대비 주요 변경 사항
           </h2>
         </div>
-        {/* 낱말 가운데에서 줄을 바꾸지 않되(keep-all), 빈칸 없이 아주 긴 글은 상자를 넘지 않게 끊는다(anywhere). */}
+        {/*
+          낱말 가운데에서 줄을 바꾸지 않되(keep-all), 빈칸 없이 아주 긴 글은 상자를 넘지 않게 끊는다(anywhere).
+          펼치면 목록이 제 높이로 바로 놓이고 글만 옅게 나타난다(접기·펼치기 버튼이 보이게 하는 스크롤 계산이 펼친 직후의 자리를 잰다).
+        */}
         <div
           id={CHANGES_LIST_ID}
           hidden={changesCollapsed}
-          className="px-[20px] pt-[4px] pb-[8px] [overflow-wrap:anywhere] [word-break:keep-all]"
+          className="animate-fade-in px-[20px] pt-[4px] pb-[8px] [overflow-wrap:anywhere] [word-break:keep-all]"
         >
           {noChangesNotice !== null && (
             <p className="py-[12px] text-[13px] leading-[20px] text-[#505050]">{noChangesNotice}</p>
@@ -244,7 +251,7 @@ export function GuidelineUploadTab({
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className={`h-[14px] w-[14px] ${changesCollapsed ? "rotate-180" : ""}`}
+            className={`h-[14px] w-[14px] transition-[rotate] duration-200 ease-soft ${changesCollapsed ? "rotate-180" : ""}`}
           >
             <path d="M4 10l4-4 4 4" />
           </svg>

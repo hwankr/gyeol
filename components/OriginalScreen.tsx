@@ -57,6 +57,7 @@ const SCROLL_CLASS = "min-h-0 flex-[1_1_auto] scroll-m-[8px] overflow-y-auto [sc
  * 원문보기 화면(/applicants/original?code=…, /evaluate/original?code=…): 지원자 한 명의 가려진 학생부 원문(왼쪽)과 기준별 근거(오른쪽).
  * 기준을 고르면 그 기준의 근거 구절에 원문에서 점선 밑줄이 그어지고, 근거를 누르면 원문이 그 자리로 스크롤되며 그 구절이 색 면으로 강조된다.
  * 디자인 시안에는 없는 화면이라 평가하기의 지원자 줄·서류 원문과 같은 조각과 색으로 만들었다. 폭이 모자라면 오른쪽 단이 아래로 내려간다.
+ * 기준을 바꾸면 그 기준의 근거가 옅게 나타나고, 근거를 고르면 원문의 그 구절이 잠깐 짙게 나타났다가 제 색으로 가라앉는다(스크롤이 닿는 곳을 알아보게).
  */
 export function OriginalScreen({
   crumbs,
@@ -77,6 +78,8 @@ export function OriginalScreen({
   onSelectTab,
   onSelectEvidence,
 }: OriginalScreenProps) {
+  /** 고른 근거. 강조한 구절을 근거가 바뀔 때마다 새로 그려(key) 나타나는 움직임이 다시 걸리게 한다. */
+  const selectedCardId = cards.find((card) => card.isSelected)?.id ?? "";
   return (
     <>
       <ConsoleCrumbs items={crumbs} />
@@ -123,7 +126,7 @@ export function OriginalScreen({
                 </h4>
                 <p className="mt-[6px] text-[14px] leading-[24px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap">
                   {section.segments.map((segment, segmentIndex) => (
-                    <SegmentText key={segmentIndex} segment={segment} highlightRef={highlightRef} />
+                    <SegmentText key={segmentIndex} segment={segment} highlightRef={highlightRef} highlightKey={selectedCardId} />
                   ))}
                 </p>
               </article>
@@ -152,10 +155,10 @@ export function OriginalScreen({
                   role="tab"
                   aria-selected={tab.isActive}
                   onClick={() => onSelectTab(tab.criterionId)}
-                  className={`box-border inline-flex min-h-[32px] max-w-full scroll-m-[8px] cursor-pointer items-center gap-[6px] rounded-[6px] border px-[12px] py-[4px] text-left text-[13px] leading-[18px] [overflow-wrap:anywhere] ${
+                  className={`motion-colors box-border inline-flex min-h-[32px] max-w-full scroll-m-[8px] cursor-pointer items-center gap-[6px] rounded-[6px] border px-[12px] py-[4px] text-left text-[13px] leading-[18px] [overflow-wrap:anywhere] ${
                     tab.isActive
                       ? "border-[#001AD0] bg-[#EEF0FF] font-semibold text-[#001AD0]"
-                      : "border-[#CFCFCF] bg-white font-medium text-[#505050]"
+                      : "border-[#CFCFCF] bg-white font-medium text-[#505050] hover-on:bg-[#F6F7FB] hover-on:text-[#111111]"
                   }`}
                 >
                   {tab.name}
@@ -176,14 +179,16 @@ export function OriginalScreen({
             >
               {cards.length === 0 && <li className="text-[13px] leading-[18px] text-[#505050]">이 기준의 근거가 없습니다.</li>}
               {cards.map((card) => (
-                <li key={card.id}>
+                <li key={card.id} className="animate-fade-in">
                   {/* 누르면 원문이 그 구절로 스크롤된다. 고른 근거는 파란 테두리·옅은 파란 바탕이다(aria-pressed). */}
                   <button
                     type="button"
                     aria-pressed={card.isSelected}
                     onClick={() => onSelectEvidence(card.id)}
-                    className={`box-border flex w-full scroll-m-[8px] cursor-pointer flex-col gap-[4px] rounded-[6px] border px-[12px] py-[8px] text-left [overflow-wrap:anywhere] ${
-                      card.isSelected ? "border-[#001AD0] bg-[#EEF0FF]" : "border-[#E4E4E4] bg-[#F6F7FB]"
+                    className={`motion-colors box-border flex w-full scroll-m-[8px] cursor-pointer flex-col gap-[4px] rounded-[6px] border px-[12px] py-[8px] text-left [overflow-wrap:anywhere] ${
+                      card.isSelected
+                        ? "border-[#001AD0] bg-[#EEF0FF]"
+                        : "border-[#E4E4E4] bg-[#F6F7FB] hover-on:border-[#CFCFCF] hover-on:bg-[#EEF0F6]"
                     }`}
                   >
                     <span className="text-[12px] leading-[16px] text-[#505050]">
@@ -231,13 +236,23 @@ export function OriginalMissing({ crumbs, title, headNote, back }: OriginalMissi
 /**
  * 원문의 구간: 고른 근거의 구절은 색 면(#DCE0FF)과 실선 밑줄, 지금 기준의 다른 근거 구절은 점선 밑줄이다
  * (평가하기의 서류 원문과 같은 표시: components/EvaluateParts.tsx 의 SEGMENT_CLASS).
+ * 강조한 구절은 고른 근거(highlightKey)가 바뀔 때마다 새로 그려져, 색 면이 잠깐 짙게 나타났다가 제 색으로 가라앉는다(app/globals.css 의 mark-in).
  */
-function SegmentText({ segment, highlightRef }: { segment: TextSegment; highlightRef: Ref<HTMLElement> }) {
+function SegmentText({
+  segment,
+  highlightRef,
+  highlightKey,
+}: {
+  segment: TextSegment;
+  highlightRef: Ref<HTMLElement>;
+  highlightKey: string;
+}) {
   if (segment.kind === "highlight") {
     return (
       <mark
+        key={highlightKey}
         ref={highlightRef}
-        className="bg-[#DCE0FF] text-[#111111] underline decoration-[#001AD0] decoration-solid underline-offset-[4px]"
+        className="animate-mark-in bg-[#DCE0FF] text-[#111111] underline decoration-[#001AD0] decoration-solid underline-offset-[4px]"
       >
         {segment.text}
       </mark>

@@ -93,7 +93,7 @@ export function ConsoleShell({ menus, logoutPath, search, searchInputRef, childr
         </nav>
         <Link
           href={logoutPath}
-          className="mt-auto flex h-[42px] items-center rounded-[6px] px-[12px] text-[13px] font-medium text-[#767676] no-underline"
+          className="motion-colors mt-auto flex h-[42px] items-center rounded-[6px] px-[12px] text-[13px] font-medium text-[#767676] no-underline hover-on:bg-[#F6F7FB] hover-on:text-[#111111]"
         >
           로그아웃
         </Link>
@@ -108,13 +108,16 @@ export function ConsoleShell({ menus, logoutPath, search, searchInputRef, childr
   );
 }
 
-const MENU_LINK_CLASS = "flex h-[42px] items-center gap-[12px] rounded-[6px] px-[12px] text-[14px] no-underline";
+const MENU_LINK_CLASS = "motion-colors flex h-[42px] items-center gap-[12px] rounded-[6px] px-[12px] text-[14px] no-underline";
 
-/** 주 메뉴 하나. 선택된 메뉴는 옅은 파란 바탕에 파란 글자·아이콘(굵기 600)이고, 나머지는 회색 글자·아이콘(굵기 500)이다. */
+/**
+ * 주 메뉴 하나. 선택된 메뉴는 옅은 파란 바탕에 파란 글자·아이콘(굵기 600)이고, 나머지는 회색 글자·아이콘(굵기 500)이다.
+ * 갈 곳이 있는 메뉴는 마우스를 올리면 옅은 회색 바탕에 검은 글자가 되고, 선택이 옮겨 갈 때 색이 150ms 에 걸쳐 바뀐다.
+ */
 function MenuLink({ menu }: { menu: ConsoleMenu & { active: boolean } }) {
   const content = (
     <>
-      <MenuIcon menuKey={menu.key} color={menu.active ? "#001AD0" : "#767676"} />
+      <MenuIcon menuKey={menu.key} active={menu.active} />
       <span>{menu.label}</span>
     </>
   );
@@ -134,7 +137,7 @@ function MenuLink({ menu }: { menu: ConsoleMenu & { active: boolean } }) {
       className={
         menu.active
           ? `${MENU_LINK_CLASS} bg-[#EEF0FF] font-semibold text-[#001AD0]`
-          : `${MENU_LINK_CLASS} font-medium text-[#505050]`
+          : `${MENU_LINK_CLASS} font-medium text-[#505050] hover-on:bg-[#F6F7FB] hover-on:text-[#111111]`
       }
     >
       {content}
@@ -142,18 +145,18 @@ function MenuLink({ menu }: { menu: ConsoleMenu & { active: boolean } }) {
   );
 }
 
-/** 메뉴 아이콘 (디자인의 SVG 그대로). 색은 선택 여부에 따라 바뀐다. */
-function MenuIcon({ menuKey, color }: { menuKey: ConsoleMenu["key"]; color: string }) {
+/** 메뉴 아이콘 (디자인의 SVG 그대로). 색은 선택 여부에 따라 바뀐다(선은 글자색을 따르게 두어 색 전환이 같이 걸린다). */
+function MenuIcon({ menuKey, active }: { menuKey: ConsoleMenu["key"]; active: boolean }) {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
       fill="none"
-      stroke={color}
+      stroke="currentColor"
       strokeWidth="1.6"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="h-[20px] w-[20px] flex-none"
+      className={`motion-colors h-[20px] w-[20px] flex-none ${active ? "text-[#001AD0]" : "text-[#767676]"}`}
     >
       {MENU_ICON_PATHS[menuKey]}
     </svg>
@@ -220,7 +223,7 @@ const ICON_BUTTON_CLASS =
 function TopBar({ search, inputRef }: { search: SearchInputProps; inputRef: Ref<HTMLInputElement> }) {
   return (
     <div className="box-border flex min-h-[60px] flex-wrap items-center justify-between gap-x-[24px] gap-y-[8px] border-b border-b-[#E4E4E4] px-[clamp(16px,2.3vw,32px)] py-[10px]">
-      <label className="box-border flex h-[36px] min-w-[200px] flex-[0_1_480px] items-center gap-[8px] rounded-[6px] border border-[#CFCFCF] bg-white px-[12px]">
+      <label className="motion-colors box-border flex h-[36px] min-w-[200px] flex-[0_1_480px] items-center gap-[8px] rounded-[6px] border border-[#CFCFCF] bg-white px-[12px] has-[input:enabled]:hover:border-[#AEAEAE]">
         <svg
           aria-hidden="true"
           viewBox="0 0 20 20"

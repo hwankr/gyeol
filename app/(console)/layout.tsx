@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { ConsoleShell } from "@/components/ConsoleShell";
+import { PageTransition } from "@/components/PageTransition";
 import { useConsoleNav } from "@/hooks/useConsoleNav";
 import { ConsoleSearchContext, useConsoleSearchState } from "@/hooks/useConsoleSearch";
 
@@ -11,15 +12,19 @@ import { ConsoleSearchContext, useConsoleSearchState } from "@/hooks/useConsoleS
  * 상단 바의 검색 입력란은 검색을 쓰는 화면(지원자 관리, 평가 대기 목록)에서만 동작한다. 입력란은 기본이 꺼진(disabled) 상태이고,
  * 입력란·입력 이벤트를 받을 곳(ref)과 입력란을 켜고 끄는 함수를 context 로 그 화면에 건넨다. 그 화면이 준비되면 켜고 숨겨지면 비우고 끈다.
  * 검색어 상태도 그 화면이 갖는다(hooks/useConsoleSearch.ts).
+ * 껍데기 전체를 화면 전환 경계로 감싼다(cover): 로그인 화면과 오갈 때 껍데기가 통째로 나타나고 사라진다. 콘솔 안에서 화면이 바뀔 때에는
+ * 껍데기가 남아 있어 움직이지 않고, 각 화면의 경계(page.tsx)가 내용만 바꾼다(components/PageTransition.tsx).
  */
 export default function ConsoleLayout({ children }: Readonly<{ children: ReactNode }>) {
   const nav = useConsoleNav();
   const search = useConsoleSearchState();
   return (
     <ConsoleSearchContext value={search.context}>
-      <ConsoleShell {...nav} search={search.input} searchInputRef={search.inputRef}>
-        {children}
-      </ConsoleShell>
+      <PageTransition cover>
+        <ConsoleShell {...nav} search={search.input} searchInputRef={search.inputRef}>
+          {children}
+        </ConsoleShell>
+      </PageTransition>
     </ConsoleSearchContext>
   );
 }
