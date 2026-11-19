@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { HOLD_REPEAT_ATTRIBUTE, HOLD_REPEAT_VALUE } from "@/lib/prep/keyRepeat";
 
 /**
- * 전형 준비 세 탭의 버튼에 같은 키 반복 규칙을 건다(app/(console)/prep/layout.tsx 에서 한 번 부른다).
+ * 전형 준비 네 탭의 버튼에 같은 키 반복 규칙을 건다(app/(console)/prep/layout.tsx 에서 한 번 부른다).
  * Enter 를 누르고 있으면 운영체제의 키 반복이 keydown(repeat 참)을 이어 보내고, 버튼은 keydown 마다 눌린다. 그런데 이 화면들은 누른 뒤
  * 초점을 다른 버튼으로 옮기는 곳이 있어(배점이 0·100 에 닿으면 반대쪽 버튼, 저장하면 수정하기) 같은 Enter 의
  * 반복이 새 버튼을 누르게 된다. 규칙: 키를 누르고 있는 동안의 반복은 처음 누른 그 버튼에서만 이어진다.

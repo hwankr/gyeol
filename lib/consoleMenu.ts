@@ -47,6 +47,7 @@ export type PrepTab = {
 
 export const PREP_TABS: readonly PrepTab[] = [
   { href: "/prep", label: "모집요강 올리기", crumb: "모집요강 올리기" },
+  { href: "/prep/consensus", label: "공통 기준 협의", crumb: "공통 기준 협의" },
   { href: "/prep/weights", label: "평가 · 배점 설정", crumb: "평가 · 배점 설정" },
   { href: "/prep/history", label: "기준 변경 기록", crumb: "기준 변경 기록" },
 ];
