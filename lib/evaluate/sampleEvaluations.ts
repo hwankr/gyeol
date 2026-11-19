@@ -1,46 +1,70 @@
+import type { AnalysisResult } from "@/types/analysis";
 import { sampleApplicantCode } from "../applicants/sampleApplicants.ts";
 
-// 평가하기 화면의 예시 자료: 로그인한 사정관에게 배정된 지원자 24명의 AI 한 줄 요약, 학년별 성장 요약, 서류 원문(가려진 학생부 문장)과
+// 평가하기 화면의 지원자 형식과 예시 자료.
+// 형식(EvaluationApplicant)은 예시 지원자와 올린 지원자(학생부 올리기 화면에서 분석한 학생부, ./uploadedEvaluation.ts)가 같이 쓴다.
+// 예시 자료: 로그인한 사정관에게 배정된 지원자 24명의 AI 한 줄 요약, 학년별 성장 요약, 서류 원문(가려진 학생부 문장)과
 // AI 가 근거로 쓴 문장, 평가 요소 자리별 AI 점수·신뢰도, 처음 평가 상태, 다른 위원의 진행 현황.
 // 실제 지원자·학교·지명이 아니다. A-0187 의 요약·세특 원문·AI 점수·내 점수·수정 사유와 A-0133·A-0251·A-0015·A-0042·A-0067 의 요약·내 점수,
 // 위원별 진행 수(21·24·17 / 24, 전체 248 / 312), 마감 문구는 디자인에 적힌 그대로이고, 나머지는 화면을 채우려고 지어낸 임시 값이다.
-// 난수·현재 시각을 쓰지 않고 지원자 번호로 계산해 늘 같은 결과가 나온다. AI 를 부르지 않는다(평가하기는 화면만 있는 기능이다).
+// 난수·현재 시각을 쓰지 않고 지원자 번호로 계산해 늘 같은 결과가 나온다. 예시 지원자의 값은 AI 가 만든 것이 아니다.
 
 /**
- * 평가 요소 자리(0~3). 기본 평가 기준(lib/prep/defaultCriteria.ts)의 학업성취도·리더십·Y형 인재·전공적합성 순서다.
+ * 예시 자료의 평가 요소 자리(0~3). 기본 평가 기준(lib/prep/defaultCriteria.ts)의 학업성취도·리더십·Y형 인재·전공적합성 순서다.
  * 예시 자료는 요소 id 가 아니라 자리로 적어 두고, 화면이 지금 평가 기준의 요소에 차례로 맞춘다(요소가 넷보다 많으면 자리를 돌려 쓴다).
+ * 올린 지원자는 분석할 때의 평가 요소 순번이 자리다(요소 수만큼 있다).
  */
 export type Slot = 0 | 1 | 2 | 3;
 
 export const SLOT_COUNT = 4;
 
-/** 서류 구분 (학생부의 네 영역) */
+/** 서류 구분 (학생부의 네 영역). 화면의 서류 구분 버튼에 늘 있다. */
 export const DOCUMENT_AREAS = ["교과", "세특", "창체", "행특"] as const;
-export type DocumentArea = (typeof DOCUMENT_AREAS)[number];
+
+/** 그 영역의 원문이 있는 지원자에게만 버튼이 나오는 서류 구분 (올린 학생부의 독서활동상황) */
+export const EXTRA_DOCUMENT_AREAS = ["독서"] as const;
+
+export type DocumentArea = (typeof DOCUMENT_AREAS)[number] | (typeof EXTRA_DOCUMENT_AREAS)[number];
 
 /** 서류 원문을 처음 열었을 때 보이는 영역 */
 export const INITIAL_DOCUMENT_AREA: DocumentArea = "세특";
 
-/** 원문의 한 조각. slot 이 있으면 AI 가 그 자리의 평가 요소 근거로 쓴 문장이다. */
+/**
+ * 원문의 한 조각. slots 는 AI 가 이 조각을 근거로 쓴 평가 요소의 자리들이다(근거가 아니면 빈 배열).
+ * 예시 자료는 조각 하나가 근거 문장 하나이고 자리도 하나다. 올린 지원자는 여러 요소의 근거 구절이 겹칠 수 있어 자리가 여럿일 수 있다.
+ */
 export type PassageSegment = {
   text: string;
-  slot?: Slot;
+  slots: readonly number[];
 };
 
-/** 서류 원문 한 건: 영역, 학년, 과목·활동 이름, 문장 조각 */
+/** 서류 원문 한 건: 영역, 학년(학년이 없는 항목은 null), 과목·활동 이름, 문장 조각 */
 export type Passage = {
   id: string;
   area: DocumentArea;
-  grade: 1 | 2 | 3;
+  grade: 1 | 2 | 3 | null;
   subject: string;
   segments: readonly PassageSegment[];
 };
 
-/** 평가 요소 자리 하나에 대한 AI 제안: 점수(0~100), 신뢰도(1~4), 그 요소의 묶음 태그 가운데 고른 것(묶음 순번, 화면이 묶음 수로 나눈 나머지를 쓴다) */
+/**
+ * 평가 요소 자리 하나에 대한 AI 제안: 점수(0~100), 신뢰도(1~4), 태그.
+ * 태그는 tags 가 있으면 그 글 그대로(올린 지원자: 분석할 때 정한 묶음 태그), 없으면 tagPicks(그 요소의 묶음 순번, 화면이 묶음 수로
+ * 나눈 나머지를 쓴다. 예시 자료)로 고른다.
+ */
 export type SlotAssessment = {
   score: number;
   confidence: 1 | 2 | 3 | 4;
   tagPicks: readonly number[];
+  tags?: readonly string[];
+};
+
+/** 근거 문장 하나: 출처("2학년 · 세특 · 물리학II"), 문장, AI 가 적은 이유(올린 지원자만) */
+export type ApplicantEvidence = {
+  id: string;
+  source: string;
+  text: string;
+  reason?: string;
 };
 
 /** 학년 하나의 성장 요약: 이름표, 성장 지수(0~100), 활동 건수(0~5) */
@@ -72,13 +96,29 @@ export type EvaluationApplicant = {
   code: string;
   /** AI 한 줄 요약 */
   summary: string;
-  ai: readonly [SlotAssessment, SlotAssessment, SlotAssessment, SlotAssessment];
+  /** 자리별 AI 제안. 예시 지원자는 넷, 올린 지원자는 분석할 때의 평가 요소 수만큼이다. */
+  ai: readonly SlotAssessment[];
   growth: readonly [GrowthPoint, GrowthPoint, GrowthPoint];
   passages: readonly Passage[];
   /** 처음 평가 상태. null 이면 아직 시작하지 않았다("대기"). */
   seed: EvaluationSeed | null;
   peers: readonly PeerOpinion[];
+  /**
+   * 자리별 근거 문장(올린 지원자만). 없으면 원문 조각에서 만든다(예시 자료는 조각 하나가 근거 문장 하나다).
+   * 올린 지원자는 근거 구절이 겹치면 조각이 구절보다 잘게 나뉘므로 구절을 따로 둔다.
+   */
+  evidences?: readonly (readonly ApplicantEvidence[])[];
+  /** 원문보기로 여는 분석 결과(올린 지원자만). 없으면 미리 만든 샘플 결과를 연다. */
+  original?: AnalysisResult;
+  /**
+   * 이 지원자의 평가를 이 분석에 묶는 표시(올린 지원자만: 분석을 남긴 때). 저장한 평가의 basis 에 들어간다.
+   * 올린 지원자의 코드는 저장소 사정에 따라 다른 학생부에 다시 붙을 수 있어, 표시가 다른 평가는 쓰지 않는다(lib/evaluate/evaluation.ts).
+   */
+  stamp?: string;
 };
+
+/** 예시 지원자의 자리별 AI 제안 (자리 넷) */
+type SampleAssessments = readonly [SlotAssessment, SlotAssessment, SlotAssessment, SlotAssessment];
 
 /** 글만 있으면 근거가 아닌 문장, [글, 자리] 면 그 자리의 근거 문장 */
 type SegmentSource = string | readonly [string, Slot];
@@ -87,7 +127,9 @@ type SegmentSource = string | readonly [string, Slot];
 type PassageSource = readonly [1 | 2 | 3, string, ...SegmentSource[]];
 
 function toSegments(sources: readonly SegmentSource[]): PassageSegment[] {
-  return sources.map((source) => (typeof source === "string" ? { text: source } : { text: source[0], slot: source[1] }));
+  return sources.map((source) =>
+    typeof source === "string" ? { text: source, slots: [] } : { text: source[0], slots: [source[1]] },
+  );
 }
 
 function toPassage(id: string, area: DocumentArea, source: PassageSource): Passage {
@@ -281,7 +323,7 @@ function achievementOf(n: number, gradeIndex: number, subjectIndex: number): str
 function subjectPassages(code: string, n: number, withEvidence: boolean): Passage[] {
   return GRADE_SUBJECTS.map((subjects, gradeIndex) => {
     const text = subjects.map((subject, index) => `${subject} ${achievementOf(n, gradeIndex, index)}`).join(" · ");
-    const segment: PassageSegment = withEvidence && gradeIndex === 1 ? { text, slot: 0 } : { text };
+    const segment: PassageSegment = { text, slots: withEvidence && gradeIndex === 1 ? [0] : [] };
     return {
       id: `${code}-subject-${gradeIndex + 1}`,
       area: "교과",
@@ -294,7 +336,7 @@ function subjectPassages(code: string, n: number, withEvidence: boolean): Passag
 
 /** 근거 표시를 뺀 원문 (A-0187 의 창체·행특은 디자인에 적힌 근거 수와 맞도록 근거로 삼지 않는다) */
 function withoutEvidence(passage: Passage): Passage {
-  return { ...passage, segments: passage.segments.map((segment) => ({ text: segment.text })) };
+  return { ...passage, segments: passage.segments.map((segment) => ({ text: segment.text, slots: [] })) };
 }
 
 /** 지원자 한 명의 서류 원문: 교과 3건, 세특 2건, 창체 1건, 행특 1건 */
@@ -336,14 +378,14 @@ const FIXED_TAG_PICKS: Readonly<Record<number, readonly (readonly number[])[]>> 
 const CONFIDENCE_CYCLE: readonly (1 | 2 | 3 | 4)[] = [3, 2, 4, 3, 2, 3, 4, 1];
 
 /** 자리별 AI 제안. 점수는 72~90, 신뢰도는 위 순서를 돌려 쓴다(1 은 드물다). */
-function assessmentsOf(n: number): EvaluationApplicant["ai"] {
+function assessmentsOf(n: number): SampleAssessments {
   const slots = [0, 1, 2, 3].map((slot): SlotAssessment => {
     const score = FIXED_AI_SCORES[n]?.[slot] ?? 72 + ((n * (7 + 3 * slot) + 11 * slot) % 19);
     const confidence = FIXED_CONFIDENCE[n]?.[slot] ?? CONFIDENCE_CYCLE[(n + 3 * slot) % CONFIDENCE_CYCLE.length];
     const tagPicks = FIXED_TAG_PICKS[n]?.[slot] ?? ((n + slot) % 2 === 0 ? [n + slot, n + slot + 1] : [n + slot]);
     return { score, confidence, tagPicks };
   });
-  return slots as unknown as EvaluationApplicant["ai"];
+  return slots as unknown as SampleAssessments;
 }
 
 /** 학년별 성장 이름표 (디자인 그대로) */
@@ -404,7 +446,7 @@ const PENDING_SEEDS: Readonly<Record<number, EvaluationSeed | null>> = {
   251: null,
 };
 
-function seedOf(n: number, ai: EvaluationApplicant["ai"]): EvaluationSeed | null {
+function seedOf(n: number, ai: SampleAssessments): EvaluationSeed | null {
   if (Object.hasOwn(PENDING_SEEDS, n)) return PENDING_SEEDS[n];
   const scores: [number, number, number, number] = [ai[0].score, ai[1].score, ai[2].score, ai[3].score];
   const reasons: Partial<Record<Slot, string>> = {};
@@ -435,12 +477,12 @@ const PEER_COMMENTS: readonly string[] = [
 ];
 
 /** 배점을 똑같이 나눈 AI 종합 점수의 어림 (다른 위원의 종합 점수를 지어낼 때만 쓴다) */
-function roughTotal(ai: EvaluationApplicant["ai"]): number {
+function roughTotal(ai: SampleAssessments): number {
   return Math.round((ai[0].score + ai[1].score + ai[2].score + ai[3].score) / SLOT_COUNT);
 }
 
 /** 다른 위원의 의견. 김서연 사정관은 모두 제출했고, 이준호 위촉위원은 평가 순서의 앞 17명만 제출했다. */
-function peersOf(n: number, position: number, ai: EvaluationApplicant["ai"]): PeerOpinion[] {
+function peersOf(n: number, position: number, ai: SampleAssessments): PeerOpinion[] {
   const base = roughTotal(ai);
   return [
     { reviewer: PEER_REVIEWERS[0], total: base + ((n % 5) - 2), comment: PEER_COMMENTS[n % PEER_COMMENTS.length] },

@@ -9,7 +9,7 @@ import {
   type UploadedApplicant,
 } from "./uploaded.ts";
 
-// 올린 지원자(업로드 화면에서 분석한 학생부)를 브라우저 localStorage 에 JSON 으로 저장하고 불러온다. 브라우저에서만 호출한다.
+// 올린 지원자(학생부 올리기 화면에서 분석한 학생부)를 브라우저 localStorage 에 JSON 으로 저장하고 불러온다. 브라우저에서만 호출한다.
 // 실패 처리는 전형 준비의 평가 기준·기록 저장(lib/prep/storage.ts), 지원자 관리의 가림 결정(./reviewStorage.ts)과 같은 규칙이다.
 //
 // 읽기와 쓰기는 모두 try/catch 로 감싼다. 저장소 읽기 결과는 둘로 나눈다.
@@ -19,7 +19,7 @@ import {
 //
 // 쓰지 않았거나 쓰기가 실패한 항목은 이 페이지의 메모리에만 둔다(지원자 관리에는 보이고 새로고침하면 사라진다). 메모리에 두는 것도
 // 저장할 때와 같은 정리로 최근 10건까지다(실패가 이어져도 10건을 넘지 않는다). 다음에 저장할 수 있을 때 같이 저장한다.
-// 업로드 화면은 분석이 끝나면 바로 결과 화면으로 가므로 "저장하지 못함" 안내를 보여 주지 않는다.
+// 메모리에만 둔 항목이 있는 동안 학생부 올리기 화면은 "저장하지 못함" 안내를 보여 준다(hasUnsavedUploadedApplicants).
 // 남길 때는 저장소를 그 순간 다시 읽고 그 끝에 더해 쓴다(다른 탭이 그사이 남긴 지원자를 지우지 않게). 코드도 그 순간의 목록으로 정한다.
 // 다른 탭의 변경은 구독하지 않는다(storage 이벤트 없음). 화면이 다시 그려질 때 저장소를 다시 읽으면서 반영된다.
 // 두 탭이 정말 동시에 쓰는 경우(읽기와 쓰기 사이에 다른 탭이 끼어드는 경우)를 막는 잠금은 없다. 그때 같은 코드가 둘 생기면 읽을 때 뒤의 것을 버린다.
@@ -54,6 +54,11 @@ export function subscribeUploadedApplicants(listener: () => void): () => void {
 export function loadUploadedApplicants(): readonly UploadedApplicant[] {
   readStored();
   return composeVisible();
+}
+
+/** 저장소에 쓰지 못해 메모리에만 둔 올린 지원자가 있는지 (학생부 올리기 화면이 "새로고침하면 사라진다" 안내에 쓴다) */
+export function hasUnsavedUploadedApplicants(): boolean {
+  return memoryItems.length > 0;
 }
 
 /**

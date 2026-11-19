@@ -1,6 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import { useRouter } from "next/navigation";
 import { useConsoleSearch } from "@/hooks/useConsoleSearch";
 import { ADMISSION } from "@/lib/admission";
 import {
@@ -30,9 +29,7 @@ import {
 import { SAMPLE_APPLICANTS } from "@/lib/applicants/sampleApplicants";
 import { NO_UPLOADED_APPLICANTS, uploadedToApplicant, type UploadedApplicant } from "@/lib/applicants/uploaded";
 import { loadUploadedApplicants, subscribeUploadedApplicants } from "@/lib/applicants/uploadedStorage";
-import { APPLICANTS_PATH } from "@/lib/consoleMenu";
-import { sampleResult } from "@/lib/mock/sampleResult";
-import { saveResult } from "@/lib/resultStorage";
+import { APPLICANTS_PATH, APPLICANTS_UPLOAD_PATH, applicantOriginalPath } from "@/lib/consoleMenu";
 
 // 서버 렌더링과 hydration 중에는 저장한 결정이 없는 모습으로 그린다. 그래서 서버 HTML 과 첫 클라이언트 렌더링이 같아
 // hydration 경고가 나지 않고, 브라우저에서 localStorage 를 읽은 뒤 저장한 결정에 따라 상태·숫자가 바뀐다(hooks/usePrepWeights.ts 와 같은 방식).
@@ -44,7 +41,7 @@ function getServerUnsaved(): boolean {
   return false;
 }
 
-// 올린 지원자(업로드 화면에서 분석한 학생부)도 같은 방식이다. 서버 렌더링과 hydration 중에는 없는 모습(예시 314명)으로 그리고,
+// 올린 지원자(학생부 올리기 화면에서 분석한 학생부)도 같은 방식이다. 서버 렌더링과 hydration 중에는 없는 모습(예시 314명)으로 그리고,
 // 브라우저에서 localStorage 를 읽은 뒤 예시 지원자 뒤에 코드 순서로 더해진다.
 function getServerUploaded(): readonly UploadedApplicant[] {
   return NO_UPLOADED_APPLICANTS;
@@ -126,8 +123,6 @@ const INITIAL_SELECTED: string | null =
 
 /** 저장소에 쓰지 못해 메모리에만 둔 결정이 있을 때의 안내 */
 const STORAGE_NOTICE = "브라우저에 저장하지 못했습니다. 새로고침하면 방금 정한 내용이 사라집니다.";
-/** 원문보기에서 결과(예시 지원자는 샘플 결과, 올린 지원자는 그 결과)를 sessionStorage 에 저장하지 못했을 때의 안내 */
-const ORIGINAL_NOTICE = "브라우저에 결과를 저장하지 못해 원문을 열 수 없습니다.";
 
 /** 초점을 옮긴 요소의 위아래로 함께 보여야 하는 범위(px): 초점 표시(2px 띄움 + 2px 선) 4px 와 여유 (hooks/usePrepWeights.ts 와 같은 값) */
 const FOCUS_REVEAL_MARGIN = 8;
@@ -163,12 +158,11 @@ function revealVertically(element: HTMLElement, margin: number) {
 }
 
 /**
- * 지원자 관리 화면 상태: 예시 지원자(lib/applicants/sampleApplicants.ts)와 올린 지원자(업로드 화면에서 분석한 학생부,
+ * 지원자 관리 화면 상태: 예시 지원자(lib/applicants/sampleApplicants.ts)와 올린 지원자(학생부 올리기 화면에서 분석한 학생부,
  * lib/applicants/uploadedStorage.ts), 저장한 가림 결정(localStorage)으로 상태·숫자를 계산하고, 걸러 보기·내 배정 보기·검색(상단 바),
- * 지원자 선택, 저장하지 않은 가림 결정, 저장, 원문보기(예시 지원자는 샘플 결과, 올린 지원자는 그 결과로 이동)를 다룬다.
+ * 지원자 선택, 저장하지 않은 가림 결정, 저장을 다룬다. 학생부 올리기와 원문보기는 다른 화면으로 가는 링크다(주소만 정한다).
  */
 export function useApplicants() {
-  const router = useRouter();
   const search = useConsoleSearch();
   const reviews = useSyncExternalStore(subscribeApplicantReviews, loadApplicantReviews, getServerReviews);
   const hasUnsaved = useSyncExternalStore(subscribeApplicantReviews, hasUnsavedApplicantReviews, getServerUnsaved);
@@ -181,8 +175,6 @@ export function useApplicants() {
   const [selectedCode, setSelectedCode] = useState<string | null>(INITIAL_SELECTED);
   /** 고른 지원자에 대해 이 화면에서 정했지만 아직 저장하지 않은 결정 (표현 id → 결정) */
   const [draft, setDraft] = useState<ApplicantDecisions>(NO_DECISIONS);
-  /** 원문보기에서 샘플 결과를 저장하지 못했는지 (안내를 보여 준다. 다른 지원자를 고르거나 다시 눌러 성공하면 지운다) */
-  const [originalFailed, setOriginalFailed] = useState(false);
   /** 상단 바 검색 입력란의 글 (입력 이벤트로 받는다. 입력란의 값은 DOM 이 쥐고 있다: hooks/useConsoleSearch.ts) */
   const [query, setQuery] = useState("");
   /** 상세 영역의 스크롤 영역 */
@@ -228,7 +220,6 @@ export function useApplicants() {
       setMineOnly(INITIAL_MINE_ONLY);
       setSelectedCode(INITIAL_SELECTED);
       setDraft(NO_DECISIONS);
-      setOriginalFailed(false);
       setQuery("");
     }
     function onPageShow(event: PageTransitionEvent) {
@@ -267,7 +258,6 @@ export function useApplicants() {
   if (nextSelectedCode !== selectedCode) {
     setSelectedCode(nextSelectedCode);
     setDraft(NO_DECISIONS);
-    setOriginalFailed(false);
   }
   const selected = selectedEntry ?? visible[0];
 
@@ -370,7 +360,6 @@ export function useApplicants() {
     pendingFocusRef.current = "select";
     setSelectedCode(code);
     setDraft(NO_DECISIONS);
-    setOriginalFailed(false);
   }
 
   function decide(expressionId: string, decision: MaskDecision) {
@@ -392,29 +381,14 @@ export function useApplicants() {
     setDraft(NO_DECISIONS);
   }
 
-  /**
-   * 원문보기: 올린 지원자는 그 지원자의 분석 결과를, 예시 지원자는 학생부 원문이 없으므로 업로드 화면의 "샘플 데이터로 보기" 와 똑같이
-   * 미리 만든 샘플 결과를 저장하고 결과 화면으로 간다(AI 를 부르지 않는다). 저장하지 못하면(sessionStorage 막힘 등) 빈 결과 화면으로
-   * 가지 않도록 이동하지 않고 상세 영역에 안내를 보여 준다.
-   */
-  function openOriginal() {
-    if (selected === undefined) return;
-    try {
-      saveResult(selected.applicant.original ?? sampleResult);
-    } catch {
-      setOriginalFailed(true);
-      return;
-    }
-    setOriginalFailed(false);
-    router.push("/result");
-  }
-
   const total = entries.length;
   const done = counts["완료"];
   const percent = reviewPercent(done, total);
 
   return {
     applicantsPath: APPLICANTS_PATH,
+    /** 학생부 올리기 화면의 주소 (걸러 보기 줄 오른쪽 끝의 링크) */
+    uploadPath: APPLICANTS_UPLOAD_PATH,
     ready,
     filter,
     selectedCode: selected?.applicant.code ?? null,
@@ -443,6 +417,8 @@ export function useApplicants() {
         : {
             code: selected.applicant.code,
             status: selected.status,
+            // 원문보기 화면의 주소. 올린 지원자는 그 학생부의 분석 결과를, 예시 지원자는 미리 만든 샘플 결과를 보여 준다(lib/applicants/original.ts).
+            originalHref: applicantOriginalPath(selected.applicant.code),
             documentCounts: selected.applicant.documentCounts,
             documentNotice: selected.applicant.documentProblem
               ? `${selected.applicant.documentSummary} · 원문과 대조해 확인이 필요합니다.`
@@ -457,8 +433,8 @@ export function useApplicants() {
             canSave,
             saved,
           },
-    // 상세 영역의 머리 아래 안내(role="alert"). 결정 저장 실패와 원문보기 실패가 함께면 두 줄이다.
-    notices: [...(hasUnsaved ? [STORAGE_NOTICE] : []), ...(originalFailed && selected !== undefined ? [ORIGINAL_NOTICE] : [])],
+    // 상세 영역의 머리 아래 안내(role="alert"): 결정을 저장소에 쓰지 못했을 때.
+    notices: hasUnsaved ? [STORAGE_NOTICE] : [],
     detailScrollRef,
     saveButtonRef,
     pressedFilterRef,
@@ -470,6 +446,5 @@ export function useApplicants() {
     onSelectApplicant: selectApplicant,
     onDecide: decide,
     onSave: save,
-    onOpenOriginal: openOriginal,
   };
 }

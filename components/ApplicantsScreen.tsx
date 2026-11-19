@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { RefObject } from "react";
 import {
   AccentTag,
@@ -19,6 +20,8 @@ import type { DeadlineRemaining } from "@/lib/applicants/deadline";
 type ApplicantsScreenProps = {
   /** 현재 위치 줄의 "지원자 관리" 가 가는 주소 */
   applicantsPath: string;
+  /** 학생부 올리기 화면의 주소 */
+  uploadPath: string;
   /** 화면이 준비됐는지 (서버 HTML·hydration 에서는 false: 본문을 조작할 수 없다) */
   ready: boolean;
   /** 지금 걸러 보기 (현재 위치 줄의 다섯째 칸) */
@@ -54,6 +57,8 @@ type ApplicantsScreenProps = {
   detail: {
     code: string;
     status: ApplicantStatus;
+    /** 원문보기 화면의 주소 */
+    originalHref: string;
     documentCounts: readonly { label: string; value: string }[];
     /** 서류 정리에 문제가 있을 때의 안내 */
     documentNotice: string | null;
@@ -67,7 +72,7 @@ type ApplicantsScreenProps = {
     /** 화면에 보이는 결정이 저장소에 저장된 그대로인지 (저장하기 버튼의 글이 "저장됨" 이 된다. 이때 canSave 는 false 다) */
     saved: boolean;
   } | null;
-  /** 상세 영역의 머리 아래 안내 (결정을 저장소에 쓰지 못함, 원문보기 결과를 저장하지 못함). 없으면 빈 배열. */
+  /** 상세 영역의 머리 아래 안내 (결정을 저장소에 쓰지 못함). 없으면 빈 배열. */
   notices: string[];
   /** 상세 영역의 스크롤 영역 (지원자를 바꾸면 맨 위로 돌린다, 저장 뒤 초점을 받는다) */
   detailScrollRef: RefObject<HTMLDivElement | null>;
@@ -85,7 +90,6 @@ type ApplicantsScreenProps = {
   onSelectApplicant: (code: string) => void;
   onDecide: (expressionId: string, decision: MaskDecision) => void;
   onSave: () => void;
-  onOpenOriginal: () => void;
 };
 
 /** 상태 표시의 색 (components/consoleUi.tsx 의 StatusChip) */
@@ -104,12 +108,15 @@ const STATUS_TONE: Record<ApplicantStatus, ChipTone> = {
  * 지원자 관리 화면: 현재 위치 줄, 제목 줄, 요약 상자(접수 마감·접수 인원·서류 검토 진행 현황), 걸러 보기·내 배정 보기,
  * 지원자 표와 오른쪽 상세 영역("확인 필요 사항")이 든 상자. 치수·색·글자는 디자인 값 그대로다.
  * 껍데기의 본문(<main>)이 세로로 쌓는 flex 상자라, 본문을 감싼 상자와 그 안의 마지막 상자(표·상세)가 남는 높이를 채운다.
+ * 디자인에 없어 더한 것: 걸러 보기 줄 오른쪽 끝의 "학생부 올리기" 링크(학생부를 올려 분석하는 화면으로 간다).
+ * "원문보기" 는 원문보기 화면으로 가는 링크다(디자인의 버튼 모양 그대로).
  * 현재 위치의 "지원자 관리" 는 보통 링크(next/link)라 화면의 JavaScript 가 준비되기 전에도 동작한다. 그 아래 본문(제목 줄, 요약 상자,
  * 걸러 보기 줄, 표, 상세 영역)은 준비되기 전(서버 HTML·hydration)에는 inert 라 초점을 받지 않고 눌리지 않는다(모양은 같다).
  * 준비 전에 들어간 초점이나 누름이 준비되면서 바뀌는 화면(저장한 결정 반영, 상세 스크롤)과 어긋나지 않게 하려는 것이다.
  */
 export function ApplicantsScreen({
   applicantsPath,
+  uploadPath,
   ready,
   filter,
   selectedCode,
@@ -133,7 +140,6 @@ export function ApplicantsScreen({
   onSelectApplicant,
   onDecide,
   onSave,
-  onOpenOriginal,
 }: ApplicantsScreenProps) {
   // 현재 위치: 홈 / 지원자 관리(링크) / 접수현황 / 서류 검토 / 걸러 보기 이름 / 고른 지원자 코드. 마지막 칸이 지금 위치다(굵게).
   // 고른 지원자가 없으면 걸러 보기 이름이 마지막 칸이다. 나머지는 갈 곳 없는 링크다.
@@ -237,7 +243,7 @@ export function ApplicantsScreen({
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-[8px]">
+          <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[8px]">
             <span id="mine-label" className="text-[13px] leading-[18px] font-medium text-[#505050]">
               내 배정 보기
             </span>
@@ -254,6 +260,10 @@ export function ApplicantsScreen({
             >
               <span aria-hidden="true" className="h-[16px] w-[16px] rounded-[50%] bg-white" />
             </button>
+            {/* 디자인에는 없는 링크: 학생부 PDF 를 올려 분석하는 화면으로 간다(올린 학생부는 이 표와 평가하기에 지원자로 나온다). */}
+            <Link href={uploadPath} className={`${BUTTON_SECONDARY_CLASS} ml-[8px] h-[32px] scroll-m-[8px] px-[12px]`}>
+              학생부 올리기
+            </Link>
           </div>
         </div>
 
@@ -354,13 +364,9 @@ export function ApplicantsScreen({
                       <StatusChip tone={STATUS_TONE[detail.status]}>{detail.status}</StatusChip>
                     </div>
                     <div className="flex gap-[8px]">
-                      <button
-                        type="button"
-                        onClick={onOpenOriginal}
-                        className={`${DETAIL_BUTTON_CLASS} ${BUTTON_SECONDARY_CLASS}`}
-                      >
+                      <Link href={detail.originalHref} className={`${DETAIL_BUTTON_CLASS} ${BUTTON_SECONDARY_CLASS}`}>
                         원문보기
-                      </button>
+                      </Link>
                       {/* 저장된 값과 다른 결정이 있을 때만 눌린다. 화면의 결정이 저장된 그대로면 글이 "저장됨" 이다(눌리지 않는다). */}
                       <button
                         ref={saveButtonRef}

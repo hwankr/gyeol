@@ -31,8 +31,8 @@ const EFFORT = "low";
 /** 응답 최대 토큰. 생각 토큰도 여기에 포함된다. */
 const MAX_TOKENS = 16000;
 
-/** AI 에 보내는 서술형 항목의 항목명. 항목명이 글자 그대로 같은 항목만 보낸다. */
-const NARRATIVE_CATEGORIES: readonly string[] = [
+/** AI 에 보내는 서술형 항목의 항목명. 항목명이 글자 그대로 같은 항목만 보낸다. AI 제안(./assessRecord.ts)도 이 항목을 쓴다. */
+export const NARRATIVE_CATEGORIES: readonly string[] = [
   "자율활동",
   "동아리활동",
   "진로활동",

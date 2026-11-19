@@ -6,8 +6,8 @@ import {
   PANEL_CLASS,
   PANEL_HEAD_CLASS,
   PANEL_TITLE_CLASS,
-  StatusChip,
 } from "@/components/consoleUi";
+import { PdfDropBox, PickedFileRow } from "@/components/PdfUpload";
 import { FOCUS_FALLBACK_PROPS, prepBodyProps } from "@/lib/prep/focusMarks";
 import type { GuidelineChange } from "@/lib/prep/guidelineChanges";
 
@@ -118,122 +118,26 @@ export function GuidelineUploadTab({
           </h2>
         </div>
         <div className="flex flex-[1_1_auto] flex-col p-[20px]">
-          {/*
-            숨긴 입력란은 1px 이라 초점 표시가 보이지 않으므로, 입력란에 키보드 초점이 있을 때 상자에 전역 :focus-visible 과
-            같은 모양(검정 2px 실선, 2px 띄움)을 그린다. 초안을 기다리는 동안에는 입력란을 막고(disabled) 끌어다 놓은 파일도 받지 않는다.
-            그동안 입력란은 마우스 입력도 받지 않는다(pointer-events: none). disabled 입력란에 누름이 걸리면 상자의 mousedown 처리까지 가지 않고
-            지금 초점이 body 로 빠지기 때문이다. 그러면 그 자리의 누름도 상자(또는 그 안의 글자)가 받는다.
-          */}
-          <label
-            ref={dropBoxRef}
-            className={`relative box-border flex min-h-[280px] flex-[1_1_auto] flex-col items-center justify-center gap-[8px] rounded-[8px] border-[1.5px] border-dashed p-[24px] text-center ${
-              isDragOver ? "border-[#001AD0] bg-[#EEF0FF]" : "border-[#AEAEAE] bg-white"
-            } ${
-              isGenerating ? "cursor-default" : "cursor-pointer"
-            } has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-[#000] has-[input:focus-visible]:outline-solid`}
-            // 기다리는 동안 꺼져 있는 상자를 눌러도 지금 초점(예: 기준 초안 만들기)을 빼앗지 않는다(누름의 기본 동작 가운데 초점 옮기기만 막는다.
-            // 입력란이 disabled 라 파일 선택 창은 열리지 않는다).
-            onMouseDown={(event) => {
-              if (isGenerating) event.preventDefault();
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              // 파일을 끌 때만 강조한다(글자나 링크를 끄는 것은 놓아도 받지 않는다).
-              if (event.dataTransfer.types.includes("Files")) onDragOverBox();
-            }}
-            onDragLeave={(event) => {
-              // 상자 안의 글자·그림 사이를 지날 때도 dragleave 가 온다. 상자 밖으로 나갈 때만 강조를 끈다.
-              const next = event.relatedTarget;
-              if (!(next instanceof Node && event.currentTarget.contains(next))) onDragLeaveBox();
-            }}
-            onDrop={(event) => {
-              // 기다리는 동안에도 기본 동작(브라우저가 파일을 여는 것)은 막는다. 그때 파일은 상태 훅이 받지 않는다.
-              event.preventDefault();
-              onDropFiles(event.dataTransfer.files);
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              disabled={isGenerating}
-              className={`absolute h-[1px] w-[1px] opacity-0${isGenerating ? " pointer-events-none" : ""}`}
-              onChange={onFileInputChange}
-              onFocus={onFileInputFocus}
-              {...FOCUS_FALLBACK_PROPS}
-            />
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 32 32"
-              fill="none"
-              stroke="#001AD0"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-[32px] w-[32px]"
-            >
-              <path d="M16 21V6M10 11.5 16 5.5l6 6M5 20v5.5h22V20" />
-            </svg>
-            {/* 버튼 모양의 글자다(누르는 것은 상자 전체). 기다리는 동안에는 꺼진 주 버튼 모양(옅은 회색 바탕, 회색 글자)이다. */}
-            <span
-              className={`mt-[4px] inline-flex h-[36px] items-center rounded-[6px] border px-[16px] text-[14px] font-semibold ${
-                isGenerating ? "border-[#E4E6EE] bg-[#E4E6EE] text-[#505050]" : "border-[#000947] bg-[#000947] text-white"
-              }`}
-            >
-              모집요강 올리기
-            </span>
-            <span className="text-[14px] leading-[20px] text-[#505050]">모집요강 PDF 파일을 이곳에 올리세요.</span>
-            {/* 걸린 파일의 오류 문구 자리. 문구가 없어도 한 줄 높이를 차지해 문구가 나타날 때 상자 안이 움직이지 않는다. */}
-            <span
-              role="alert"
-              className="min-h-[18px] text-[13px] leading-[18px] font-medium text-[#BA1A1A] [overflow-wrap:anywhere]"
-            >
-              {fileError}
-            </span>
-          </label>
+          {/* 점선 상자와 고른 파일 줄은 학생부 올리기와 같이 쓰는 조각이다(components/PdfUpload.tsx). */}
+          <PdfDropBox
+            boxRef={dropBoxRef}
+            inputRef={fileInputRef}
+            busy={isGenerating}
+            dragOver={isDragOver}
+            buttonLabel="모집요강 올리기"
+            hint="모집요강 PDF 파일을 이곳에 올리세요."
+            error={fileError}
+            inputProps={FOCUS_FALLBACK_PROPS}
+            onInputChange={onFileInputChange}
+            onInputFocus={onFileInputFocus}
+            onDropFiles={onDropFiles}
+            onDragOverBox={onDragOverBox}
+            onDragLeaveBox={onDragLeaveBox}
+          />
 
           {fileName !== null && (
             <>
-              <div
-                role="group"
-                aria-label="올린 파일"
-                className="mt-[12px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px] rounded-[6px] border border-[#E4E4E4] px-[12px] py-[10px]"
-              >
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="#505050"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-[20px] w-[20px] flex-none"
-                >
-                  <path d="M5 2.5h6.5L15.5 6.5V17.5H5z" />
-                  <path d="M11.5 2.5v4h4" />
-                </svg>
-                {/* 긴 이름은 한 줄에서 말줄임표로 자른다. 전체 이름은 title 로 볼 수 있다. */}
-                <span
-                  title={fileName}
-                  className="min-w-0 flex-[1_1_160px] overflow-hidden font-medium text-ellipsis whitespace-nowrap"
-                >
-                  {fileName}
-                </span>
-                <span className="text-[13px] text-[#505050] tabular-nums">{fileSizeText}</span>
-                <StatusChip tone="green">올리기 완료</StatusChip>
-                {/*
-                  누르면 이 줄이 사라진다(초점은 상태 훅이 파일 입력란으로 옮긴다). 기다리는 동안에는 "기준 초안 만들기" 와 같이
-                  disabled 대신 aria-disabled 로 두어 초점이 남게 하고, 눌러도 상태 훅이 아무것도 하지 않는다(흐린 모양, 기본 화살표 커서).
-                */}
-                <button
-                  type="button"
-                  aria-disabled={isGenerating ? "true" : undefined}
-                  onClick={(event) => onClearFile(event.currentTarget === document.activeElement)}
-                  className={`${BUTTON_SECONDARY_CLASS} h-[28px] scroll-m-[8px] cursor-pointer px-[10px] aria-disabled:cursor-default aria-disabled:opacity-[0.45]`}
-                >
-                  삭제
-                </button>
-              </div>
+              <PickedFileRow fileName={fileName} sizeText={fileSizeText} busy={isGenerating} onClear={onClearFile} />
 
               <div className="mt-[12px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
                 {/*

@@ -1,4 +1,4 @@
-// 화면에서 API 를 부를 때 같이 쓰는 것 (lib/analyzeClient.ts, lib/criteriaClient.ts). 브라우저에서만 쓴다.
+// 화면에서 API 를 부를 때 같이 쓰는 것 (lib/analyzeClient.ts, lib/guidelineClient.ts). 브라우저에서만 쓴다.
 
 /** 서버에 연결하지 못했을 때 보여 주는 문구 */
 export const CONNECTION_ERROR = "서버에 연결하지 못했습니다. 다시 시도해 주세요.";

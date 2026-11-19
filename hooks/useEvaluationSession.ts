@@ -1,13 +1,15 @@
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useEvaluationData } from "@/hooks/useEvaluationData";
 import { ADMISSION } from "@/lib/admission";
 import {
   EMPTY_EVALUATION,
-  criteriaBasis,
+  documentAreasOf,
   effectiveRecord,
+  evaluateOriginalPath,
+  evaluationBasis,
   evaluationStatus,
-  isEvidenceSlot,
+  evidenceSlotCount,
+  evidenceSlotsOf,
   passageSource,
   passagesIn,
   queuePosition,
@@ -16,14 +18,7 @@ import {
   type EvaluationRecord,
 } from "@/lib/evaluate/evaluation";
 import { updateEvaluation } from "@/lib/evaluate/evaluationStorage";
-import {
-  DOCUMENT_AREAS,
-  INITIAL_DOCUMENT_AREA,
-  type DocumentArea,
-  type EvaluationApplicant,
-} from "@/lib/evaluate/sampleEvaluations";
-import { sampleResult } from "@/lib/mock/sampleResult";
-import { saveResult } from "@/lib/resultStorage";
+import { INITIAL_DOCUMENT_AREA, type DocumentArea, type EvaluationApplicant } from "@/lib/evaluate/sampleEvaluations";
 
 /** 저장소에 쓰지 못했을 때의 안내 (이 페이지의 메모리에는 남아 있다) */
 const UNSAVED_NOTE = "브라우저 저장소에 쓰지 못했습니다. 이 탭을 닫으면 지금 내용이 사라집니다.";
@@ -38,20 +33,17 @@ export type SegmentEmphasis = "selected" | "other" | "none";
 
 /**
  * 총평 화면과 세부 항목 평가 화면이 같이 쓰는 지원자 한 명의 평가 상태: 지금 평가(저장한 평가 또는 처음 상태), 고치기(쓸 때마다 저장),
- * 임시저장, 보류·재검토 요청 표시, 가림 누락 신고, 서류 원문(서류 구분 고르기, 근거 강조), 원문보기, 평가 순서의 앞뒤 지원자.
+ * 임시저장, 보류·재검토 요청 표시, 가림 누락 신고, 서류 원문(서류 구분 고르기, 근거 강조), 원문보기 화면의 주소, 평가 순서의 앞뒤 지원자.
  * 지원자가 바뀌면 이 훅을 쓰는 컴포넌트를 새로 그린다(key). 그래서 안내 글·서류 구분은 지원자마다 처음 상태로 시작한다.
  * pathOf 는 앞뒤 지원자로 갈 주소를 만든다(총평은 총평으로, 세부 항목 평가는 같은 평가 요소의 세부 항목 평가로).
  */
 export function useEvaluationSession(applicant: EvaluationApplicant, pathOf: (code: string) => string) {
-  const router = useRouter();
-  const { elements, criteriaVersion, stored, unsaved } = useEvaluationData();
+  const { elements, criteriaVersion, stored, unsaved, applicants } = useEvaluationData();
   const record = effectiveRecord(applicant, stored, elements);
   const locked = record?.status === "submitted";
   /** 방금 한 일의 안내 ("방금 임시 저장했습니다." 등). 다른 것을 고치면 지운다. */
   const [note, setNote] = useState("");
   const [area, setArea] = useState<DocumentArea>(INITIAL_DOCUMENT_AREA);
-  /** 원문보기에서 샘플 결과를 저장하지 못했는지 */
-  const [originalFailed, setOriginalFailed] = useState(false);
   /** 앞뒤 지원자로 가는 링크 (제출한 뒤 초점을 옮길 곳) */
   const nextLinkRef = useRef<HTMLAnchorElement>(null);
   const backLinkRef = useRef<HTMLAnchorElement>(null);
@@ -66,7 +58,7 @@ export function useEvaluationSession(applicant: EvaluationApplicant, pathOf: (co
       ...(record ?? EMPTY_EVALUATION),
       status: "editing",
       ...changes,
-      basis: criteriaBasis(elements),
+      basis: evaluationBasis(applicant, elements),
     });
     setNote(nextNote);
     return true;
@@ -91,49 +83,35 @@ export function useEvaluationSession(applicant: EvaluationApplicant, pathOf: (co
   function toggleMaskReport() {
     const base = record ?? EMPTY_EVALUATION;
     const reported = !base.maskReported;
-    updateEvaluation(applicant.code, { ...base, maskReported: reported, basis: criteriaBasis(elements) });
+    updateEvaluation(applicant.code, { ...base, maskReported: reported, basis: evaluationBasis(applicant, elements) });
     setNote(reported ? "가림 누락을 신고했습니다." : "가림 누락 신고를 거두었습니다.");
   }
 
-  /**
-   * 원문보기: 예시 지원자는 학생부 원문 파일이 없으므로 지원자 관리의 원문보기와 똑같이 미리 만든 샘플 결과를 저장하고 결과 화면으로 간다.
-   * 저장하지 못하면(sessionStorage 막힘 등) 빈 결과 화면으로 가지 않도록 이동하지 않고 안내를 보여 준다.
-   */
-  function openOriginal() {
-    try {
-      saveResult(sampleResult);
-    } catch {
-      setOriginalFailed(true);
-      return;
-    }
-    setOriginalFailed(false);
-    router.push("/result");
-  }
-
-  const queue = queuePosition(applicant.code);
+  const queue = queuePosition(applicants, applicant.code);
   const mark = MARKS.find((item) => item.key === record?.mark);
 
-  /** 서류 원문: 고른 서류 구분의 원문과 조각마다의 강조. highlightIndex 는 근거를 강조할 평가 요소의 순번이다. */
+  /**
+   * 서류 원문: 고른 서류 구분의 원문과 조각마다의 강조. highlightIndex 는 근거를 강조할 평가 요소의 순번이다.
+   * 조각이 여러 요소의 근거면(올린 지원자의 겹친 구절) 지금 요소가 그 가운데 있을 때 "selected", 없으면 "other" 다.
+   */
   function documentView(highlightIndex: number) {
-    const selectedSlot = slotOf(highlightIndex);
+    const selectedSlot = slotOf(applicant, highlightIndex);
+    const slotLimit = evidenceSlotCount(applicant, elements.length);
     return {
-      areas: DOCUMENT_AREAS.map((item) => ({ area: item, on: item === area, onPick: () => setArea(item) })),
+      areas: documentAreasOf(applicant).map((item) => ({ area: item, on: item === area, onPick: () => setArea(item) })),
       passages: passagesIn(applicant, area).map((passage) => ({
         id: passage.id,
         source: passageSource(passage),
         segments: passage.segments.map((segment, index) => {
-          const emphasis: SegmentEmphasis = !isEvidenceSlot(segment.slot, elements.length)
-            ? "none"
-            : segment.slot === selectedSlot
-              ? "selected"
-              : "other";
+          const slots = evidenceSlotsOf(segment, slotLimit);
+          const emphasis: SegmentEmphasis = slots.length === 0 ? "none" : slots.includes(selectedSlot) ? "selected" : "other";
           return { key: `${passage.id}-${index}`, text: segment.text, emphasis };
         }),
       })),
       maskReported: record?.maskReported === true,
       onToggleMaskReport: toggleMaskReport,
-      onOpenOriginal: openOriginal,
-      originalFailed,
+      // 원문보기 화면(/evaluate/original). 올린 지원자는 그 학생부의 분석 결과를, 예시 지원자는 미리 만든 샘플 결과를 보여 준다.
+      originalHref: evaluateOriginalPath(applicant.code),
     };
   }
 

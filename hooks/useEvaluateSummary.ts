@@ -20,6 +20,9 @@ import {
 } from "@/lib/evaluate/evaluation";
 import type { EvaluationApplicant } from "@/lib/evaluate/sampleEvaluations";
 
+/** 학생 성장 요약 그림에서 건수 막대 눈금의 끝 (디자인 값) */
+const GROWTH_COUNT_MAX = 5;
+
 /**
  * 평가하기 · 총평 화면 상태: 지원자 한 명의 학생 성장 요약, 서류 원문, 항목별 AI 점수와 근거(평가 요소 고르기), 내 평가 입력
  * (요소별 내 점수, AI 점수와 다른 요소의 수정 사유, 종합 의견, 보류·재검토 요청, 제출), 제출한 뒤의 다른 위원 의견.
@@ -95,9 +98,12 @@ export function useEvaluateSummary(applicant: EvaluationApplicant) {
     bar: { ...session.bar, backHref: EVALUATE_PATH, backLabel: "목록" },
     growth: {
       points: applicant.growth,
-      label: `학년별 성장 추이: ${applicant.growth.map((point) => `${point.grade}학년 ${point.index}`).join(", ")}. 활동 건수: ${applicant.growth
-        .map((point) => `${point.grade}학년 ${point.count}건`)
-        .join(", ")}`,
+      // 막대 눈금의 끝: 보통 5 건이고, 건수가 그보다 많으면(올린 지원자의 근거 건수) 가장 큰 건수에 맞춘다.
+      countMax: Math.max(GROWTH_COUNT_MAX, ...applicant.growth.map((point) => point.count)),
+      // 건수는 예시 지원자는 활동 건수(예시 값), 올린 지원자는 그 학년 기록에서 나온 근거 구절의 수다.
+      label: `학년별 성장 추이: ${applicant.growth.map((point) => `${point.grade}학년 ${point.index}`).join(", ")}. ${
+        applicant.original === undefined ? "활동 건수" : "근거 건수"
+      }: ${applicant.growth.map((point) => `${point.grade}학년 ${point.count}건`).join(", ")}`,
     },
     document: session.documentView(selectedIndex),
     basis: {
@@ -163,7 +169,7 @@ export function useEvaluateSummary(applicant: EvaluationApplicant) {
       submitLabel: locked ? "제출됨" : "평가 완료 제출",
       onSubmit: submit,
       marks: session.marks,
-      /** 다른 위원 의견: 내 평가를 제출한 뒤에만 보인다 */
+      /** 다른 위원 의견: 내 평가를 제출한 뒤에만 보인다. 올린 지원자는 다른 위원이 없어 빈 목록이다. */
       peers: locked ? applicant.peers : null,
     },
   };

@@ -32,9 +32,33 @@ export type Evidence = {
   reason: string;      // 이 구절이 해당 기준의 근거인 이유
 };
 
+/** 평가 요소 하나에 대한 AI 제안. 사정관이 평가를 시작할 때 참고하는 값이고 확정 점수가 아니다. */
+export type ElementAssessment = {
+  criterionId: string; // Criterion.id (c1 …). 평가 요소 순서와 같다
+  score: number;       // 제안 점수 0~100 정수: 세부 평가 항목 질문마다 AI 가 고른 1~5 의 평균 × 20
+  confidence: number;  // 신뢰도 1~4 정수. 1 이면 사람이 직접 확인해야 한다
+  tags: string[];      // 기록이 뚜렷한 묶음의 태그 (0~2개)
+};
+
+/** 학년 하나의 성장 요약 (AI 제안) */
+export type GradeGrowth = {
+  grade: number;  // 1~3
+  label: string;  // 그 학년 기록의 특징 (예: "기초 탐구")
+  index: number;  // 그 학년 기록에 드러난 탐구·활동의 깊이 0~100 정수 (같은 학생의 학년 사이 변화를 보는 값)
+};
+
+/** 전형 준비의 평가 기준으로 분석했을 때 AI 가 만드는 제안 (lib/pipeline/assessRecord.ts) */
+export type Assessment = {
+  rubric: string;                // 이 제안을 만든 세부 평가 항목의 지문 (lib/prep/analysisCriteria.ts 의 rubricFingerprint)
+  summary: string;               // 한 줄 요약
+  elements: ElementAssessment[]; // criteria.criteria 와 같은 순서·같은 개수
+  growth: GradeGrowth[];         // 1·2·3학년 순서로 세 건
+};
+
 export type AnalysisResult = {
   criteria: DepartmentCriteria;
   sections: Section[];   // 블라인드 처리(lib/pipeline/blind.ts)를 거친 항목. 가리기 전 원문은 들어 있지 않다
   evidences: Evidence[];
   masks: { type: string; count: number }[]; // 블라인드 처리 내역: 가린 정보 종류(예: "학교명")와 가린 곳 수. 가린 것이 없으면 빈 배열
+  assessment?: Assessment; // AI 제안. 전형 준비의 평가 기준으로 분석했을 때만 있다(그 밖의 학과 기준으로 분석한 결과와 예전 결과에는 없다)
 };

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { EvaluateMissing } from "@/components/EvaluateParts";
 import { EvaluateSummaryScreen } from "@/components/EvaluateSummaryScreen";
 import { useEvaluateSummary } from "@/hooks/useEvaluateSummary";
+import { useEvaluationData } from "@/hooks/useEvaluationData";
 import { ADMISSION } from "@/lib/admission";
 import { findEvaluationApplicant } from "@/lib/evaluate/evaluation";
 import type { EvaluationApplicant } from "@/lib/evaluate/sampleEvaluations";
@@ -23,7 +24,9 @@ export default function EvaluateSummaryPage() {
 }
 
 function SummaryByCode() {
-  const applicant = findEvaluationApplicant(useSearchParams().get("code"));
+  // 평가할 지원자 목록(예시 지원자 + 지금 평가 기준으로 분석한 올린 지원자)에서 찾는다. 올린 지원자는 브라우저 저장소에 있다.
+  const { applicants } = useEvaluationData();
+  const applicant = findEvaluationApplicant(applicants, useSearchParams().get("code"));
   if (applicant === undefined) return <EvaluateMissing note={`${ADMISSION.trackFull} · ${ADMISSION.unit}`} />;
   // 지원자가 바뀌면 새로 그려서 고른 평가 요소·서류 구분·안내 글을 처음 상태로 시작한다(저장한 평가는 저장소에 있어 그대로다).
   return <Summary key={applicant.code} applicant={applicant} />;
