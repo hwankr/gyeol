@@ -6,6 +6,7 @@ import {
   readApiKey,
   toTaggedJson,
 } from "./claude.ts";
+import { NARRATIVE_CATEGORIES } from "../recordSections.ts";
 import { locateQuote } from "./locateQuote.ts";
 
 // 근거 추출: 학생부 서술형 항목과 학과 평가 기준을 Claude API 에 한 번에 보내 기준별 근거 구절을 받고,
@@ -31,15 +32,11 @@ const EFFORT = "low";
 /** 응답 최대 토큰. 생각 토큰도 여기에 포함된다. */
 const MAX_TOKENS = 16000;
 
-/** AI 에 보내는 서술형 항목의 항목명. 항목명이 글자 그대로 같은 항목만 보낸다. AI 제안(./assessRecord.ts)도 이 항목을 쓴다. */
-export const NARRATIVE_CATEGORIES: readonly string[] = [
-  "자율활동",
-  "동아리활동",
-  "진로활동",
-  "세부능력 및 특기사항",
-  "독서활동상황",
-  "행동특성 및 종합의견",
-];
+/**
+ * AI 에 보내는 서술형 항목의 항목명. 항목명이 글자 그대로 같은 항목만 보낸다. AI 제안(./assessRecord.ts)도 이 항목을 쓴다.
+ * 목록은 화면 코드도 쓰는 ../recordSections.ts 에 있다(이 파일은 SDK 를 가져와 화면에서 가져올 수 없다).
+ */
+export { NARRATIVE_CATEGORIES };
 
 /** AI 가 거절했을 때 화면에 보여 줄 문구. 나머지 오류 문구(키 없음, 시간 초과 등)는 ./claude.ts 에 있다. */
 const REFUSAL_MESSAGE = "AI 가 이 요청에 대한 응답을 거절해 근거를 찾지 못했습니다.";

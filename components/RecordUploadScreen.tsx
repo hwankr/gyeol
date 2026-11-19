@@ -202,7 +202,7 @@ export function RecordUploadScreen({
           </div>
           <div className="px-[20px] pt-[4px] pb-[8px] [overflow-wrap:anywhere] [word-break:keep-all]">
             <p className="py-[12px] text-[13px] leading-[20px] text-[#505050]">
-              전형 준비에서 저장한 {criteria.department} 평가 기준으로 근거를 찾고 AI 점수 제안을 만듭니다. 식별 정보는 분석하기 전에 가립니다.
+              전형 준비에서 저장한 {criteria.department} 평가 기준으로 근거를 찾고 AI 점수 제안을 만듭니다. 식별 정보는 분석하기 전에 가립니다. 스캔본처럼 글자를 바로 읽을 수 없는 학생부는 AI 가 가리기 전의 쪽 그림을 읽어 글로 옮긴 뒤에 가립니다.
             </p>
             <ul>
               {criteria.elements.map((element) => (
