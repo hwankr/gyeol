@@ -9,8 +9,10 @@ import {
   PANEL_HEAD_CLASS,
   PANEL_TITLE_CLASS,
   StatusChip,
+  segmentClass,
   type ConsoleCrumb,
 } from "@/components/consoleUi";
+import type { OriginalMode, PdfPageView } from "@/hooks/useOriginalView";
 import type { CriterionTab, EvidenceCardView, SourceSectionView, TextSegment } from "@/lib/resultView";
 
 type OriginalScreenProps = {
@@ -40,9 +42,29 @@ type OriginalScreenProps = {
   selectedSectionRef: Ref<HTMLElement>;
   /** 강조한 인용 구절 */
   highlightRef: Ref<HTMLElement>;
+  /** PDF 쪽 스크롤 영역 */
+  pdfScrollRef: Ref<HTMLDivElement>;
+  /** PDF 쪽 위의 표시 가운데 스크롤 대상 */
+  pdfTargetRef: Ref<HTMLSpanElement>;
+  /** 실제 PDF 보기: 가린 쪽 그림과 그 위의 표시. 쪽 그림이 없는 지원자는 available 이 false 다(보기 고르기와 쪽 번호 버튼이 없다) */
+  pdf: {
+    available: boolean;
+    /** 왼쪽 단의 지금 보기 */
+    mode: OriginalMode;
+    pages: readonly PdfPageView[];
+    onSelectMode: (mode: OriginalMode) => void;
+    /** 항목의 쪽 번호를 누름: 그 항목을 PDF 에서 본다 */
+    onShowSection: (sectionId: string) => void;
+  };
   onSelectTab: (criterionId: string) => void;
   onSelectEvidence: (evidenceId: string) => void;
 };
+
+/** 왼쪽 단의 보기 고르기 */
+const MODES: readonly { mode: OriginalMode; label: string }[] = [
+  { mode: "text", label: "글" },
+  { mode: "pdf", label: "PDF" },
+];
 
 /**
  * 두 단의 높이: 화면 높이에서 위의 것(상단 바, 현재 위치·제목·지원자 줄, 여백)을 뺀 만큼이고 480px 보다 작아지지 않는다.
@@ -58,6 +80,8 @@ const SCROLL_CLASS = "min-h-0 flex-[1_1_auto] scroll-m-[8px] overflow-y-auto [sc
  * 기준을 고르면 그 기준의 근거 구절에 원문에서 점선 밑줄이 그어지고, 근거를 누르면 원문이 그 자리로 스크롤되며 그 구절이 색 면으로 강조된다.
  * 디자인 시안에는 없는 화면이라 평가하기의 지원자 줄·서류 원문과 같은 조각과 색으로 만들었다. 폭이 모자라면 오른쪽 단이 아래로 내려간다.
  * 기준을 바꾸면 그 기준의 근거가 옅게 나타나고, 근거를 고르면 원문의 그 구절이 잠깐 짙게 나타났다가 제 색으로 가라앉는다(스크롤이 닿는 곳을 알아보게).
+ * 올린 학생부는 왼쪽 단을 "글" 과 "PDF" 로 바꿔 볼 수 있다. PDF 는 실제 학생부의 쪽 그림이고 가린 정보의 자리는 덮여 있다(가리기 전 그림은
+ * 어디에도 남지 않는다). 항목 제목의 쪽 번호를 누르거나 PDF 보기에서 근거를 고르면 그 쪽으로 스크롤되고 그 자리가 색 면으로 표시된다.
  */
 export function OriginalScreen({
   crumbs,
@@ -75,6 +99,9 @@ export function OriginalScreen({
   sourceScrollRef,
   selectedSectionRef,
   highlightRef,
+  pdfScrollRef,
+  pdfTargetRef,
+  pdf,
   onSelectTab,
   onSelectEvidence,
 }: OriginalScreenProps) {
@@ -109,20 +136,103 @@ export function OriginalScreen({
 
       <div className={`${PANEL_CLASS} mt-[16px] flex flex-wrap items-stretch`}>
         <section aria-labelledby="original-title" className={`flex min-w-0 flex-[999_1_460px] flex-col ${COLUMN_HEIGHT_CLASS}`}>
-          <div className={`${PANEL_HEAD_CLASS} flex h-[40px] flex-none items-center rounded-tl-[7px] px-[20px]`}>
+          <div className={`${PANEL_HEAD_CLASS} flex h-[40px] flex-none items-center justify-between gap-[8px] rounded-tl-[7px] px-[20px]`}>
             <h3 id="original-title" className={PANEL_TITLE_CLASS}>
               학생부 원문
             </h3>
+            {pdf.available && (
+              <div role="group" aria-label="원문 보기" className="flex">
+                {MODES.map((item, index) => (
+                  <button
+                    key={item.mode}
+                    type="button"
+                    aria-pressed={pdf.mode === item.mode}
+                    onClick={() => pdf.onSelectMode(item.mode)}
+                    className={`${segmentClass(index, MODES.length, pdf.mode === item.mode)} h-[26px] scroll-m-[8px] px-[12px]`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div ref={sourceScrollRef} tabIndex={0} role="group" aria-label="학생부 원문 내용" className={`${SCROLL_CLASS} px-[20px]`}>
+          {pdf.mode === "pdf" && (
+            <div
+              ref={pdfScrollRef}
+              tabIndex={0}
+              role="group"
+              aria-label="학생부 PDF 쪽"
+              className={`${SCROLL_CLASS} flex animate-fade-in flex-col gap-[12px] bg-[#F0F0F2] p-[12px]`}
+            >
+              {pdf.pages.map((page) => (
+                <figure
+                  key={page.page}
+                  className="relative m-0 w-full flex-none overflow-hidden rounded-[2px] border border-[#CFCFCF] bg-white"
+                  style={{ aspectRatio: `${page.width} / ${page.height}` }}
+                >
+                  {page.url !== null ? (
+                    // 그림은 이 브라우저에 남긴 가린 쪽 그림(blob 주소)이라 next/image 를 쓰지 않는다.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={page.url} alt={`학생부 ${page.page}쪽`} loading="lazy" className="absolute inset-0 h-full w-full" />
+                  ) : (
+                    <p className="absolute inset-0 m-0 flex items-center justify-center text-[13px] leading-[18px] text-[#505050]">
+                      {page.stateText}
+                    </p>
+                  )}
+                  {page.marks.map((mark) => (
+                    <span
+                      key={mark.key}
+                      ref={mark.isTarget ? pdfTargetRef : undefined}
+                      aria-hidden="true"
+                      className={`pointer-events-none absolute ${PDF_MARK_CLASS[mark.kind]}`}
+                      style={{
+                        left: `${mark.x * 100}%`,
+                        top: `${mark.y * 100}%`,
+                        width: `${mark.w * 100}%`,
+                        height: `${mark.h * 100}%`,
+                      }}
+                    />
+                  ))}
+                  <figcaption className="absolute right-[6px] bottom-[4px] rounded-[4px] bg-white/[0.85] px-[6px] text-[11px] leading-[16px] font-medium text-[#505050] tabular-nums">
+                    {page.page} / {pdf.pages.length}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
+          <div
+            ref={sourceScrollRef}
+            tabIndex={0}
+            role="group"
+            aria-label="학생부 원문 내용"
+            hidden={pdf.mode === "pdf"}
+            className={`${SCROLL_CLASS} px-[20px] ${pdf.mode === "pdf" ? "hidden" : ""}`}
+          >
             {sections.map((section, index) => (
               <article
                 key={section.id}
                 ref={section.isSelected ? selectedSectionRef : undefined}
                 className={`py-[12px] ${index === 0 ? "" : "border-t border-t-[#E4E4E4]"}`}
               >
-                <h4 className={`text-[12px] leading-[16px] font-semibold ${section.isSelected ? "text-[#001AD0]" : "text-[#505050]"}`}>
+                <h4
+                  className={`flex flex-wrap items-baseline gap-x-[6px] text-[12px] leading-[16px] font-semibold ${
+                    section.isSelected ? "text-[#001AD0]" : "text-[#505050]"
+                  }`}
+                >
                   {sectionTitle(section)}
+                  {/* 쪽 그림이 있으면 쪽 번호가 버튼이다: 누르면 실제 PDF 의 그 쪽에서 이 항목의 자리를 보여 준다. */}
+                  {pdf.available ? (
+                    <button
+                      type="button"
+                      aria-label={`${sectionTitle(section)} PDF ${section.page}쪽 보기`}
+                      onClick={() => pdf.onShowSection(section.id)}
+                      className="motion-colors cursor-pointer scroll-m-[8px] rounded-[4px] border-0 bg-transparent p-0 text-[12px] leading-[16px] font-medium text-[#001AD0] tabular-nums hover-on:underline"
+                    >
+                      PDF {section.page}쪽
+                    </button>
+                  ) : (
+                    <span className="font-medium tabular-nums">· {section.page}쪽</span>
+                  )}
                 </h4>
                 <p className="mt-[6px] text-[14px] leading-[24px] [overflow-wrap:anywhere] break-keep whitespace-pre-wrap">
                   {section.segments.map((segment, segmentIndex) => (
@@ -264,14 +374,26 @@ function SegmentText({
   return <>{segment.text}</>;
 }
 
-/** 항목 제목: 항목명 · 학년 · 과목 · 시간 · 쪽 번호 (학년·과목·시간은 없으면 뺀다. 과목이 빈 문자열이어도 뺀다) */
+/**
+ * PDF 쪽 위의 표시: 고른 근거의 인용 구절은 짙은 색 면(글의 강조 색과 같은 파랑), 그 항목의 원문은 옅은 색 면.
+ * 색 면은 곱하기로 얹어 아래의 글자가 그대로 보인다.
+ */
+const PDF_MARK_CLASS = {
+  quote: "animate-mark-in bg-[#8C9BFF]/[0.45] mix-blend-multiply",
+  section: "bg-[#DCE0FF]/[0.55] mix-blend-multiply",
+} as const;
+
+/**
+ * 항목 제목: 항목명 · 묶음 · 학년 · 과목 · 시간 (묶음·학년·과목·시간은 없으면 뺀다. 과목이 빈 문자열이어도 뺀다).
+ * 묶음은 서식의 "진로 선택 과목"·"체육·예술" 처럼 항목명만으로는 알 수 없는 것이다. 쪽 번호는 제목 옆에 따로 적는다.
+ */
 function sectionTitle(section: SourceSectionView): string {
   return [
     section.category,
+    section.group,
     section.grade === null ? null : `${section.grade}학년`,
     section.subject || null,
     section.hours === undefined ? null : `${section.hours}시간`,
-    `${section.page}쪽`,
   ]
     .filter((part) => part !== null)
     .join(" · ");

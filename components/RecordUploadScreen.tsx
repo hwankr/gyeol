@@ -9,9 +9,12 @@ import {
   PANEL_HEAD_CLASS,
   PANEL_TITLE_CLASS,
   Spinner,
+  StatusChip,
+  type ChipTone,
   type ConsoleCrumb,
 } from "@/components/consoleUi";
-import { BUSY_PRIMARY_BUTTON_CLASS, PdfDropBox, PickedFileRow } from "@/components/PdfUpload";
+import { BUSY_PRIMARY_BUTTON_CLASS, PdfDropBox } from "@/components/PdfUpload";
+import type { RecordUploadRow } from "@/hooks/useRecordUpload";
 
 type RecordUploadScreenProps = {
   /** 화면이 준비됐는지 (준비 전에는 본문이 inert 라 초점을 받지 않고 눌리지 않는다. 모양은 그대로) */
@@ -26,20 +29,19 @@ type RecordUploadScreenProps = {
   dropBoxRef: RefObject<HTMLLabelElement | null>;
   analyzeButtonRef: RefObject<HTMLButtonElement | null>;
   doneLinkRef: RefObject<HTMLAnchorElement | null>;
-  /** 고른 파일 이름 (확인을 통과한 파일만). 있을 때만 파일 줄과 "분석 시작" 줄이 나타난다. */
-  fileName: string | null;
-  fileSizeText: string;
+  /** 올려 둔 학생부 (올려 둔 순서). 한 줄이 한 건이다 */
+  rows: readonly RecordUploadRow[];
+  /** 방금 고른 파일 가운데 받지 못한 것이 있을 때의 문구 */
   fileError: string | null;
   isDragOver: boolean;
-  /** 분석을 기다리는 중인지 (버튼은 aria-disabled, 파일 선택은 막힌다) */
+  /** 분석하는 중인지 (버튼은 aria-disabled, 파일 선택과 줄의 "삭제" 는 막힌다) */
   isAnalyzing: boolean;
-  /** 버튼 오른쪽 상태 글 (기다리는 동안만) */
+  /** "분석 시작" 줄을 보여 줄지 (분석할 학생부가 있거나 분석하는 중) */
+  showAnalyze: boolean;
+  /** 버튼 오른쪽 상태 글 (분석하는 동안만) */
   statusText: string;
-  requestError: string | null;
   /** 저장소에 쓰지 못했을 때의 안내 (없으면 빈 글) */
   storageNotice: string;
-  /** 방금 올린 학생부의 안내. evaluateHref 가 null 이면 평가 대기 목록에 나오지 않는 학생부다. */
-  done: { text: string; evaluateHref: string | null; originalHref: string } | null;
   /** 이 브라우저에 남아 있는 올린 학생부 수와 한도 */
   keptText: string;
   /** 분석에 쓰는 평가 기준 */
@@ -52,16 +54,24 @@ type RecordUploadScreenProps = {
   onDropFiles: (files: FileList) => void;
   onDragOverBox: () => void;
   onDragLeaveBox: () => void;
-  onClearFile: (hadFocus: boolean) => void;
+  onRemoveRow: (id: number, hadFocus: boolean) => void;
   onAnalyze: () => void;
   onFileInputFocus: () => void;
 };
 
+const STATUS_TONE: Record<RecordUploadRow["status"], ChipTone> = {
+  waiting: "gray",
+  working: "blue",
+  done: "green",
+  failed: "red",
+};
+
 /**
  * 지원자 관리 · 학생부 올리기 화면(/applicants/upload). 디자인 시안에는 없는 화면이라 전형 준비의 모집요강 올리기와 같은 조각
- * (점선 상자, 파일 줄, 주 버튼과 상태 글, 실패 문구, 안내 상자)과 같은 두 단 상자로 만들었다. 왼쪽은 "학생부 올리기",
+ * (점선 상자, 파일 줄, 주 버튼과 상태 글, 실패 문구)과 같은 두 단 상자로 만들었다. 왼쪽은 "학생부 올리기",
  * 오른쪽(400px 까지)은 "분석에 쓰는 평가 기준"(전형 준비에서 저장한 요소·배점·태그와 고치러 가는 링크)이다. 폭이 모자라면 오른쪽 단이 아래로 내려간다.
- * 분석이 끝나면 파일 줄과 "분석 시작" 이 사라지고 방금 올린 학생부의 안내(평가하기·원문보기 링크)가 나타난다. 다른 화면으로 가지 않는다.
+ * 학생부는 여러 건을 한꺼번에 올려 둘 수 있다. 올려 둔 학생부는 한 줄씩 보이고(이름·크기·상태), "분석 시작" 을 누르면 올려 둔 순서대로
+ * 한 건씩 분석한다. 끝난 줄은 파일 이름 대신 지원자 코드와 평가하기·원문보기 링크를 보여 준다. 다른 화면으로 가지 않는다.
  */
 export function RecordUploadScreen({
   ready,
@@ -73,25 +83,25 @@ export function RecordUploadScreen({
   dropBoxRef,
   analyzeButtonRef,
   doneLinkRef,
-  fileName,
-  fileSizeText,
+  rows,
   fileError,
   isDragOver,
   isAnalyzing,
+  showAnalyze,
   statusText,
-  requestError,
   storageNotice,
-  done,
   keptText,
   criteria,
   onFileInputChange,
   onDropFiles,
   onDragOverBox,
   onDragLeaveBox,
-  onClearFile,
+  onRemoveRow,
   onAnalyze,
   onFileInputFocus,
 }: RecordUploadScreenProps) {
+  /** 끝난 줄 가운데 가장 나중 것: 그 줄의 첫 링크가 "분석 시작" 이 사라질 때 초점을 받는다. */
+  const lastDoneId = rows.findLast((row) => row.links !== null)?.id;
   return (
     <>
       <ConsoleCrumbs items={crumbs} />
@@ -118,6 +128,7 @@ export function RecordUploadScreen({
               buttonLabel="학생부 올리기"
               hint="학생부 PDF 파일을 이곳에 올리세요."
               error={fileError}
+              multiple
               onInputChange={onFileInputChange}
               onInputFocus={onFileInputFocus}
               onDropFiles={onDropFiles}
@@ -125,67 +136,108 @@ export function RecordUploadScreen({
               onDragLeaveBox={onDragLeaveBox}
             />
 
-            {fileName !== null && (
-              <>
-                <PickedFileRow fileName={fileName} sizeText={fileSizeText} busy={isAnalyzing} onClear={onClearFile} />
-
-                <div className="mt-[12px] flex animate-fade-in flex-wrap items-center gap-x-[12px] gap-y-[8px]">
-                  {/* 기다리는 동안 disabled 대신 aria-disabled 로 두어(누르면 상태 훅이 아무것도 하지 않는다) 초점이 버튼에 남게 한다. */}
-                  <button
-                    ref={analyzeButtonRef}
-                    type="button"
-                    aria-disabled={isAnalyzing ? "true" : undefined}
-                    onClick={onAnalyze}
-                    className={`${BUTTON_PRIMARY_CLASS} ${BUSY_PRIMARY_BUTTON_CLASS}`}
-                  >
-                    분석 시작
-                  </button>
-                  {/* 기다리는 동안에는 상태 글 앞에 돌아가는 표시가 있다(분석은 20초 남짓 걸린다). */}
-                  <p aria-live="polite" className="flex items-center gap-[6px] text-[13px] leading-[18px] text-[#505050]">
-                    {statusText !== "" && <Spinner />}
-                    {statusText}
-                  </p>
-                </div>
-              </>
+            {rows.length > 0 && (
+              <ul aria-label="올려 둔 학생부" className="mt-[12px] flex flex-col gap-[8px]">
+                {rows.map((row) => (
+                  <li key={row.id} className="animate-fade-in rounded-[6px] border border-[#E4E4E4] px-[12px] py-[10px]">
+                    <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        stroke="#505050"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-[20px] w-[20px] flex-none"
+                      >
+                        <path d="M5 2.5h6.5L15.5 6.5V17.5H5z" />
+                        <path d="M11.5 2.5v4h4" />
+                      </svg>
+                      {/* 긴 이름은 한 줄에서 말줄임표로 자른다(전체 이름은 title 로 볼 수 있다). 끝난 줄은 지원자 코드다. */}
+                      <span
+                        title={row.title}
+                        className="min-w-0 flex-[1_1_160px] overflow-hidden font-medium text-ellipsis whitespace-nowrap tabular-nums"
+                      >
+                        {row.title}
+                      </span>
+                      {row.sizeText !== "" && <span className="text-[13px] text-[#505050] tabular-nums">{row.sizeText}</span>}
+                      <StatusChip tone={STATUS_TONE[row.status]}>{row.statusLabel}</StatusChip>
+                      {/*
+                        누르면 이 줄이 사라진다(초점은 상태 훅이 파일 입력란으로 옮긴다). 분석하는 동안에는 disabled 대신 aria-disabled 로 두어
+                        초점이 남게 하고, 눌러도 상태 훅이 아무것도 하지 않는다(흐린 모양, 기본 화살표 커서).
+                      */}
+                      {row.removable && (
+                        <button
+                          type="button"
+                          aria-disabled={isAnalyzing ? "true" : undefined}
+                          onClick={(event) => onRemoveRow(row.id, event.currentTarget === document.activeElement)}
+                          className={`${BUTTON_SECONDARY_CLASS} h-[28px] scroll-m-[8px] cursor-pointer px-[10px] aria-disabled:cursor-default aria-disabled:opacity-[0.45]`}
+                        >
+                          삭제
+                        </button>
+                      )}
+                      {row.links !== null && (
+                        <div className="flex flex-none flex-wrap gap-[8px]">
+                          {row.links.evaluateHref !== null && (
+                            <Link
+                              ref={row.id === lastDoneId ? doneLinkRef : undefined}
+                              href={row.links.evaluateHref}
+                              className={`${BUTTON_PRIMARY_CLASS} h-[28px] scroll-m-[8px] px-[10px]`}
+                            >
+                              평가하기
+                            </Link>
+                          )}
+                          <Link
+                            ref={row.id === lastDoneId && row.links.evaluateHref === null ? doneLinkRef : undefined}
+                            href={row.links.originalHref}
+                            className={`${BUTTON_SECONDARY_CLASS} h-[28px] scroll-m-[8px] px-[10px]`}
+                          >
+                            원문보기
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                    {row.note !== "" && (
+                      <p
+                        role={row.noteIsError ? "alert" : undefined}
+                        className={`mt-[6px] flex items-center gap-[6px] text-[13px] leading-[18px] [overflow-wrap:anywhere] ${
+                          row.noteIsError ? "font-medium text-[#BA1A1A]" : "text-[#505050]"
+                        }`}
+                      >
+                        {row.status === "working" && <Spinner />}
+                        {row.note}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
 
-            {requestError !== null && (
-              <p role="alert" className="mt-[8px] animate-fade-in text-[13px] leading-[18px] font-medium text-[#BA1A1A] [overflow-wrap:anywhere]">
-                {requestError}
-              </p>
+            {showAnalyze && (
+              <div className="mt-[12px] flex animate-fade-in flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+                {/* 분석하는 동안 disabled 대신 aria-disabled 로 두어(누르면 상태 훅이 아무것도 하지 않는다) 초점이 버튼에 남게 한다. */}
+                <button
+                  ref={analyzeButtonRef}
+                  type="button"
+                  aria-disabled={isAnalyzing ? "true" : undefined}
+                  onClick={onAnalyze}
+                  className={`${BUTTON_PRIMARY_CLASS} ${BUSY_PRIMARY_BUTTON_CLASS}`}
+                >
+                  분석 시작
+                </button>
+                {/* 분석하는 동안 몇 건째인지 알린다. 건마다의 단계는 그 줄에 적힌다. */}
+                <p aria-live="polite" className="text-[13px] leading-[18px] text-[#505050]">
+                  {statusText}
+                </p>
+              </div>
             )}
+
             {storageNotice !== "" && (
               <p role="alert" className="mt-[8px] animate-fade-in text-[13px] leading-[18px] font-medium text-[#BA1A1A] [overflow-wrap:anywhere]">
                 {storageNotice}
               </p>
             )}
-
-            {/* 방금 올린 학생부의 안내는 늘 있는 알림 영역 안에 그려 생길 때 읽히게 한다(없으면 빈 영역이라 모양에 영향이 없다). */}
-            <div aria-live="polite">
-              {done !== null && (
-                <div className="mt-[12px] flex animate-fade-in flex-wrap items-center gap-x-[12px] gap-y-[8px] rounded-[6px] border border-[#E4E4E4] px-[12px] py-[10px] text-[13px] leading-[18px] [overflow-wrap:anywhere]">
-                  <p className="min-w-0 flex-[1_1_240px] font-medium text-[#111111]">{done.text}</p>
-                  <div className="flex flex-none flex-wrap gap-[8px]">
-                    {done.evaluateHref !== null && (
-                      <Link
-                        ref={doneLinkRef}
-                        href={done.evaluateHref}
-                        className={`${BUTTON_PRIMARY_CLASS} h-[28px] scroll-m-[8px] px-[10px]`}
-                      >
-                        평가하기
-                      </Link>
-                    )}
-                    <Link
-                      ref={done.evaluateHref === null ? doneLinkRef : undefined}
-                      href={done.originalHref}
-                      className={`${BUTTON_SECONDARY_CLASS} h-[28px] scroll-m-[8px] px-[10px]`}
-                    >
-                      원문보기
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </div>
 
             <p className="mt-[12px] text-[12px] leading-[16px] text-[#767676]">{keptText}</p>
           </div>

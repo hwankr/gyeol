@@ -32,7 +32,8 @@ const UNEXPECTED_ERROR = "이미지로 된 쪽을 읽는 중 오류가 발생했
  * 3. image 가 base64 로 적은 JPEG 가 아님 → 400
  * 4. text 가 있는데 문자열이 아니거나 MAX_PAGE_TEXT_LENGTH(20,000자)를 넘음 → 400 (공백만 있으면 없는 것으로 본다)
  * 5. AI 호출 실패(키 없음, 시간 초과, 거절 등) → 502 (lib/pipeline/claude.ts 의 화면 문구), 그 밖의 예상하지 못한 오류 → 502(일반 문구)
- * 응답은 { sections: [{ category, grade, subject, text, continued }] } 이다(lib/recordSections.ts 의 PageSection). 옮길 기록이 없는 쪽은 빈 배열.
+ * 응답은 { sections: [{ fieldId, category, grade, subject, hours, text, continued }] } 이다(lib/recordSections.ts 의 PageSection.
+ * fieldId 는 학생부 서식(lib/recordForm.ts)의 칸이고 category 는 그 칸의 항목명이다). 옮길 기록이 없는 쪽은 빈 배열.
  * 응답의 글은 가리기 전 원문이다(보낸 브라우저가 이미 가진 내용). 블라인드 처리는 항목을 모아 보내는 /api/analyze 에서 한다.
  * 아무것도 저장하지 않고, 로그에는 개수·시간·토큰 수·오류 종류만 남긴다(그림과 옮겨 적은 글은 남기지 않는다).
  */

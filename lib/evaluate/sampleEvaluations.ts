@@ -45,6 +45,8 @@ export type Passage = {
   grade: 1 | 2 | 3 | null;
   subject: string;
   segments: readonly PassageSegment[];
+  /** 올린 지원자만: 이 원문인 학생부 항목의 id 와 PDF 쪽 번호 (원문보기에서 실제 PDF 의 자리를 여는 데 쓴다) */
+  origin?: { sectionId: string; page: number };
 };
 
 /**

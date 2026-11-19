@@ -1,5 +1,6 @@
 import type { AnalysisResult } from "@/types/analysis";
 import { sampleResult } from "../mock/sampleResult.ts";
+import { recordPagesKey } from "../recordPagesStorage.ts";
 import { SAMPLE_APPLICANT_COUNT, sampleApplicantCode } from "./sampleApplicants.ts";
 import { uploadedCodeNumber, type UploadedApplicant } from "./uploaded.ts";
 
@@ -18,6 +19,8 @@ export type OriginalRecord = {
   sample: boolean;
   /** 화면을 새로 그릴 열쇠: 지원자나 그 분석이 바뀌면 달라진다(고른 기준·근거·스크롤을 처음 상태로 시작하게 한다) */
   key: string;
+  /** 가린 쪽 그림의 열쇠(lib/recordPagesStorage.ts). 예시 지원자는 쪽 그림이 없어 null */
+  pagesKey: string | null;
 };
 
 /** 예시 지원자의 코드인지: "A-" + 네 자리이고 번호가 1~314 */
@@ -33,7 +36,9 @@ function isSampleCode(code: string): boolean {
 export function originalRecordOf(code: string | null, uploaded: readonly UploadedApplicant[]): OriginalRecord | null {
   if (code === null) return null;
   const item = uploaded.find((entry) => entry.code === code);
-  if (item !== undefined) return { code, result: item.result, sample: false, key: `${code}@${item.at}` };
-  if (isSampleCode(code)) return { code, result: sampleResult, sample: true, key: code };
+  if (item !== undefined) {
+    return { code, result: item.result, sample: false, key: `${code}@${item.at}`, pagesKey: recordPagesKey(code, item.at) };
+  }
+  if (isSampleCode(code)) return { code, result: sampleResult, sample: true, key: code, pagesKey: null };
   return null;
 }

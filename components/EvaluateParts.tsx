@@ -179,6 +179,8 @@ type DocumentPanelProps = {
   passages: {
     id: string;
     source: string;
+    /** 그 원문의 PDF 쪽 번호와, 원문보기 화면에서 실제 PDF 의 그 자리를 여는 주소 (올린 지원자만. 없으면 null) */
+    page: { label: string; href: string } | null;
     segments: { key: string; text: string; emphasis: keyof typeof SEGMENT_CLASS }[];
   }[];
   /** 가림 누락을 신고했는지 */
@@ -261,7 +263,19 @@ export function DocumentPanel({
               key={passage.id}
               className={`animate-fade-in border-t border-t-[#E4E4E4] pt-[12px] ${index === 0 ? "" : "mt-[12px]"}`}
             >
-              <p className="text-[12px] leading-[16px] font-semibold text-[#505050]">{passage.source}</p>
+              <p className="flex flex-wrap items-baseline gap-x-[8px] text-[12px] leading-[16px] font-semibold text-[#505050]">
+                {passage.source}
+                {/* 올린 지원자: 실제 PDF 의 그 쪽에서 이 원문의 자리를 본다(원문보기 화면). */}
+                {passage.page !== null && (
+                  <Link
+                    href={passage.page.href}
+                    aria-label={`${passage.source} PDF ${passage.page.label} 보기`}
+                    className="motion-colors scroll-m-[8px] font-medium text-[#001AD0] tabular-nums no-underline hover-on:underline"
+                  >
+                    PDF {passage.page.label}
+                  </Link>
+                )}
+              </p>
               <p className="mt-[6px] text-[14px] leading-[24px] [overflow-wrap:anywhere] break-keep whitespace-pre-line">
                 {passage.segments.map((segment) => (
                   <span key={segment.key} className={SEGMENT_CLASS[segment.emphasis]}>

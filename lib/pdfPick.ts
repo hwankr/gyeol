@@ -45,3 +45,14 @@ export function takeInputFile(input: HTMLInputElement | null): File | null {
   input.value = "";
   return file;
 }
+
+/**
+ * 파일 입력란에 들어 있는 파일을 모두 꺼내고 입력란을 비운다(여러 파일을 고를 수 있는 입력란: 학생부 올리기).
+ * 비워 두어야 같은 파일을 다시 골라도 change 가 일어난다.
+ */
+export function takeInputFiles(input: HTMLInputElement | null): File[] {
+  if (input === null || input.files === null) return [];
+  const files = Array.from(input.files);
+  input.value = "";
+  return files;
+}

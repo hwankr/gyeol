@@ -102,6 +102,11 @@ export function useEvaluationSession(applicant: EvaluationApplicant, pathOf: (co
       passages: passagesIn(applicant, area).map((passage) => ({
         id: passage.id,
         source: passageSource(passage),
+        // 올린 지원자의 원문은 실제 PDF 의 쪽으로 가는 링크가 있다(원문보기 화면이 그 항목의 자리를 보여 준다).
+        page:
+          passage.origin === undefined
+            ? null
+            : { label: `${passage.origin.page}쪽`, href: evaluateOriginalPath(applicant.code, passage.origin.sectionId) },
         segments: passage.segments.map((segment, index) => {
           const slots = evidenceSlotsOf(segment, slotLimit);
           const emphasis: SegmentEmphasis = slots.length === 0 ? "none" : slots.includes(selectedSlot) ? "selected" : "other";

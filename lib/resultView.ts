@@ -1,4 +1,5 @@
 import type { AnalysisResult, Criterion, Evidence } from "@/types/analysis";
+import { recordFormGroup } from "./recordForm.ts";
 
 // 원문보기 화면(components/OriginalScreen.tsx)에 그릴 값을 만드는 순수 함수 모음. 화면 컴포넌트는 여기서 만든 값을 그리기만 한다.
 
@@ -32,11 +33,13 @@ export type SourceSectionView = {
   category: string;
   grade: number | null;
   subject?: string;
+  /** 서식에서의 묶음 이름(교과학습발달상황의 "진로 선택 과목"·"체육·예술" 등). 없으면 null */
+  group: string | null;
   /** 창의적 체험활동 영역의 시간. 없으면 undefined */
   hours?: number;
   /** PDF 쪽 번호 */
   page: number;
-  /** 선택한 근거가 들어 있는 항목인지 */
+  /** 선택한 근거가 들어 있는 항목이거나, 고른 항목인지 */
   isSelected: boolean;
   segments: TextSegment[];
 };
@@ -126,13 +129,15 @@ export function segmentText(text: string, marks: readonly QuoteMark[]): TextSegm
 }
 
 /**
- * 지금 고른 기준과 고른 근거를 반영해 원문보기 화면 전체에 그릴 값을 만든다.
+ * 지금 고른 기준과 고른 근거(또는 고른 항목)를 반영해 원문보기 화면 전체에 그릴 값을 만든다.
  * 탭은 result.criteria.criteria 순서대로 만든다. 기준이 하나도 없으면(activeCriterionId 가 null) 근거 카드도, 기준 설명도 없다.
+ * focusSectionId 는 근거 없이 고른 항목이다(쪽 번호를 눌러 실제 PDF 의 자리를 보는 항목). 고른 근거가 있으면 그 근거의 항목이 먼저다.
  */
 export function buildResultView(
   result: AnalysisResult,
   activeCriterionId: string | null,
   selectedEvidenceId: string | null,
+  focusSectionId: string | null = null,
 ): ResultView {
   const activeEvidences = result.evidences.filter(
     (evidence) => evidence.criterionId === activeCriterionId,
@@ -157,9 +162,10 @@ export function buildResultView(
       category: section.category,
       grade: section.grade,
       subject: section.subject,
+      group: recordFormGroup(section.fieldId),
       hours: section.hours,
       page: section.page,
-      isSelected: section.id === selectedEvidence?.sectionId,
+      isSelected: section.id === (selectedEvidence?.sectionId ?? focusSectionId),
       segments: segmentText(section.text, marks),
     };
   });
