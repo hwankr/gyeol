@@ -1,5 +1,5 @@
 // 전형 준비 화면에서 초점을 코드로 옮긴 뒤, 옮긴 대상(과 초점 표시)이 화면에 보이게 하는 도우미. 브라우저에서만 호출한다.
-// hooks/usePrepWeights.ts(요소 고르기·저장하기 뒤)와 hooks/useGuidelineUpload.ts(초안 안내의 링크 뒤)가 같이 쓴다.
+// hooks/usePrepWeights.ts(요소 고르기·저장하기·크게 보기 뒤)와 hooks/usePrepHeader.ts(안내 링크를 눌러 머리의 탭으로 초점을 넘길 때)가 같이 쓴다.
 
 /** 초점을 옮긴 버튼·링크 위아래로 함께 보여야 하는 범위(px): 초점 표시(2px 띄움 + 2px 선) 4px 와 여유 */
 export const FOCUS_REVEAL_MARGIN = 8;

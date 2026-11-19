@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Ref } from "react";
 import { Area } from "@/components/Area";
-import { APPLICANTS_PATH } from "@/lib/consoleMenu";
+import { APPLICANTS_PATH, EVALUATE_PATH } from "@/lib/consoleMenu";
 import { SERVICE_NAME } from "@/lib/constants";
 import type {
   CriterionTab,
@@ -58,6 +58,9 @@ export function ResultScreen({
             </Link>
             <Link href={APPLICANTS_PATH} className="underline">
               지원자 관리
+            </Link>
+            <Link href={EVALUATE_PATH} className="underline">
+              평가하기
             </Link>
           </div>
         </div>

@@ -10,12 +10,14 @@ export type ConsoleMenu = {
 /** 지원자 관리 화면의 주소 (주 메뉴, 현재 위치 줄의 "지원자 관리") */
 export const APPLICANTS_PATH = "/applicants";
 
-// 평가하기는 지금의 업로드 화면으로 간다.
+/** 평가하기 화면의 첫 주소: 평가 대기 목록 (주 메뉴, 현재 위치 줄의 "평가하기") */
+export const EVALUATE_PATH = "/evaluate";
+
 export const CONSOLE_MENUS: readonly ConsoleMenu[] = [
   { key: "home", label: "홈", href: null },
   { key: "prep", label: "전형 준비", href: "/prep" },
   { key: "applicants", label: "지원자 관리", href: APPLICANTS_PATH },
-  { key: "evaluate", label: "평가하기", href: "/upload" },
+  { key: "evaluate", label: "평가하기", href: EVALUATE_PATH },
   { key: "decision", label: "선발 결정", href: null },
   { key: "settings", label: "이력·설정", href: null },
 ];
@@ -36,9 +38,9 @@ export type PrepTab = {
 };
 
 export const PREP_TABS: readonly PrepTab[] = [
-  { href: "/prep", label: "모집요강 올리기", crumb: "모집요강" },
-  { href: "/prep/weights", label: "평가 · 배점 설정", crumb: "평가·배점" },
-  { href: "/prep/history", label: "기준 변경 기록", crumb: "변경 기록" },
+  { href: "/prep", label: "모집요강 올리기", crumb: "모집요강 올리기" },
+  { href: "/prep/weights", label: "평가 · 배점 설정", crumb: "평가 · 배점 설정" },
+  { href: "/prep/history", label: "기준 변경 기록", crumb: "기준 변경 기록" },
 ];
 
 /** 전형 준비 화면의 첫 주소 (현재 위치 줄의 "전형 준비") */

@@ -1,4 +1,12 @@
-import { Fragment, type KeyboardEvent, type RefObject } from "react";
+import { Fragment, type RefObject } from "react";
+import {
+  AccentTag,
+  BUTTON_PRIMARY_CLASS,
+  BUTTON_SECONDARY_CLASS,
+  PANEL_CLASS,
+  PANEL_HEAD_CLASS,
+  PANEL_TITLE_CLASS,
+} from "@/components/consoleUi";
 import type { NumberedGroup } from "@/lib/prep/criteria";
 import { FOCUS_FALLBACK_PROPS, prepBodyProps } from "@/lib/prep/focusMarks";
 import { HOLD_REPEAT_ATTRIBUTE, HOLD_REPEAT_VALUE } from "@/lib/prep/keyRepeat";
@@ -13,8 +21,6 @@ type WeightElement = {
   tagsLine: string;
   /** 화면에 보이는 배점 (수정 상태에서는 고치는 중인 값) */
   weight: number;
-  /** 배점 막대의 채움 너비·손잡이 위치(%) */
-  barPercent: number;
   canDecrease: boolean;
   canIncrease: boolean;
 };
@@ -22,17 +28,21 @@ type WeightElement = {
 type WeightsTabProps = {
   /** 탭이 준비됐는지 (준비 전에는 본문이 inert 라 초점을 받지 않고 눌리지 않는다. 모양은 그대로) */
   ready: boolean;
-  /** 탭 본문의 두 단 요소 (준비 여부를 이 요소가 문서에 붙었는지로 정한다) */
+  /** 탭 본문의 두 단 상자 (준비 여부를 이 요소가 문서에 붙었는지로 정한다) */
   bodyRef: RefObject<HTMLDivElement | null>;
-  /** 모집 단위 이름 (제목 줄 오른쪽) */
+  /** 모집 단위 이름 (왼쪽 단 머리 줄의 제목 옆) */
   department: string;
-  /** 모집요강 초안이 있을 때 탭 줄과 두 단 사이에 보여 주는 안내 (없으면 null) */
+  /** 모집요강 초안이 있을 때 탭 줄 아래에 보여 주는 안내 (없으면 null) */
   draftNotice: string | null;
+  /** 수정하기·저장하기 왼쪽의 안내 한 줄 (보기 상태, 수정 상태, 방금 저장한 뒤) */
+  modeNote: string;
   elements: WeightElement[];
-  /** 고른 요소의 순서 (0 부터). 그 요소만 "떠 있는 카드" 모양이다. */
+  /** 고른 요소의 순서 (0 부터). 그 요소의 이름만 파란 글자다. */
   selectedIndex: number;
   /** 고른 요소의 세부 평가 항목 */
   detail: { name: string; groups: NumberedGroup[] };
+  /** 배점 막대(range 입력란)의 눈금 */
+  weightRange: { min: number; max: number; step: number };
   total: number;
   totalMax: number;
   editing: boolean;
@@ -41,191 +51,92 @@ type WeightsTabProps = {
   totalNotice: string | null;
   /** 저장소에 저장하지 못했을 때의 안내 */
   storageNotice: string | null;
-  scrollAreaRef: RefObject<HTMLDivElement | null>;
-  dialogRef: RefObject<HTMLDialogElement | null>;
-  expandButtonRef: RefObject<HTMLButtonElement | null>;
-  closeButtonRef: RefObject<HTMLButtonElement | null>;
-  /** "크게 보기" 창의 제목 (창을 열면 초점이 여기로 온다) */
-  dialogTitleRef: RefObject<HTMLHeadingElement | null>;
-  /** 고른 요소(떠 있는 카드)의 화살표 버튼 */
-  selectedArrowRef: RefObject<HTMLButtonElement | null>;
+  /** 세부 평가 항목을 크게 보는 중인지 (왼쪽 단을 그리지 않고 패널이 상자 폭 전체를 쓴다) */
+  big: boolean;
+  /** 고른 요소의 이름 버튼 */
+  selectedNameButtonRef: RefObject<HTMLButtonElement | null>;
   /** 수정하기·취소 버튼 (저장 뒤 초점을 여기로 옮긴다) */
   editButtonRef: RefObject<HTMLButtonElement | null>;
-  /** 요소를 고른다. hadFocus 는 누른 이름 버튼에 초점이 있었는지 (있었으면 새 카드의 화살표 버튼으로 초점을 옮긴다) */
+  /** 크게 보기·작게 보기 버튼 */
+  bigButtonRef: RefObject<HTMLButtonElement | null>;
+  /** 요소를 고른다. hadFocus 는 누른 이름 버튼에 초점이 있었는지 (있었으면 다시 그린 뒤 그 버튼이 보이게 한다) */
   onSelectElement: (id: string, hadFocus: boolean) => void;
   /** 배점 −·+. hadFocus 는 누른 버튼에 초점이 있었는지 */
   onDecrease: (id: string, hadFocus: boolean) => void;
   onIncrease: (id: string, hadFocus: boolean) => void;
+  /** 배점 막대를 움직였을 때. value 는 막대의 새 값 */
+  onSetWeight: (id: string, value: number) => void;
   /** 수정하기·취소. hadFocus 는 누른 버튼에 초점이 있었는지 */
   onToggleEditing: (hadFocus: boolean) => void;
   /** 저장하기. hadFocus 는 누른 버튼에 초점이 있었는지 (있었으면 저장 뒤 초점이 수정하기 버튼으로 간다) */
   onSave: (hadFocus: boolean) => void;
-  onOpenDialog: () => void;
-  onCloseDialog: () => void;
-  onDialogClose: () => void;
-  onDialogKeyDown: (event: KeyboardEvent<HTMLDialogElement>) => void;
+  /** 크게 보기·작게 보기. hadFocus 는 누른 버튼에 초점이 있었는지 */
+  onToggleBig: (hadFocus: boolean) => void;
 };
-
-/**
- * 글자가 없는 버튼의 글자 크기. 디자인은 이 버튼들에 글꼴을 정하지 않아 브라우저 기본 버튼 글자(13.333px)가 쓰였다.
- * 보이는 모양에는 영향이 없지만 계산된 값을 디자인과 맞춘다.
- */
-const ICON_BUTTON_FONT = "text-[13.3333px] font-normal text-black";
 
 const DETAIL_GUIDE = "1~5점의 척도 평가로 진행됩니다.";
 
 /**
- * 전형 준비 · 평가·배점 설정 탭(/prep/weights): 왼쪽 평가 요소와 배점, 오른쪽 수정하기·저장하기와 세부 평가 항목 패널.
- * 치수·색·글자는 디자인 값 그대로다. 고른 요소 하나만 오른쪽 패널 쪽으로 뻗어 붙는 "떠 있는 카드" 모양이다.
- * 디자인은 첫 요소를 고른 모습뿐이라, 다른 요소를 고르면 순서는 그대로 두고 그 자리에서 카드 모양만 입힌다
- * (카드 위아래 32px, 일반 모양끼리 24px, 첫 요소가 일반 모양이면 제목 줄과 35px, 패널 왼쪽 위 모서리는 첫 요소일 때만 각짐).
- * 배점 막대는 표시일 뿐이고(aria-hidden) 끌 수 없다. 배점은 수정 상태에서 −·+ 로 1 씩 바꾼다.
- * 모집요강 초안이 있으면 탭 줄 아래에 안내 한 줄(디자인에 없어 정한 모양)이 나타나고 두 단은 그 아래 13px 에 놓인다.
+ * 전형 준비 · 평가·배점 설정 탭(/prep/weights): 안내 한 줄과 수정하기·저장하기, 그 아래 테두리 상자 하나에 두 단
+ * (왼쪽 평가 요소와 배점, 오른쪽 세부 평가 항목 패널). 치수·색·글자는 디자인 값 그대로다.
+ * 두 단은 줄을 바꾸는 flex 라서(왼쪽 420px·오른쪽 440px 기준, 오른쪽은 480px 까지) 상자가 좁으면 오른쪽 단이 아래로 내려간다.
+ * 상자는 본문(<main>)의 남는 높이를 채우고, 내용이 길면 문서가 세로로 스크롤된다(패널 안에서 따로 스크롤하지 않는다).
+ * 배점은 수정 상태에서 −·+ (1 씩)와 배점 막대(range 입력란)로 바꾼다. 보기 상태에서는 셋 다 꺼져 있다.
+ * 요소 이름은 버튼이고 누르면 그 요소의 세부 평가 항목이 오른쪽 패널에 나온다. 디자인은 첫 요소를 고른 모습뿐이고 고르는 컨트롤이
+ * 없어, 고른 요소는 이름을 파란 글자(#001AD0)로 적고 패널 머리 줄의 꼬리표에도 그 이름을 적는다(색만으로 구분하지 않는다).
+ * "크게 보기" 를 누르면 왼쪽 단을 그리지 않고 패널이 상자 폭 전체를 쓰며 질문 글자가 16px 이 된다(버튼 글자는 "작게 보기").
+ * 디자인에 없어 정한 것: 모집요강 초안 안내(탭 줄 아래 16px, 옅은 파란 바탕), 저장소에 저장하지 못했을 때의 안내(버튼 줄 아래 8px, 빨간 글자).
  */
 export function WeightsTab({
   ready,
   bodyRef,
   department,
   draftNotice,
+  modeNote,
   elements,
   selectedIndex,
   detail,
+  weightRange,
   total,
   totalMax,
   editing,
   canSave,
   totalNotice,
   storageNotice,
-  scrollAreaRef,
-  dialogRef,
-  expandButtonRef,
-  closeButtonRef,
-  dialogTitleRef,
-  selectedArrowRef,
+  big,
+  selectedNameButtonRef,
   editButtonRef,
+  bigButtonRef,
   onSelectElement,
   onDecrease,
   onIncrease,
+  onSetWeight,
   onToggleEditing,
   onSave,
-  onOpenDialog,
-  onCloseDialog,
-  onDialogClose,
-  onDialogKeyDown,
+  onToggleBig,
 }: WeightsTabProps) {
-  const before = elements.slice(0, selectedIndex);
-  const selected = elements[selectedIndex];
-  const after = elements.slice(selectedIndex + 1);
-
   return (
     <>
       {draftNotice !== null && (
-        <p {...prepBodyProps(ready)} className="mt-[13px] rounded-[6px] bg-[#E0E1F9] px-[12px] py-[8px] text-[14px] leading-[20px] font-medium text-[#000947] [overflow-wrap:anywhere]">
+        <p
+          {...prepBodyProps(ready)}
+          className="mt-[16px] rounded-[6px] bg-[#EEF0FF] px-[12px] py-[8px] text-[13px] leading-[18px] font-medium text-[#001AD0] [overflow-wrap:anywhere]"
+        >
           {draftNotice}
         </p>
       )}
-      <div ref={bodyRef} {...prepBodyProps(ready)} className="mt-[13px] -mr-[13px] -ml-[6px] flex flex-wrap items-start gap-[16.7px]">
-        <section
-          aria-labelledby="weights-title"
-          className="box-border min-w-0 flex-[0_1_518px] rounded-[8px] bg-white pt-[17px] pb-[16px]"
-        >
-          <div className="flex flex-wrap items-baseline gap-x-[24px] gap-y-0 px-[27px]">
-            <h2 id="weights-title" className="text-[20px] leading-[28px] font-extrabold tracking-[-0.02em]">
-              평가 · 배점 설정
-            </h2>
-            <p className="min-w-0 text-[20px] leading-[28px] font-medium [overflow-wrap:anywhere]">{department}</p>
-          </div>
-
-          {before.length > 0 && (
-            <div className="mt-[35px] flex flex-col gap-[24px] pr-[39px] pl-[31px]">
-              {before.map((element) => (
-                <div key={element.id}>
-                  <ElementRow
-                    element={element}
-                    selected={false}
-                    onSelectElement={onSelectElement}
-                    onDecrease={onDecrease}
-                    onIncrease={onIncrease}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {selected !== undefined && (
-            <div
-              className={`${selectedIndex === 0 ? "mt-[19px]" : "mt-[32px]"} relative z-2 -mr-[16.7px] ml-[10px] rounded-[8px_0_0_8px] bg-white pt-[16px] pr-[56px] pb-[15px] pl-[21px] [box-shadow:0_2px_10px_rgba(0,9,71,0.09)] [clip-path:inset(-14px_0_-14px_-14px)]`}
-            >
-              <ElementRow
-                element={selected}
-                selected
-                onSelectElement={onSelectElement}
-                onDecrease={onDecrease}
-                onIncrease={onIncrease}
-              />
-              <button
-                ref={selectedArrowRef}
-                type="button"
-                {...FOCUS_FALLBACK_PROPS}
-                aria-label={`${selected.name} 세부 평가 항목 보기`}
-                aria-pressed="true"
-                className={`${ICON_BUTTON_FONT} absolute top-[51px] right-[5px] flex h-[24px] w-[24px] scroll-m-[8px] cursor-pointer items-center justify-center border-0 bg-transparent p-0`}
-              >
-                <svg aria-hidden="true" viewBox="0 0 7 12" className="h-[12px] w-[7px]">
-                  <path
-                    fill="none"
-                    stroke="#131927"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M1 1l5 5-5 5"
-                  />
-                </svg>
-              </button>
-            </div>
-          )}
-
-          {after.length > 0 && (
-            <div className="mt-[32px] flex flex-col gap-[24px] pr-[39px] pl-[31px]">
-              {after.map((element) => (
-                <div key={element.id}>
-                  <ElementRow
-                    element={element}
-                    selected={false}
-                    onSelectElement={onSelectElement}
-                    onDecrease={onDecrease}
-                    onIncrease={onIncrease}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          <p className="mt-[16px] mr-[27px] flex items-baseline justify-end gap-[19px] font-extrabold">
-            <span className="text-[16px] leading-[28px]">합계</span>
-            <span className="text-[20px] leading-[28px] tracking-[-0.02em]">
-              {total === totalMax ? total : <span className="text-[#BA1A1A]">{total}</span>}
-              <span className="text-[16px]">/ {totalMax}</span>
-            </span>
+      <div {...prepBodyProps(ready)} className={draftNotice === null ? "mt-[16px]" : "mt-[12px]"}>
+        <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px]">
+          {/* 알림 영역은 처음부터 있어, 수정 상태에 들어가거나 저장한 뒤 글자가 바뀔 때 읽힌다. */}
+          <p aria-live="polite" className="text-[13px] leading-[18px] text-[#505050]">
+            {modeNote}
           </p>
-          {/* 안내가 없을 때는 빈 줄(높이 0)로 두어 모양이 디자인과 같고, 알림 영역은 처음부터 있어 바뀔 때 읽힌다. */}
-          <p aria-live="polite" className={`${totalNotice !== null ? "mt-[4px]" : ""} ${NOTICE_CLASS}`}>
-            {totalNotice}
-          </p>
-          {storageNotice !== null && (
-            <p role="alert" className={`mt-[4px] ${NOTICE_CLASS}`}>
-              {storageNotice}
-            </p>
-          )}
-        </section>
-
-        <div className="flex min-w-0 flex-[1_1_360px] flex-col">
-          <div className="mt-[6px] flex justify-end gap-[15px] pr-[19px]">
+          <div className="flex gap-[8px]">
             <button
               ref={editButtonRef}
               type="button"
               onClick={(event) => onToggleEditing(event.currentTarget === document.activeElement)}
-              className="h-[35px] scroll-m-[8px] cursor-pointer rounded-[6px] border-0 bg-[#001AD0] px-[16px] text-[13px] font-semibold text-white"
+              className={`${BUTTON_SECONDARY_CLASS} ${TOOL_BUTTON_CLASS}`}
             >
               {editing ? "취소" : "수정하기"}
             </button>
@@ -233,143 +144,190 @@ export function WeightsTab({
               type="button"
               disabled={!canSave}
               onClick={(event) => onSave(event.currentTarget === document.activeElement)}
-              className={`${DARK_BUTTON_CLASS} scroll-m-[8px] disabled:cursor-default`}
+              className={`${BUTTON_PRIMARY_CLASS} ${TOOL_BUTTON_CLASS}`}
             >
               저장하기
             </button>
           </div>
+        </div>
+        {/* 크게 보는 중에도(왼쪽 단이 없어도) 보이도록 두 단 상자 밖에 둔다. */}
+        {storageNotice !== null && (
+          <p role="alert" className="mt-[8px] text-[13px] leading-[18px] font-medium text-[#BA1A1A]">
+            {storageNotice}
+          </p>
+        )}
+      </div>
+      <div
+        ref={bodyRef}
+        {...prepBodyProps(ready)}
+        className={`${PANEL_CLASS} mt-[12px] flex flex-[1_1_auto] flex-wrap items-stretch`}
+      >
+        {!big && (
           <section
-            aria-labelledby="detail-title"
-            className={`relative z-1 mt-[23px] box-border flex h-[544px] flex-col bg-white pt-[20px] px-[23px] pb-[11px] [box-shadow:0_2px_10px_rgba(0,9,71,0.09)] ${
-              selectedIndex === 0 ? "rounded-[0_12px_12px_12px]" : "rounded-[12px]"
-            }`}
+            aria-labelledby="weights-title"
+            className="box-border min-w-0 flex-[999_1_420px] border-r border-r-[#E4E4E4]"
           >
-            <div className="flex flex-wrap items-baseline gap-x-[19px] gap-y-0">
-              <h2 id="detail-title" className="text-[20px] leading-[28px] font-extrabold">
-                세부 평가 항목
-              </h2>
-              <p className={GUIDE_CLASS}>{DETAIL_GUIDE}</p>
-            </div>
             {/*
-              묶음·질문 영역만 패널 안에서 세로로 스크롤한다(패널 높이 544px 고정, "크게 보기" 는 늘 아래에 보인다).
-              스크롤바는 브라우저 스크롤바를 가늘게 꾸민 것(globals.css 의 .prep-scrollbar, 굵기 6px)이고 자리를 늘 비워 둔다
-              (scrollbar-gutter: stable). 오른쪽으로 4px 내밀고 안쪽 여백을 줄여, 스크롤바가 패널 오른쪽 안쪽 19px 에 오고
-              글자 폭은 디자인과 같다(23 + 28 = 19 + 6 + 26).
+              머리 줄: 높이 40px 에 아래 선 1px(합쳐 41px). 모집 단위 이름이 길어 줄이 바뀌면 늘어나도록 높이 대신 최소 높이와
+              위아래 여백(11 + 18 + 11)으로 맞췄다. 한 줄일 때의 모양은 디자인과 같다.
             */}
             <div
-              ref={scrollAreaRef}
-              tabIndex={0}
-              aria-label="세부 평가 항목 목록"
-              className="prep-scrollbar mt-[22px] -mr-[4px] min-h-0 scroll-m-[8px] flex-[0_1_auto] overflow-y-auto pr-[26px] pl-[7px] [scrollbar-gutter:stable]"
+              className={`${PANEL_HEAD_CLASS} box-border flex min-h-[41px] flex-wrap items-center gap-x-[10px] rounded-[7px_0_0_0] px-[20px] py-[11px]`}
             >
-              <DetailGroups groups={detail.groups} questionClass="text-[14px] leading-[20px]" />
+              <h2 id="weights-title" className={PANEL_TITLE_CLASS}>
+                평가 · 배점 설정
+              </h2>
+              <span className="min-w-0 text-[13px] leading-[18px] text-[#505050] [overflow-wrap:anywhere]">
+                {department}
+              </span>
             </div>
+            <div className="px-[20px]">
+              {elements.map((element, index) => (
+                <ElementRow
+                  key={element.id}
+                  element={element}
+                  selected={index === selectedIndex}
+                  editing={editing}
+                  weightRange={weightRange}
+                  selectedNameButtonRef={selectedNameButtonRef}
+                  onSelectElement={onSelectElement}
+                  onDecrease={onDecrease}
+                  onIncrease={onIncrease}
+                  onSetWeight={onSetWeight}
+                />
+              ))}
+              <div className="flex flex-wrap items-baseline justify-end gap-x-[12px] gap-y-[4px] pt-[14px] pb-[16px]">
+                {/* 안내가 없을 때는 빈 칸(너비 0)으로 두어 모양이 디자인과 같고, 알림 영역은 처음부터 있어 바뀔 때 읽힌다. */}
+                <p aria-live="polite" className="mr-auto text-[13px] leading-[18px] font-medium text-[#BA1A1A]">
+                  {totalNotice}
+                </p>
+                <span className="text-[13px] leading-[18px] font-medium text-[#505050]">합계</span>
+                <p
+                  className={`text-[22px] leading-[30px] font-bold tabular-nums ${
+                    total === totalMax ? "text-[#111111]" : "text-[#BA1A1A]"
+                  }`}
+                >
+                  {total} <span className="text-[14px] font-medium text-[#505050]">/ {totalMax}</span>
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <section
+          aria-labelledby="detail-title"
+          className={`box-border min-w-0 flex-[1_1_440px] ${big ? "" : "max-w-[480px]"}`}
+        >
+          {/*
+            머리 줄: 높이 40px 에 아래 선 1px(합쳐 41px). 요소 이름이 길어 줄이 바뀌면 늘어나도록 높이 대신 최소 높이와
+            위아래 여백(6 + 버튼 28 + 6)으로 맞췄다. 한 줄일 때의 모양은 디자인과 같다.
+          */}
+          <div
+            className={`${PANEL_HEAD_CLASS} box-border flex min-h-[41px] flex-wrap items-center gap-x-[10px] gap-y-[4px] rounded-[0_7px_0_0] py-[6px] pr-[12px] pl-[20px]`}
+          >
+            <h2 id="detail-title" className={PANEL_TITLE_CLASS}>
+              세부 평가 항목
+            </h2>
+            <AccentTag>{detail.name}</AccentTag>
+            {/*
+              크게 보는 중에는 왼쪽 단(고른 요소의 이름 버튼)이 없으므로, 초점이 있던 컨트롤이 사라졌을 때 되돌릴 곳이 이 버튼이다
+              (hooks/usePrepFocusKeeper.ts).
+            */}
             <button
-              ref={expandButtonRef}
+              ref={bigButtonRef}
               type="button"
-              onClick={onOpenDialog}
-              className="mt-auto mr-[12px] ml-auto flex scroll-m-[8px] cursor-pointer items-center gap-[16px] border-0 bg-transparent py-[4px] px-0 text-[14px] leading-[20px] font-extrabold tracking-[-0.02em] text-[#000947]"
+              aria-pressed={big}
+              {...(big ? FOCUS_FALLBACK_PROPS : {})}
+              onClick={(event) => onToggleBig(event.currentTarget === document.activeElement)}
+              className="ml-auto box-border inline-flex h-[28px] scroll-m-[8px] cursor-pointer items-center gap-[4px] rounded-[6px] border border-[#CFCFCF] bg-white px-[8px] text-[12px] leading-[normal] font-medium text-[#111111]"
             >
-              크게 보기
+              {big ? "작게 보기" : "크게 보기"}
               <svg
                 aria-hidden="true"
-                viewBox="0 0 18 18"
+                viewBox="0 0 16 16"
                 fill="none"
-                stroke="#000947"
-                strokeWidth="1.6"
+                stroke="#505050"
+                strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="h-[18px] w-[18px]"
+                className="h-[12px] w-[12px]"
               >
-                <path d="M11 2h5v5M16 2l-5.5 5.5M7 16H2v-5M2 16l5.5-5.5" />
+                <path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9" />
               </svg>
             </button>
-          </section>
-        </div>
-
-        {/* "크게 보기" 창: 고른 요소의 묶음·질문 전체. 열린 동안 뒤 화면은 조작되지 않는다(<dialog> 의 showModal). 닫기·Esc 로 닫힌다. */}
-        <dialog
-          ref={dialogRef}
-          aria-labelledby="detail-dialog-title"
-          onClose={onDialogClose}
-          onKeyDown={onDialogKeyDown}
-          className="m-auto box-border max-h-[calc(100vh_-_64px)] w-[min(880px,calc(100vw_-_32px))] max-w-none overflow-y-auto rounded-[12px] border-0 bg-white p-[24px] text-[#111111] [box-shadow:0_2px_10px_rgba(0,9,71,0.09)] backdrop:bg-[rgba(0,0,0,0.4)]"
-        >
-          <div className="flex flex-wrap items-baseline gap-x-[19px] gap-y-0">
-            {/*
-              창을 열면 이 제목에 초점을 두어(tabIndex -1, Tab 순서에는 없음) 맨 위부터 읽게 한다. 컨트롤이 아니라 초점 표시는 그리지 않는다
-              (키보드로 열면 :focus-visible 이 걸리므로 전역 규칙보다 앞서게 !important 로 끈다).
-            */}
-            <h2
-              ref={dialogTitleRef}
-              id="detail-dialog-title"
-              tabIndex={-1}
-              className="text-[20px] leading-[28px] font-extrabold outline-none! [overflow-wrap:anywhere]"
-            >
-              {detail.name} 세부 평가 항목
-            </h2>
-            <p className={GUIDE_CLASS}>{DETAIL_GUIDE}</p>
           </div>
-          <div className="mt-[22px]">
-            <DetailGroups groups={detail.groups} questionClass="text-[16px] leading-[24px]" />
+          <div className="px-[20px] pt-[16px] pb-[20px] break-keep">
+            <p className="text-[13px] leading-[18px] text-[#505050]">{DETAIL_GUIDE}</p>
+            <DetailGroups groups={detail.groups} big={big} />
           </div>
-          <div className="mt-[24px] flex justify-end">
-            <button ref={closeButtonRef} type="button" onClick={onCloseDialog} className={DARK_BUTTON_CLASS}>
-              닫기
-            </button>
-          </div>
-        </dialog>
+        </section>
       </div>
     </>
   );
 }
 
+/**
+ * 수정하기·취소, 저장하기 버튼의 크기 (모양은 components/consoleUi.tsx 의 보조·주 버튼).
+ * 줄 높이는 디자인의 버튼처럼 글꼴 기본값(normal)이라 글자의 세로 위치가 디자인과 같다.
+ */
+const TOOL_BUTTON_CLASS = "h-[32px] scroll-m-[8px] cursor-pointer px-[12px] leading-[normal]";
+
 /** 배점 −·+: Enter 를 길게 누르면 계속 바뀐다(그 버튼에서 시작한 누름의 반복만. hooks/useKeyRepeatGuard.ts) */
 const HOLD_REPEAT_PROPS = { [HOLD_REPEAT_ATTRIBUTE]: HOLD_REPEAT_VALUE };
 
-/** 디자인의 "저장하기" 버튼 모양 (저장하기, 창의 닫기) */
-const DARK_BUTTON_CLASS =
-  "h-[35px] cursor-pointer rounded-[6px] border-0 bg-[#000947] px-[16px] text-[13px] font-semibold text-white";
+/** 배점 −·+ 버튼: 36px 정사각형, 회색 테두리. 꺼지면(보기 상태, 0·100 에 닿음) 흐려진다. 바깥쪽 모서리는 쓰는 쪽이 정한다. */
+const STEP_BUTTON_CLASS =
+  "box-border flex h-[36px] w-[36px] flex-none scroll-m-[8px] cursor-pointer items-center justify-center border border-[#CFCFCF] bg-white p-0 disabled:cursor-default disabled:opacity-[0.4]";
 
-const GUIDE_CLASS = "text-[15px] leading-[20px] font-medium text-[#767676]";
-
-/** 합계 줄 아래 안내 (합계 줄과 같은 오른쪽 여백, 오른쪽 정렬) */
-const NOTICE_CLASS = "mr-[27px] text-right text-[13px] leading-[18px] font-medium text-[#BA1A1A]";
-
-type ElementRowProps = Pick<WeightsTabProps, "onSelectElement" | "onDecrease" | "onIncrease"> & {
+type ElementRowProps = Pick<
+  WeightsTabProps,
+  "editing" | "weightRange" | "selectedNameButtonRef" | "onSelectElement" | "onDecrease" | "onIncrease" | "onSetWeight"
+> & {
   element: WeightElement;
   selected: boolean;
 };
 
 /**
- * 평가 요소 한 줄: 이름·태그 줄, 배점 조절(−, 숫자, +), 배점 막대.
- * 고르지 않은 요소의 이름은 버튼이다(모양은 디자인의 이름 글자 그대로). 누르면 그 요소를 고른다.
- * 긴 이름·태그는 줄을 바꿔 배점 조절 상자와 겹치지 않는다.
+ * 평가 요소 한 줄: 이름·태그 줄, 배점 조절(−, 숫자, +), 그 아래 배점 막대. 아래에 선이 하나 있다.
+ * 이름은 버튼이다(모양은 디자인의 이름 글자 그대로). 누르면 그 요소를 고르고, 고른 요소의 버튼은 눌린 상태(aria-pressed)·파란 글자다.
+ * 고른 요소의 이름 버튼은 늘 있고 꺼지지 않아, 초점이 있던 컨트롤이 사라지거나 꺼졌을 때 되돌릴 곳이다(data-focus-fallback).
+ * 이름·태그가 길어 배점 조절과 한 줄에 들어가지 않으면 배점 조절이 다음 줄로 내려가고, 한 낱말이 상자보다 길면 낱말 안에서 줄을 바꾼다.
+ * 배점 막대는 눈금 끝(weightRange.max)까지만 움직인다. 배점이 그보다 크면(−·+ 로 올린 값) 손잡이는 끝에 머물고, 읽어 주는 값은
+ * 실제 배점이다(aria-valuetext).
  */
-function ElementRow({ element, selected, onSelectElement, onDecrease, onIncrease }: ElementRowProps) {
+function ElementRow({
+  element,
+  selected,
+  editing,
+  weightRange,
+  selectedNameButtonRef,
+  onSelectElement,
+  onDecrease,
+  onIncrease,
+  onSetWeight,
+}: ElementRowProps) {
   return (
-    <>
-      <div className="flex items-start justify-between gap-[12px] pr-[18px]">
+    <div className="border-b border-b-[#E4E4E4] py-[16px]">
+      <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px]">
         <div className="min-w-0">
-          <h3 className="text-[20px] leading-[28px] font-extrabold [overflow-wrap:anywhere]">
-            {selected ? (
-              element.name
-            ) : (
-              <button
-                type="button"
-                aria-label={`${element.name} 세부 평가 항목 보기`}
-                onClick={(event) => onSelectElement(element.id, event.currentTarget === document.activeElement)}
-                className="scroll-m-[8px] cursor-pointer text-left"
-              >
-                {element.name}
-              </button>
-            )}
+          <h3 className="text-[15px] leading-[22px] font-semibold [overflow-wrap:anywhere]">
+            <button
+              ref={selected ? selectedNameButtonRef : undefined}
+              type="button"
+              {...(selected ? FOCUS_FALLBACK_PROPS : {})}
+              aria-label={`${element.name} 세부 평가 항목 보기`}
+              aria-pressed={selected}
+              onClick={(event) => onSelectElement(element.id, event.currentTarget === document.activeElement)}
+              className={`scroll-m-[8px] cursor-pointer text-left ${selected ? "text-[#001AD0]" : ""}`}
+            >
+              {element.name}
+            </button>
           </h3>
-          <p className="mt-[3px] min-h-[36px] max-w-[200px] text-[14px] leading-[18px] font-medium break-keep text-[#767676] [overflow-wrap:anywhere]">
+          <p className="mt-[2px] text-[13px] leading-[18px] text-[#505050] [overflow-wrap:anywhere]">
             {element.tagsLine}
           </p>
         </div>
-        <div className="mt-[16px] flex h-[42px] flex-none rounded-[8px] bg-white [box-shadow:0_1px_8px_rgba(0,9,71,0.1)]">
+        <div className="flex items-center">
           <button
             type="button"
             aria-label={`${element.name} 배점 줄이기`}
@@ -377,14 +335,21 @@ function ElementRow({ element, selected, onSelectElement, onDecrease, onIncrease
             id={element.decreaseButtonId}
             {...HOLD_REPEAT_PROPS}
             onClick={(event) => onDecrease(element.id, event.currentTarget === document.activeElement)}
-            className={`${ICON_BUTTON_FONT} flex w-[42px] scroll-m-[8px] cursor-pointer items-center justify-center rounded-[8px_0_0_8px] border-0 bg-transparent p-0 disabled:cursor-default`}
+            className={`${STEP_BUTTON_CLASS} rounded-l-[6px]`}
           >
-            <svg aria-hidden="true" viewBox="0 0 12 12" className="h-[12px] w-[12px]">
-              <path fill="none" stroke="#000000" strokeWidth="2" d="M0 6h12" />
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="#111111"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              className="h-[14px] w-[14px]"
+            >
+              <path d="M3.5 8h9" />
             </svg>
           </button>
-          {/* 너비 50px 에 좌우 테두리 1px 이 더해진다(디자인은 box-sizing 을 정하지 않음). */}
-          <span className="box-content flex w-[50px] items-center justify-center border-x border-x-[#ECECEC] text-[20px] font-medium text-black">
+          <span className="box-border flex h-[36px] w-[52px] flex-none items-center justify-center border-y border-y-[#CFCFCF] text-[15px] font-semibold tabular-nums">
             {element.weight}
           </span>
           <button
@@ -394,44 +359,52 @@ function ElementRow({ element, selected, onSelectElement, onDecrease, onIncrease
             id={element.increaseButtonId}
             {...HOLD_REPEAT_PROPS}
             onClick={(event) => onIncrease(element.id, event.currentTarget === document.activeElement)}
-            className={`${ICON_BUTTON_FONT} flex w-[40px] scroll-m-[8px] cursor-pointer items-center justify-center rounded-[0_8px_8px_0] border-0 bg-transparent p-0 disabled:cursor-default`}
+            className={`${STEP_BUTTON_CLASS} rounded-r-[6px]`}
           >
-            <svg aria-hidden="true" viewBox="0 0 10 10" className="h-[10px] w-[10px]">
-              <path fill="none" stroke="#000000" strokeWidth="2" d="M0 5h10M5 0v10" />
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="#111111"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              className="h-[14px] w-[14px]"
+            >
+              <path d="M3.5 8h9M8 3.5v9" />
             </svg>
           </button>
         </div>
       </div>
-      <div aria-hidden="true" className="relative mt-[10px] h-[20px]">
-        <div className="absolute top-[6px] right-0 left-0 h-[8px] rounded-[4px] bg-[#D9D9D9]" />
-        <div
-          className="absolute top-[5px] left-0 h-[10px] rounded-[5px] bg-[linear-gradient(90deg,#1820EF_0,#227BF1_158px)]"
-          style={{ width: `${element.barPercent}%` }}
-        />
-        <div
-          className="absolute top-0 -ml-[10px] box-border h-[20px] w-[20px] rounded-[50%] border-[3px] border-[#000947] bg-white"
-          style={{ left: `${element.barPercent}%` }}
-        />
-      </div>
-    </>
+      <input
+        type="range"
+        min={weightRange.min}
+        max={weightRange.max}
+        step={weightRange.step}
+        aria-label={`${element.name} 배점`}
+        aria-valuetext={element.weight > weightRange.max ? String(element.weight) : undefined}
+        value={element.weight}
+        disabled={!editing}
+        onChange={(event) => onSetWeight(element.id, event.currentTarget.valueAsNumber)}
+        className="mt-[12px] block w-full scroll-m-[8px] accent-[#001AD0]"
+      />
+    </div>
   );
 }
 
-/** 묶음별 알약 모양 제목과 번호 붙은 질문 목록 (패널과 "크게 보기" 창이 같이 쓴다. 질문 글자 크기만 다르다). */
-function DetailGroups({ groups, questionClass }: { groups: NumberedGroup[]; questionClass: string }) {
+/**
+ * 묶음별 제목과 번호 붙은 질문 목록. 질문 글자는 14px, 크게 보는 중에는 16px 이다(줄 높이 1.55 배).
+ * 번호 칸은 20px 로 고정이라 두 자리 번호("10.")여도 질문 글의 왼쪽 끝이 다른 줄과 같다(번호가 칸보다 넓으면 8px 간격 쪽으로 조금 넘친다).
+ */
+function DetailGroups({ groups, big }: { groups: NumberedGroup[]; big: boolean }) {
   return groups.map((group, index) => (
     <Fragment key={index}>
-      <h3
-        className={`${index === 0 ? "" : "mt-[20px]"} inline-block rounded-[13px] px-[9px] text-[12px] leading-[26px] font-bold text-[#000947] [overflow-wrap:anywhere] ${
-          group.tone === "light" ? "bg-[#E0E1F9]" : "bg-[#C3C5DD]"
-        }`}
-      >
-        {group.name}
-      </h3>
-      <ol className={`mt-[17px] flex flex-col gap-[26px] font-medium ${questionClass}`}>
+      <h3 className="mt-[16px] text-[14px] leading-[20px] font-semibold [overflow-wrap:anywhere]">{group.name}</h3>
+      <ol className={`mt-[8px] flex flex-col leading-[1.55] ${big ? "text-[16px]" : "text-[14px]"}`}>
         {group.questions.map((question) => (
-          <li key={question.number} className="flex">
-            <span className="flex-[0_0_28px] font-bold">{question.number}.</span>
+          <li key={question.number} className="flex gap-[8px] border-t border-t-[#E4E4E4] py-[8px]">
+            <span className="min-w-0 flex-[0_0_20px] whitespace-nowrap text-[#505050] tabular-nums">
+              {question.number}.
+            </span>
             <span className="min-w-0 [overflow-wrap:anywhere]">{question.text}</span>
           </li>
         ))}

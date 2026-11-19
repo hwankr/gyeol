@@ -57,11 +57,6 @@ export type Applicant = {
   original?: AnalysisResult;
 };
 
-/** 표와 상세 제목의 코드: 디자인대로 A 와 - 사이에 공백을 넣는다 ("A-0133" → "A -0133"). */
-export function displayCode(code: string): string {
-  return code.replace("-", " -");
-}
-
 /** 종류별 가림 수의 합 (결정과 상관없이 그대로다) */
 export function maskTotal(applicant: Applicant): number {
   return applicant.maskCounts.reduce((sum, item) => sum + item.count, 0);
@@ -81,13 +76,16 @@ export function applicantStatus(applicant: Applicant, decisions: ApplicantDecisi
   return undecidedCount(applicant, decisions) === 0 ? "완료" : "확인 필요";
 }
 
-/** 표의 "개인정보 가림" 글: 정하지 않은 표현이 있으면 "13곳 가림 · 확인 2곳"(빨강), 없으면 "13곳 가림" */
-export function maskSummary(applicant: Applicant, decisions: ApplicantDecisions | undefined) {
+/**
+ * 표의 "개인정보 가림" 글. 가린 곳 수("13곳 가림")와, 저장한 결정으로 정하지 않은 표현이 있으면 그 수("확인 2곳")다.
+ * 화면은 둘을 " · " 로 이어 "13곳 가림 · 확인 2곳" 으로 적고 뒤쪽만 빨강으로 그린다. 정하지 않은 표현이 없으면 check 는 null 이다.
+ */
+export function maskSummary(
+  applicant: Applicant,
+  decisions: ApplicantDecisions | undefined,
+): { masked: string; check: string | null } {
   const remaining = undecidedCount(applicant, decisions);
-  const total = maskTotal(applicant);
-  return remaining > 0
-    ? { text: `${total}곳 가림 · 확인 ${remaining}곳`, needsCheck: true }
-    : { text: `${total}곳 가림`, needsCheck: false };
+  return { masked: `${maskTotal(applicant)}곳 가림`, check: remaining > 0 ? `확인 ${remaining}곳` : null };
 }
 
 /** 검색 비교용 글: 공백과 "-" 를 빼고 영문을 대문자로 ("a -0133" → "A0133") */

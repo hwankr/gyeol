@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import Form from "next/form";
 import { GyeolLogo } from "@/components/GyeolLogo";
 import { pretendard } from "@/components/loginFonts";
@@ -11,8 +12,13 @@ type LoginScreenProps = {
   accounts: { id: string; label: string }[];
   /** 선택한 계정 id */
   accountId: string;
+  /** "계속" 아래 안내 문구 (어느 계정으로 들어가는지) */
+  hint: string;
   onSelectUniversity: (universityId: string) => void;
   onSelectAccount: (accountId: string) => void;
+  /** 두 선택 목록 요소에 붙일 ref (훅이 화면에 보이는 값을 읽는다) */
+  universitySelectRef: RefObject<HTMLSelectElement | null>;
+  accountSelectRef: RefObject<HTMLSelectElement | null>;
   /** "계속"을 누르면 가는 주소 (전형 준비 화면) */
   continuePath: string;
 };
@@ -27,75 +33,95 @@ const FEATURES = [
   { term: "꾸준한 기록", description: "열람·수정·확정은 모두 이력으로 남습니다." },
 ] as const;
 
+/** 안내 문구 요소의 id. "계속" 버튼의 설명(aria-describedby)으로 잇는다. */
+const HINT_ID = "gyeol-login-hint";
+
 /**
- * 로그인 화면 (/). 왼쪽은 로고와 소개, 오른쪽 카드는 계정 선택이다.
+ * 로그인 화면 (/). 왼쪽은 로고와 소개, 오른쪽 흰 카드는 계정 선택이다.
  * 화면 폭에 맞춰 늘고 줄며, 좁으면 두 덩어리가 위아래로 쌓이고 내용이 길면 문서가 세로로 스크롤된다.
- * 치수·색·글자는 디자인 값을 그대로 쓴다. 줄 높이는 디자인(브라우저 기본 normal)에 맞춰 바깥 상자에서 normal 로 되돌린다.
+ * 치수·색·글자는 디자인 값을 그대로 쓴다. 바탕 글자(14px, 줄 높이 20px, #111111)는 바깥 상자에 두고 각 글자가 필요한 값만 바꾼다.
  */
 export function LoginScreen({
   universities,
   universityId,
   accounts,
   accountId,
+  hint,
   onSelectUniversity,
   onSelectAccount,
+  universitySelectRef,
+  accountSelectRef,
   continuePath,
 }: LoginScreenProps) {
   return (
     // 넓게 깐 무늬 층을 overflow-hidden 으로 잘라 내서 무늬 때문에 스크롤 영역이 늘지 않는다.
     <div
-      className={`${pretendard.className} relative box-border flex min-h-screen flex-wrap items-center gap-x-[40px] gap-y-[48px] overflow-hidden bg-[#000947] pt-[clamp(32px,6.95vw,100px)] pr-[clamp(20px,5.56vw,80px)] pb-[clamp(32px,6.95vw,100px)] pl-[clamp(24px,7.99vw,115px)] leading-[normal] break-keep text-white`}
+      className={`${pretendard.className} relative box-border flex min-h-screen flex-wrap items-center overflow-hidden bg-[#000947] text-[14px] leading-[20px] break-keep text-[#111111]`}
     >
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -inset-[60%] rotate-[15.4deg] bg-[url(/login-pattern.svg)] bg-size-[75px_260px]"
       />
 
-      <div className="relative min-w-0 flex-[1_1_360px]">
-        <GyeolLogo />
-        <p className="mt-[51px] max-w-[500px] text-[16px] leading-[24px] font-light text-white">{INTRO}</p>
-        <dl className="mt-[87px] flex flex-col gap-[28px]">
-          {FEATURES.map((feature) => (
-            <div key={feature.term} className="flex flex-wrap gap-x-0 gap-y-[4px] leading-[24px]">
-              <dt className="flex-[0_0_124px] text-[16px] font-bold text-[#D6D6D6]">{feature.term}</dt>
-              <dd className="min-w-0 flex-[1_1_240px] text-[15px] font-normal text-[#D6D6D6]">{feature.description}</dd>
-            </div>
-          ))}
-        </dl>
+      <div className="relative box-border min-w-0 flex-[1_1_480px] p-[clamp(32px,6vw,88px)] text-white">
+        <div className="max-w-[480px]">
+          <GyeolLogo />
+          <p className="mt-[32px] text-[16px] leading-[26px]">{INTRO}</p>
+          {/* 항목마다 위에 가는 줄을 긋고, 마지막 항목은 아래에도 긋는다. */}
+          <dl className="mt-[32px] flex flex-col">
+            {FEATURES.map((feature) => (
+              <div
+                key={feature.term}
+                className="flex flex-wrap gap-x-[16px] gap-y-[4px] border-t border-[rgba(255,255,255,0.28)] py-[14px] last:border-b"
+              >
+                <dt className="flex-[0_0_112px] text-[14px] leading-[22px] font-semibold">{feature.term}</dt>
+                <dd className="flex-[1_1_240px] text-[14px] leading-[22px]">{feature.description}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
       </div>
 
-      <main className="relative box-border min-w-0 max-w-[640px] flex-[1_1_480px] rounded-[12px] bg-white px-[clamp(24px,5.83vw,84px)] pt-[clamp(48px,12.36vw,178px)] pb-[clamp(48px,11.8vw,170px)] text-[#111111]">
-        <p className="text-[13px] leading-[16px] font-bold text-[#767676]">1 / 3 · 계정 선택</p>
-        <h1 className="mt-[6px] text-[32px] leading-[40px] font-bold tracking-[-0.02em] text-[#111111]">로그인</h1>
-        {/*
-          "계속"은 보통 HTML 폼 제출(GET, action = 전형 준비 화면 주소)이 받친다. 그래서 버튼이 보이는 어느 순간에 눌러도
-          (HTML 을 받는 도중, JS 가 도착하기 전, hydration 도중) 브라우저가 전형 준비 화면으로 이동한다(문서 이동, 주소 끝에 빈 "?").
-          JS 가 준비된 뒤에는 next/form 이 그 제출을 가로채 새로고침 없이 이동한다(주소는 정확히 전형 준비 화면 주소).
-          두 선택 목록에는 name 이 없어 고른 값은 주소에 실리지 않는다.
-        */}
-        <Form className="mt-[34px] flex flex-col gap-[24px]" action={continuePath}>
-          <SelectField
-            id="gyeol-university"
-            label="대학"
-            value={universityId}
-            options={universities.map(({ id, name }) => ({ value: id, label: name }))}
-            onChange={onSelectUniversity}
-          />
-          <SelectField
-            id="gyeol-account"
-            label="계정"
-            value={accountId}
-            options={accounts.map(({ id, label }) => ({ value: id, label }))}
-            onChange={onSelectAccount}
-          />
-          {/* 안쪽 여백(1px 6px)은 디자인이 따로 정하지 않아 브라우저 기본값이 쓰인 것을 그대로 맞춘다. */}
-          <button
-            type="submit"
-            className="mt-[66px] box-border h-[78px] w-full cursor-pointer rounded-[4px] border-0 bg-[#000947] px-[6px] py-px text-[20px] font-bold text-white"
-          >
-            계속
-          </button>
-        </Form>
+      <main className="relative box-border flex min-w-0 flex-[1_1_480px] items-center justify-center px-[24px] py-[48px]">
+        <div className="box-border w-full max-w-[440px] rounded-[8px] bg-white p-[36px]">
+          <p className="text-[13px] leading-[18px] font-medium text-[#505050]">1 / 3 · 계정 선택</p>
+          <h1 className="mt-[6px] text-[26px] leading-[34px] font-bold tracking-[-0.01em]">로그인</h1>
+          {/*
+            "계속"은 보통 HTML 폼 제출(GET, action = 전형 준비 화면 주소)이 받친다. 그래서 버튼이 보이는 어느 순간에 눌러도
+            (HTML 을 받는 도중, JS 가 도착하기 전, hydration 도중) 브라우저가 전형 준비 화면으로 이동한다(문서 이동, 주소 끝에 빈 "?").
+            JS 가 준비된 뒤에는 next/form 이 그 제출을 가로채 새로고침 없이 이동한다(주소는 정확히 전형 준비 화면 주소).
+            두 선택 목록에는 name 이 없어 고른 값은 주소에 실리지 않는다.
+          */}
+          <Form className="mt-[24px] flex flex-col gap-[16px]" action={continuePath}>
+            <SelectField
+              id="gyeol-university"
+              label="대학"
+              value={universityId}
+              options={universities.map(({ id, name }) => ({ value: id, label: name }))}
+              onChange={onSelectUniversity}
+              selectRef={universitySelectRef}
+            />
+            <SelectField
+              id="gyeol-account"
+              label="계정"
+              value={accountId}
+              options={accounts.map(({ id, label }) => ({ value: id, label }))}
+              onChange={onSelectAccount}
+              selectRef={accountSelectRef}
+            />
+            {/* 디자인의 "계속"은 링크 모양(가운데 놓인 글자, 안쪽 여백 없음)이다. 같은 모양을 제출 버튼에 준다. */}
+            <button
+              type="submit"
+              aria-describedby={HINT_ID}
+              className="mt-[8px] box-border flex h-[48px] w-full cursor-pointer items-center justify-center rounded-[6px] border border-[#000947] bg-[#000947] p-0 text-[15px] font-semibold text-white"
+            >
+              계속
+            </button>
+            <p id={HINT_ID} className="text-[13px] leading-[18px] text-[#505050]">
+              {hint}
+            </p>
+          </Form>
+        </div>
       </main>
     </div>
   );
@@ -107,44 +133,30 @@ type SelectFieldProps = {
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
+  selectRef: RefObject<HTMLSelectElement | null>;
 };
 
-/** 이름표와 선택 목록. 브라우저 기본 선택 목록의 모양을 지우고(appearance-none) 위아래 화살표를 겹친다. */
-function SelectField({ id, label, value, options, onChange }: SelectFieldProps) {
+/** 이름표와 선택 목록. 선택 목록은 브라우저 기본 모양(화살표 포함)에 크기·테두리·글자만 디자인 값으로 준다. */
+function SelectField({ id, label, value, options, onChange, selectRef }: SelectFieldProps) {
   return (
-    <div className="flex flex-col gap-[8px]">
-      <label htmlFor={id} className="text-[20px] leading-[28px] font-bold text-[#505050]">
+    <div className="flex flex-col gap-[6px]">
+      <label htmlFor={id} className="text-[13px] leading-[18px] font-semibold">
         {label}
       </label>
-      <div className="relative">
-        {/* 오른쪽 안쪽 여백(60px)이 화살표 자리라서 긴 문구도 화살표와 겹치지 않는다. */}
-        <select
-          id={id}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="m-0 box-border block h-[58px] w-full cursor-pointer appearance-none rounded-[6px] border-2 border-[#BBBBBB] bg-white py-0 pr-[60px] pl-[28px] text-[16px] font-normal text-[#767676]"
-        >
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 12 20"
-          className="pointer-events-none absolute top-1/2 right-[34px] -mt-[10px] h-[20px] w-[12px]"
-        >
-          <path
-            fill="none"
-            stroke="#131927"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M1 6.5L6 1.5L11 6.5M1 13.5L6 18.5L11 13.5"
-          />
-        </svg>
-      </div>
+      {/* 줄 높이는 디자인이 따로 정하지 않아 브라우저 기본값(normal)이 쓰인 것을 그대로 맞춘다. */}
+      <select
+        ref={selectRef}
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="m-0 box-border h-[44px] w-full rounded-[6px] border border-[#CFCFCF] bg-white px-[12px] py-0 text-[15px] leading-[normal] text-[#111111]"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

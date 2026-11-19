@@ -11,35 +11,34 @@ type ConsoleShellProps = {
   logoutPath: string;
   /** 상단 바의 검색 입력란. enabled 가 false 인 동안은 기능이 없는 컨트롤(disabled)이다. */
   search: SearchInputProps;
-  /** 검색 입력란 (지원자 관리 화면을 나갈 때 그 화면이 실제 값을 비운다) */
+  /** 검색 입력란 (검색을 쓰는 화면을 나갈 때 그 화면이 실제 값을 비운다) */
   searchInputRef: Ref<HTMLInputElement>;
-  /** 본문(<main>) 아래 안쪽 여백을 0 으로 할지 (지원자 관리 화면. 전형 준비는 23px) */
-  flushBottom: boolean;
-  /** 상단 바 아래에 그릴 화면 내용 */
+  /** 상단 바 아래 본문(<main>)에 그릴 화면 내용 */
   children: ReactNode;
 };
 
 type SearchInputProps = {
-  /** 검색이 동작하는지. 지원자 관리 화면이 준비돼 보이는 동안만 true 다(서버 HTML·hydration 때와 그 밖의 화면에서는 false). */
+  /** 검색이 동작하는지. 검색을 쓰는 화면(지원자 관리, 평가 대기 목록)이 준비돼 보이는 동안만 true 다(서버 HTML·hydration 때와 그 밖의 화면에서는 false). */
   enabled: boolean;
+  /** 입력란의 안내 글자(placeholder)이자 이름(aria-label). 검색을 쓰는 화면이 정하고, 그 밖에는 "검색" 이다. */
+  label: string;
   /** 글을 칠 때마다 (지우기 표시를 눌렀을 때 포함). 입력란의 지금 값 전체를 넘긴다. */
   onChange: (value: string) => void;
 };
 
 /**
- * 새 화면(전형 준비 등)의 껍데기: 왼쪽 사이드바와 본문(<main>)의 첫 줄인 검색·계정 줄.
- * 치수·색·글자는 디자인 값 그대로다. 바깥 상자는 화면 높이 이상이고 줄을 바꿔(flex-wrap) 좁은 화면에서는 본문이 사이드바 아래로 내려간다.
- * 최소 폭 제한은 없고 내용이 길면 문서가 세로로 스크롤된다.
- * 줄 높이는 디자인(브라우저 기본 normal)에 맞춰 바깥 상자에서 normal 로 되돌린다.
+ * 새 화면(전형 준비, 지원자 관리, 평가하기)의 껍데기: 왼쪽 사이드바, 오른쪽 위의 상단 바(검색·계정), 그 아래 본문(<main>).
+ * 치수·색·글자는 디자인 값 그대로다. 바깥 상자는 화면 높이 이상이고 줄을 바꿔(flex-wrap) 좁은 화면에서는 오른쪽 단이 사이드바 아래로 내려간다.
+ * 최소 폭 제한은 없고 내용이 길면 문서가 세로로 스크롤된다. 본문은 세로로 쌓는 flex 상자라 화면의 마지막 상자가 남는 높이를 채울 수 있다.
  * 다른 주소로 가는 것은 모두 보통 링크(next/link)라서 화면의 JavaScript 가 준비되기 전에 눌러도 그 주소의 문서로 이동한다.
  */
-export function ConsoleShell({ menus, logoutPath, search, searchInputRef, flushBottom, children }: ConsoleShellProps) {
+export function ConsoleShell({ menus, logoutPath, search, searchInputRef, children }: ConsoleShellProps) {
   return (
     <div
-      className={`${consolePretendard.className} box-border flex min-h-screen flex-wrap bg-[#F3F3F3] leading-[normal] text-[#111111]`}
+      className={`${consolePretendard.className} box-border flex min-h-screen flex-wrap bg-white text-[14px] leading-[20px] text-[#111111]`}
     >
-      <div className="box-border flex flex-[1_0_258px] flex-col rounded-[10px] bg-white pt-[41px] pb-[33px] text-[#000947]">
-        <div className="ml-[43px] flex items-center gap-[0.33em] text-[25.6px] leading-none text-[#001AD0]">
+      <div className="box-border flex flex-[1_0_248px] flex-col border-r border-r-[#E4E4E4] px-[12px] pt-[20px] pb-[16px]">
+        <div className="flex items-center gap-[0.33em] px-[12px] text-[22px] leading-none text-[#001AD0]">
           <svg aria-hidden="true" viewBox="0 0 107 147" className="h-[0.96em] w-[0.7em] flex-none">
             <path fill="#001AD0" d="M0 0A53.5 53.5 0 0 0 107 0L91 0Q85.5 0 85.1 5A32 32 0 0 1 21.9 5Q21.5 0 16 0Z" />
             <path
@@ -56,78 +55,66 @@ export function ConsoleShell({ menus, logoutPath, search, searchInputRef, flushB
             Gyeol
           </span>
         </div>
-        <p className="mt-[26px] ml-[43px] text-[16px] leading-[20px] font-bold">{ADMISSION.university}</p>
-        <p className="ml-[43px] text-[14px] leading-[18px] font-normal">{ADMISSION.systemName}</p>
-        {/* 전형이 하나뿐이라 기능이 없는 컨트롤이다(눌리지 않음). 모양은 디자인 그대로다. */}
-        <button
-          type="button"
-          aria-haspopup="listbox"
-          disabled
-          className={`${BUTTON_DEFAULT_FONT} relative mt-[28px] mr-[25px] ml-[43px] cursor-default rounded-[8px] border-0 bg-[#F4F4F4] pt-[10px] pr-[40px] pb-[10px] pl-[16px] text-left font-normal text-[#000947]`}
-        >
-          <span className="block text-[13px] leading-[16px] font-semibold text-[#485A83]">전형 선택</span>
-          <span className="mt-[7px] block text-[16px] leading-[20px] font-bold">{ADMISSION.trackShort}</span>
-          <svg aria-hidden="true" viewBox="0 0 14 9" className="absolute top-[39px] right-[13px] h-[9px] w-[14px]">
-            <path
+        <div className="mt-[24px] px-[12px]">
+          <p className="text-[14px] leading-[20px] font-semibold">{ADMISSION.university}</p>
+          <p className="mt-[2px] text-[12px] leading-[16px] text-[#767676]">{ADMISSION.systemName}</p>
+        </div>
+        <div className="mt-[16px] px-[12px]">
+          <span id="track-label" className="block text-[12px] leading-[16px] font-medium text-[#767676]">
+            전형 선택
+          </span>
+          {/* 전형이 하나뿐이라 기능이 없는 컨트롤이다(눌리지 않음). 모양은 디자인 그대로다. */}
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-labelledby="track-label track-value"
+            disabled
+            className="mt-[6px] box-border flex h-[36px] w-full cursor-default items-center justify-between rounded-[6px] border border-[#CFCFCF] bg-white pr-[10px] pl-[12px] text-[14px] font-medium text-[#111111]"
+          >
+            <span id="track-value">{ADMISSION.trackShort}</span>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
               fill="none"
-              stroke="#000947"
+              stroke="#767676"
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M1 1.5l6 6 6-6"
-            />
-          </svg>
-        </button>
-        <nav aria-label="주 메뉴" className="mt-[39px] flex flex-col gap-[10px]">
+              className="h-[16px] w-[16px]"
+            >
+              <path d="M4 6l4 4 4-4" />
+            </svg>
+          </button>
+        </div>
+        <nav aria-label="주 메뉴" className="mt-[24px] flex flex-col gap-[2px]">
           {menus.map((menu) => (
             <MenuLink key={menu.key} menu={menu} />
           ))}
         </nav>
         <Link
           href={logoutPath}
-          className="mt-auto mr-[33px] ml-auto pt-[24px] text-[12px] leading-[16px] font-medium text-[#505050] underline"
+          className="mt-auto flex h-[42px] items-center rounded-[6px] px-[12px] text-[13px] font-medium text-[#767676] no-underline"
         >
           로그아웃
         </Link>
       </div>
-      <main
-        className={`box-border min-w-0 flex-[999_1_560px] pt-[35px] pr-[clamp(16px,3.9vw,56px)] pl-[clamp(20px,5.4vw,78px)] ${
-          flushBottom ? "pb-0" : "pb-[23px]"
-        }`}
-      >
+      <div className="flex min-w-0 flex-[999_1_560px] flex-col">
         <TopBar search={search} inputRef={searchInputRef} />
-        {children}
-      </main>
+        <main className="box-border flex flex-[1_1_auto] flex-col px-[clamp(16px,2.3vw,32px)] pt-[20px] pb-[24px]">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
 
-/**
- * 글자가 없는 버튼(아이콘 버튼 등)의 글자 크기. 디자인은 이 버튼들에 글꼴을 정하지 않아 브라우저 기본 버튼 글자(13.333px)가 쓰였다.
- * 보이는 모양에는 영향이 없지만 계산된 값을 디자인과 맞춘다.
- */
-const BUTTON_DEFAULT_FONT = "text-[13.3333px]";
+const MENU_LINK_CLASS = "flex h-[42px] items-center gap-[12px] rounded-[6px] px-[12px] text-[14px] no-underline";
 
-const MENU_LINK_CLASS = "flex h-[76px] items-center gap-[20px] ml-[18px] pl-[25px] text-[20px] tracking-[-0.02em] no-underline";
-
-/** 주 메뉴 하나. 선택된 메뉴는 왼쪽이 둥근 회색 띠와 위아래 오목한 모서리 조각, 파란 글자·아이콘(굵기 800)이다. */
+/** 주 메뉴 하나. 선택된 메뉴는 옅은 파란 바탕에 파란 글자·아이콘(굵기 600)이고, 나머지는 회색 글자·아이콘(굵기 500)이다. */
 function MenuLink({ menu }: { menu: ConsoleMenu & { active: boolean } }) {
-  const color = menu.active ? "#001AD0" : "#000947";
   const content = (
     <>
-      {menu.active && (
-        <>
-          <span
-            aria-hidden="true"
-            className="absolute -top-[12px] right-0 h-[12px] w-[12px] bg-[radial-gradient(circle_at_0_0,#FFFFFF_11.5px,#F3F3F3_12px)]"
-          />
-          <span
-            aria-hidden="true"
-            className="absolute right-0 -bottom-[12px] h-[12px] w-[12px] bg-[radial-gradient(circle_at_0_100%,#FFFFFF_11.5px,#F3F3F3_12px)]"
-          />
-        </>
-      )}
-      <MenuIcon menuKey={menu.key} color={color} />
+      <MenuIcon menuKey={menu.key} color={menu.active ? "#001AD0" : "#767676"} />
       <span>{menu.label}</span>
     </>
   );
@@ -135,7 +122,7 @@ function MenuLink({ menu }: { menu: ConsoleMenu & { active: boolean } }) {
   // 갈 곳이 없는 메뉴: href 없는 <a> 라서 초점을 받지 않고 눌러도 아무 일도 없다.
   if (menu.href === null) {
     return (
-      <a aria-disabled="true" className={`${MENU_LINK_CLASS} cursor-default font-bold text-[#000947]`}>
+      <a aria-disabled="true" className={`${MENU_LINK_CLASS} cursor-default font-medium text-[#505050]`}>
         {content}
       </a>
     );
@@ -146,8 +133,8 @@ function MenuLink({ menu }: { menu: ConsoleMenu & { active: boolean } }) {
       aria-current={menu.active ? "page" : undefined}
       className={
         menu.active
-          ? `${MENU_LINK_CLASS} relative rounded-[12px_0_0_12px] bg-[#F3F3F3] font-extrabold text-[#001AD0]`
-          : `${MENU_LINK_CLASS} font-bold text-[#000947]`
+          ? `${MENU_LINK_CLASS} bg-[#EEF0FF] font-semibold text-[#001AD0]`
+          : `${MENU_LINK_CLASS} font-medium text-[#505050]`
       }
     >
       {content}
@@ -166,7 +153,7 @@ function MenuIcon({ menuKey, color }: { menuKey: ConsoleMenu["key"]; color: stri
       strokeWidth="1.6"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="h-[24px] w-[24px] flex-none"
+      className="h-[20px] w-[20px] flex-none"
     >
       {MENU_ICON_PATHS[menuKey]}
     </svg>
@@ -220,96 +207,91 @@ const MENU_ICON_PATHS: Record<ConsoleMenu["key"], ReactNode> = {
   ),
 };
 
+/** 상단 바의 아이콘 버튼(내보내기·알림): 36px 정사각형, 회색 테두리. 기능이 없는 컨트롤이다(눌리지 않음). */
+const ICON_BUTTON_CLASS =
+  "box-border flex h-[36px] w-[36px] flex-none cursor-default items-center justify-center rounded-[6px] border border-[#CFCFCF] bg-white p-0";
+
 /**
- * 본문 첫 줄: 검색 입력란, 소속·사정관, 프로필 그림, 내보내기·알림 버튼. 내보내기·알림은 기능이 없는 컨트롤이다(눌리지 않음).
- * 검색 입력란은 지원자 관리 화면이 준비된 뒤에만 켜져 동작하고(글을 칠 때마다 걸러 보기에 반영), 그 전과 그 밖의 화면에서는 기능이 없는
- * 컨트롤(disabled)이다. 모양은 어느 쪽이든 디자인 그대로다(안내 글자·지우기 버튼을 더하지 않는다. type="search" 의 브라우저 기본 지우기 표시는 그대로).
+ * 상단 바: 검색 입력란, 사정관·소속, 프로필 그림, 내보내기·알림 버튼. 아래에 선이 하나 있다. 내보내기·알림은 기능이 없는 컨트롤이다(눌리지 않음).
+ * 검색 입력란은 검색을 쓰는 화면(지원자 관리, 평가 대기 목록)이 준비된 뒤에만 켜져 동작하고(글을 칠 때마다 그 화면의 걸러 보기에 반영),
+ * 그 전과 그 밖의 화면에서는 기능이 없는 컨트롤(disabled)이다. 모양은 어느 쪽이든 디자인 그대로이고 안내 글자만 화면에 따라 다르다
+ * (type="search" 의 브라우저 기본 지우기 표시는 그대로).
  */
 function TopBar({ search, inputRef }: { search: SearchInputProps; inputRef: Ref<HTMLInputElement> }) {
   return (
-    <div className="-ml-[19px] flex flex-wrap items-center justify-between gap-x-[24px] gap-y-[12px]">
-      <label className="box-border flex h-[40px] min-w-[200px] flex-[0_1_603px] items-center gap-[10px] rounded-[20px] bg-white pr-[20px] pl-[22px]">
+    <div className="box-border flex min-h-[60px] flex-wrap items-center justify-between gap-x-[24px] gap-y-[8px] border-b border-b-[#E4E4E4] px-[clamp(16px,2.3vw,32px)] py-[10px]">
+      <label className="box-border flex h-[36px] min-w-[200px] flex-[0_1_480px] items-center gap-[8px] rounded-[6px] border border-[#CFCFCF] bg-white px-[12px]">
         <svg
           aria-hidden="true"
           viewBox="0 0 20 20"
           fill="none"
-          stroke="#131927"
+          stroke="#767676"
           strokeWidth="1.6"
           strokeLinecap="round"
-          className="h-[20px] w-[20px] flex-none"
+          className="h-[16px] w-[16px] flex-none"
         >
           <circle cx="8.8" cy="8.8" r="6.3" />
           <path d="M13.5 13.5 18 18" />
         </svg>
         {/*
-          안쪽 여백(1px 2px)은 디자인이 정하지 않아 브라우저 기본값이 쓰인 것을 그대로 맞춘다.
-          기본은 꺼져(disabled) 있고 지원자 관리 화면이 준비되면 켜진다(hooks/useConsoleSearch.ts). 서버 HTML 에서는 어느 주소에서나 꺼져 있다.
-          React 가 값을 쥐지 않는 입력란(defaultValue)이라 사람이 적은 글자를 React 가 덮어쓰지 않는다. 값을 비우는 것은 지원자 관리 화면을
-          나갈 때뿐이다(hooks/useApplicants.ts). autoComplete="off" 는 새로고침·뒤로 가기 때 브라우저가 전에 적은 글자를 채워 넣지 않게
-          (돌아온 화면이 처음 상태이게) 한다.
+          기본은 꺼져(disabled) 있고 검색을 쓰는 화면이 준비되면 켜진다(hooks/useConsoleSearch.ts). 서버 HTML 에서는 어느 주소에서나 꺼져 있다.
+          React 가 값을 쥐지 않는 입력란(defaultValue)이라 사람이 적은 글자를 React 가 덮어쓰지 않는다. 값을 비우는 것은 검색을 쓰는 화면을
+          나갈 때뿐이다(hooks/useApplicants.ts, hooks/useEvaluateList.ts). autoComplete="off" 는 새로고침·뒤로 가기 때 브라우저가 전에 적은
+          글자를 채워 넣지 않게(돌아온 화면이 처음 상태이게) 한다.
         */}
         <input
           ref={inputRef}
           type="search"
-          aria-label="검색"
+          aria-label={search.label}
+          placeholder={search.label}
           autoComplete="off"
           disabled={!search.enabled}
           defaultValue=""
           onChange={(event) => search.onChange(event.currentTarget.value)}
-          className="min-w-0 flex-[1_1_auto] scroll-m-[8px] border-0 bg-transparent px-[2px] py-px text-[15px] text-[#111111] disabled:cursor-default"
+          className="min-w-0 flex-[1_1_auto] scroll-m-[8px] border-0 bg-transparent text-[14px] text-[#111111] placeholder:text-[#767676] disabled:cursor-default"
         />
       </label>
-      <div className="flex items-center">
-        <div className="mr-[22px] text-right text-[#333333]">
-          <div className="text-[12px] leading-[17px] font-semibold">{ADMISSION.office}</div>
-          <div className="text-[12px] leading-[20px] font-semibold">
-            <span className="text-[14px] font-extrabold">{ADMISSION.reviewerName}</span> {ADMISSION.reviewerRole}
+      <div className="flex items-center gap-[4px]">
+        <div className="mr-[8px] text-right">
+          <div className="text-[13px] leading-[18px] font-semibold">
+            {ADMISSION.reviewerName} {ADMISSION.reviewerRole}
           </div>
+          <div className="text-[12px] leading-[16px] text-[#767676]">{ADMISSION.office}</div>
         </div>
         <svg
           role="img"
           aria-label={`${ADMISSION.reviewerName} ${ADMISSION.reviewerRole} 프로필`}
           viewBox="0 0 40 40"
-          className="h-[40px] w-[40px] flex-none rounded-[50%]"
+          className="mr-[8px] h-[32px] w-[32px] flex-none rounded-[50%]"
         >
           <rect width="40" height="40" fill="#000947" />
           <circle cx="20" cy="36" r="12.5" fill="#FFFFFF" />
           <path fill="#FFFFFF" d="M14.5 16.5c0-4.5 3-7 10.5-7 0 7.5-2.5 11-7 11-2 0-3.5-1.5-3.5-4z" />
         </svg>
-        <button
-          type="button"
-          aria-label="내보내기"
-          disabled
-          className={`${BUTTON_DEFAULT_FONT} ml-[18px] flex h-[40px] w-[40px] flex-none cursor-default items-center justify-center rounded-[50%] border-0 bg-white p-0 font-normal text-black`}
-        >
+        <button type="button" aria-label="내보내기" disabled className={ICON_BUTTON_CLASS}>
           <svg
             aria-hidden="true"
             viewBox="0 0 18 20"
             fill="none"
-            stroke="#000947"
+            stroke="#505050"
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="h-[20px] w-[18px]"
+            className="h-[18px] w-[16px]"
           >
             <path d="M9 13V2M4.8 6 9 1.8 13.2 6M1.5 11.5V18h15v-6.5" />
           </svg>
         </button>
-        <button
-          type="button"
-          aria-label="알림"
-          disabled
-          className={`${BUTTON_DEFAULT_FONT} ml-[18px] flex h-[40px] w-[40px] flex-none cursor-default items-center justify-center rounded-[50%] border-0 bg-white p-0 font-normal text-black`}
-        >
+        <button type="button" aria-label="알림" disabled className={`${ICON_BUTTON_CLASS} ml-[4px]`}>
           <svg
             aria-hidden="true"
             viewBox="0 0 20 22"
             fill="none"
-            stroke="#000947"
+            stroke="#505050"
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="h-[22px] w-[20px]"
+            className="h-[19px] w-[17px]"
           >
             <path d="M10 2.2a6 6 0 0 0-6 6v4.3l-1.6 3.4h15.2L16 12.5V8.2a6 6 0 0 0-6-6z" />
             <path d="M8.3 19.2a1.8 1.8 0 0 0 3.4 0" />

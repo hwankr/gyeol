@@ -9,7 +9,6 @@ import {
   NO_REVIEWS,
   applicantStatus,
   competitionRate,
-  displayCode,
   maskSummary,
   matchesSearch,
   reviewPercent,
@@ -90,6 +89,9 @@ const DETAIL_FROM_TOP = "";
 
 /** 로그인한 사정관 (내 배정 보기) */
 const MY_NAME = ADMISSION.reviewerName;
+
+/** 이 화면이 보이는 동안 상단 바 검색 입력란의 안내 글자이자 이름 */
+const SEARCH_LABEL = "지원자 코드 검색";
 
 /** 처음 걸러 보기와 내 배정 보기 */
 const INITIAL_FILTER: ApplicantFilter = "확인 필요";
@@ -185,7 +187,7 @@ export function useApplicants() {
   const [query, setQuery] = useState("");
   /** 상세 영역의 스크롤 영역 */
   const detailScrollRef = useRef<HTMLDivElement>(null);
-  /** 저장하기 버튼, 지금 눌려 있는 걸러 보기 버튼, 고른 지원자의 코드 버튼 (초점을 옮길 때 쓴다) */
+  /** 저장하기 버튼, 지금 눌려 있는 걸러 보기 버튼, 고른 지원자의 줄 버튼(표의 줄 전체가 버튼 하나다) (초점을 옮길 때 쓴다) */
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const pressedFilterRef = useRef<HTMLButtonElement>(null);
   const selectedCodeButtonRef = useRef<HTMLButtonElement>(null);
@@ -202,7 +204,8 @@ export function useApplicants() {
 
   // 이 화면의 수명 관리 (hooks/useGuidelineUpload.ts 와 같은 방식).
   // - 검색: 상단 바의 검색 입력란은 기본이 꺼져(disabled) 있다. 이 화면이 브라우저에서 준비되면(이 effect 가 돌면) 입력 이벤트를 받기 시작하고
-  //   입력란을 켠다. 준비 전에는 입력란에 글자를 넣을 수 없으므로 준비되는 순간 읽어 올 값이 없다(입력란은 비어 있다).
+  //   입력란을 켠다(켜진 동안 입력란의 안내 글자·이름은 "지원자 코드 검색" 이다). 준비 전에는 입력란에 글자를 넣을 수 없으므로 준비되는 순간
+  //   읽어 올 값이 없다(입력란은 비어 있다).
   // - cacheComponents 에서는 다른 화면으로 가도 이 화면이 숨겨질 뿐 상태가 남는다. 숨겨지거나 언마운트될 때 cleanup 에서 입력 이벤트를 그만 받고
   //   입력란을 끈다. 그리고 입력란의 실제 값을 비우고 처음 상태(걸러 보기 "확인 필요", 내 배정 보기 켜짐, 검색어 없음, 처음 선택,
   //   저장하지 않은 결정 없음)로 되돌린다. 켜고 끄기와 비우기를 모두 이 화면이 하므로, 한 번도 준비되지 않은 화면은 남길 것이 없다.
@@ -234,7 +237,7 @@ export function useApplicants() {
       if (detailScrollRef.current !== null) detailScrollRef.current.scrollTop = 0;
     }
     listenerRef.current = setQuery;
-    setInputEnabled(true);
+    setInputEnabled(true, SEARCH_LABEL);
     window.addEventListener("pageshow", onPageShow);
     return () => {
       window.removeEventListener("pageshow", onPageShow);
@@ -286,11 +289,11 @@ export function useApplicants() {
   // 1. 따로 정한 곳이 있는 조작
   //    - 저장하기(초점이 저장하기에 있었을 때): 저장하면 저장하기가 꺼지거나 줄이 사라져 상세 영역이 바뀌거나 없어진다 → 상세 스크롤 영역,
   //      고른 지원자가 없으면 지금 눌려 있는 걸러 보기 버튼.
-  //    - 지원자 고르기(줄의 어느 칸을 눌렀든, 코드 버튼을 눌렀든): 실제로 고른 지원자의 코드 버튼. 누른 줄이 화면 갱신으로 사라져 선택이
-  //      옮겨 갔으면 옮겨 간 지원자의 것, 선택이 없어졌으면 지금 눌려 있는 걸러 보기 버튼. 마우스로 줄의 다른 칸을 눌렀을 때도 초점이
-  //      문서에 남지 않는다.
+  //    - 지원자 고르기(줄 버튼을 마우스로 눌렀든 키보드로 눌렀든): 실제로 고른 지원자의 줄 버튼. 누른 줄이 화면 갱신으로 사라져 선택이
+  //      옮겨 갔으면 옮겨 간 지원자의 것, 선택이 없어졌으면 지금 눌려 있는 걸러 보기 버튼. 마우스로 눌러도 버튼에 초점을 주지 않는
+  //      브라우저에서도 초점이 문서에 남지 않는다.
   // 2. 그 밖에(안전망): 이 화면 안에서 마지막으로 초점을 받은 컨트롤이 이제 없거나 꺼졌거나 그려지지 않고 초점이 문서에 있으면(브라우저가
-  //    아직 꺼진 컨트롤에 초점을 두고 있는 경우 포함) 고른 지원자의 코드 버튼, 없으면 지금 눌려 있는 걸러 보기 버튼. 경로마다 따로 처리하지
+  //    아직 꺼진 컨트롤에 초점을 두고 있는 경우 포함) 고른 지원자의 줄 버튼, 없으면 지금 눌려 있는 걸러 보기 버튼. 경로마다 따로 처리하지
   //    않으므로 아직 찾지 못한 경로도 막는다.
   // 되돌리지 않는 경우: 사람이 컨트롤이 아닌 곳을 마우스로 눌러 초점을 뗐을 때(아래 pointerdown), 초점이 화면 밖(상단 바의 검색 입력란 등)에
   // 있을 때, 다른 화면으로 이동할 때(이 화면이 숨겨지면 effect 가 돌지 않는다), 브라우저 창·탭이 초점을 잃었을 때(document.activeElement 는
@@ -314,7 +317,7 @@ export function useApplicants() {
 
   // 이 화면 안에서 마지막으로 초점을 받은 컨트롤을 기억한다(위 안전망이 쓴다). 초점이 화면 밖으로 가면 잊는다.
   // 사람이 컨트롤이 아닌 곳(빈 곳, 글자, 요약 카드 등)을 마우스로 눌러 초점을 떼면 잊는다(그 뒤에는 되돌리지 않는다).
-  // 표의 줄을 누른 것은 지원자 고르기가 초점을 정하므로 여기서는 따로 보지 않는다. 화면이 숨겨지면 기억과 정해 둔 초점을 지운다.
+  // 표의 줄은 줄 전체가 버튼이라 컨트롤을 누른 것이고, 초점은 지원자 고르기가 정한다. 화면이 숨겨지면 기억과 정해 둔 초점을 지운다.
   useLayoutEffect(() => {
     const inScreen = (node: Node) => crumbNavRef.current?.contains(node) === true || contentRef.current?.contains(node) === true;
     function onFocusIn(event: FocusEvent) {
@@ -347,10 +350,20 @@ export function useApplicants() {
       return decision !== undefined && decision !== selected.decisions[expression.id];
     });
 
-  /** 지원자 고르기 (줄의 어느 칸을 마우스로 누르거나, 코드 버튼을 키보드·마우스로 누름). 고른 뒤 초점은 고른 지원자의 코드 버튼이다. */
+  // 저장하기 버튼의 글이 "저장됨" 이 되는 때: 화면에 보이는 결정이 저장소에 저장된 그대로일 때다. 고른 지원자에게 저장한 결정이 하나라도
+  // 있고, 그것과 다른 저장하지 않은 결정이 없고(canSave 가 아님), 저장소에 쓰지 못해 메모리에만 둔 결정도 없어야 한다(메모리에만 둔 결정이
+  // 있는 동안은 어느 지원자의 것인지 가리지 않고 "저장됨" 이라고 적지 않는다. 그동안은 "저장하지 못함" 안내가 나와 있다).
+  const saved =
+    selected !== undefined &&
+    !canSave &&
+    !hasUnsaved &&
+    selected.applicant.expressions.some((expression) => selected.decisions[expression.id] !== undefined);
+
+  /** 지원자 고르기 (줄 버튼을 마우스·키보드로 누름. 줄의 어느 칸을 눌러도 같다). 고른 뒤 초점은 고른 지원자의 줄 버튼이다. */
   function selectApplicant(code: string) {
     if (code === selected?.applicant.code) {
-      // 이미 고른 지원자: 다시 그릴 것이 없으므로 바로 그 코드 버튼에 초점을 준다(줄의 다른 칸을 눌렀을 때 초점이 문서에 남지 않게).
+      // 이미 고른 지원자: 다시 그릴 것이 없으므로 바로 그 줄 버튼에 초점을 준다(마우스로 눌러도 버튼에 초점을 주지 않는 브라우저에서 초점이
+      // 문서에 남지 않게).
       if (selectedCodeButtonRef.current !== null) focusAndReveal(selectedCodeButtonRef.current);
       return;
     }
@@ -408,18 +421,17 @@ export function useApplicants() {
     subtitle: `${ADMISSION.trackFull} · ${ADMISSION.unit} · 접수 ${total}건`,
     deadline: { label: APPLICATION_DEADLINE.label, dateText: APPLICATION_DEADLINE.dateText, remaining },
     applications: { total, quota: ADMISSION.quota, rate: competitionRate(total, ADMISSION.quota) },
-    review: { percent, done, total, waiting: total - done },
+    review: { percent, done, waiting: total - done },
     filters: APPLICANT_FILTERS.map((item) => ({ filter: item, count: counts[item], pressed: item === filter })),
     mineOnly,
     rows: visible.map(({ applicant, status, decisions }) => {
       const mask = maskSummary(applicant, decisions);
       return {
         code: applicant.code,
-        displayCode: displayCode(applicant.code),
         documentSummary: applicant.documentSummary,
         documentProblem: applicant.documentProblem,
-        maskText: mask.text,
-        maskNeedsCheck: mask.needsCheck,
+        maskText: mask.masked,
+        maskCheckText: mask.check,
         assignee: applicant.assignee,
         status,
         selected: applicant.code === selected?.applicant.code,
@@ -430,7 +442,6 @@ export function useApplicants() {
         ? null
         : {
             code: selected.applicant.code,
-            displayCode: displayCode(selected.applicant.code),
             status: selected.status,
             documentCounts: selected.applicant.documentCounts,
             documentNotice: selected.applicant.documentProblem
@@ -441,7 +452,10 @@ export function useApplicants() {
               ...expression,
               decision: decisionOf(selected, expression.id),
             })),
+            // 화면에 보이는 결정(저장하지 않은 결정 포함)이 아직 없는 표현 수. 표의 "확인 N곳" 은 저장한 결정만 본다(maskSummary).
+            undecided: selected.applicant.expressions.filter((expression) => decisionOf(selected, expression.id) === null).length,
             canSave,
+            saved,
           },
     // 상세 영역의 머리 아래 안내(role="alert"). 결정 저장 실패와 원문보기 실패가 함께면 두 줄이다.
     notices: [...(hasUnsaved ? [STORAGE_NOTICE] : []), ...(originalFailed && selected !== undefined ? [ORIGINAL_NOTICE] : [])],

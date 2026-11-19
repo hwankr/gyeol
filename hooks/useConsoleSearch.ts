@@ -1,7 +1,7 @@
-import { createContext, useContext, useMemo, useRef, useState, type RefObject } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type RefObject } from "react";
 
 // 상단 바의 검색 입력란. 입력란은 껍데기(app/(console)/layout.tsx → components/ConsoleShell.tsx)에 있고 검색어를 쓰는 것은
-// 지원자 관리 화면이다. 껍데기의 JS 와 지원자 관리 화면의 JS 는 따로 도착하므로, 입력란은 기본이 꺼진(disabled) 상태이고
+// 지원자 관리 화면과 평가하기의 평가 대기 목록 화면이다(아래 설명은 지원자 관리 화면을 예로 든다. 평가 대기 목록도 같은 방식이다). 껍데기의 JS 와 지원자 관리 화면의 JS 는 따로 도착하므로, 입력란은 기본이 꺼진(disabled) 상태이고
 // 지원자 관리 화면이 준비되면(그 화면의 훅이 브라우저에서 돌면) 그때 켜진다. 서버 HTML 과 첫 클라이언트 렌더링에서는 어느 주소에서나
 // 꺼져 있고 비어 있다(hydration 경고 없음). 준비 전에는 글자를 넣을 수 없으므로 준비 전에 적은 글자를 살리거나 지울 일이 없다.
 //
@@ -18,9 +18,19 @@ export type ConsoleSearch = {
   inputRef: RefObject<HTMLInputElement | null>;
   /** 입력 이벤트를 받을 곳. 지원자 관리 화면이 보이는 동안만 등록된다. */
   listenerRef: RefObject<((query: string) => void) | null>;
-  /** 입력란을 켜고 끈다 (지원자 관리 화면이 보이는 동안만 켠다) */
-  setInputEnabled: (enabled: boolean) => void;
+  /**
+   * 입력란을 켜고 끈다 (검색을 쓰는 화면이 보이는 동안만 켠다). 켤 때 label 을 주면 입력란의 안내 글자(placeholder)와 이름(aria-label)이
+   * 그 글이 된다(예: "지원자 코드 검색"). 끄면 기본 글 "검색" 으로 돌아간다.
+   */
+  setInputEnabled: (enabled: boolean, label?: string) => void;
 };
+
+/** 검색을 쓰는 화면이 없을 때 입력란의 안내 글자와 이름 */
+export const DEFAULT_SEARCH_LABEL = "검색";
+
+type SearchInputState = { enabled: boolean; label: string };
+
+const SEARCH_INPUT_OFF: SearchInputState = { enabled: false, label: DEFAULT_SEARCH_LABEL };
 
 export const ConsoleSearchContext = createContext<ConsoleSearch | null>(null);
 
@@ -28,15 +38,22 @@ export const ConsoleSearchContext = createContext<ConsoleSearch | null>(null);
 export function useConsoleSearchState() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listenerRef = useRef<((query: string) => void) | null>(null);
-  /** 입력란이 켜져 있는지. 처음(서버 HTML·hydration)에는 꺼져 있다. */
-  const [enabled, setInputEnabled] = useState(false);
-  // context 값은 처음 한 번 만든 객체를 계속 쓴다(ref 와 state 설정 함수만 들어 있어 바뀔 일이 없다).
-  const context = useMemo<ConsoleSearch>(() => ({ inputRef, listenerRef, setInputEnabled }), []);
+  /** 입력란이 켜져 있는지와 안내 글자. 처음(서버 HTML·hydration)에는 꺼져 있고 안내 글자는 "검색" 이다. */
+  const [input, setInput] = useState<SearchInputState>(SEARCH_INPUT_OFF);
+  const setInputEnabled = useCallback((enabled: boolean, label: string = DEFAULT_SEARCH_LABEL) => {
+    setInput((previous) => {
+      const next: SearchInputState = enabled ? { enabled: true, label } : SEARCH_INPUT_OFF;
+      return previous.enabled === next.enabled && previous.label === next.label ? previous : next;
+    });
+  }, []);
+  // context 값은 처음 한 번 만든 객체를 계속 쓴다(ref 와 바뀌지 않는 함수만 들어 있다).
+  const context = useMemo<ConsoleSearch>(() => ({ inputRef, listenerRef, setInputEnabled }), [setInputEnabled]);
   return {
     context,
     /** 껍데기(상단 바)에 건네는 입력란 상태 */
     input: {
-      enabled,
+      enabled: input.enabled,
+      label: input.label,
       onChange: (query: string) => listenerRef.current?.(query),
     },
     inputRef,

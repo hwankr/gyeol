@@ -2,11 +2,11 @@ import { mulish } from "@/components/loginFonts";
 
 /**
  * 로그인 화면의 로고: 곡선 세 개 무늬와 로고 글자 "Gyeol".
- * 크기는 글자 크기를 따른다(무늬·간격이 em 단위). 로고 글자는 서비스 이름 상수(SERVICE_NAME)와 따로 적는다.
+ * 글자 크기는 56px(디자인 값)이고 무늬·간격은 그 글자 크기를 따른다(em 단위). 로고 글자는 서비스 이름 상수(SERVICE_NAME)와 따로 적는다.
  */
 export function GyeolLogo() {
   return (
-    <div className="flex items-center gap-[0.45em] text-[length:clamp(60px,7.08vw,102px)] leading-none">
+    <div className="flex items-center gap-[0.4em] text-[56px] leading-none">
       <svg aria-hidden="true" viewBox="0 0 107 147" className="h-[0.96em] w-[0.7em] flex-none">
         <path fill="#FFFFFF" d="M0 0A53.5 53.5 0 0 0 107 0L91 0Q85.5 0 85.1 5A32 32 0 0 1 21.9 5Q21.5 0 16 0Z" />
         <path

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ConsoleCrumbs, ConsoleTitle } from "@/components/consoleUi";
 import { ADMISSION } from "@/lib/admission";
 
 type PrepHeaderProps = {
@@ -13,74 +14,53 @@ type PrepHeaderProps = {
 };
 
 /**
- * 전형 준비 화면 세 탭의 공통 머리: 현재 위치 줄, 제목 줄(오늘 날짜), 전형 요약 카드, 탭 줄.
- * 치수·색·글자는 디자인 값 그대로다. 탭과 현재 위치의 "전형 준비" 는 보통 링크(next/link)다.
+ * 전형 준비 화면 세 탭의 공통 머리: 현재 위치 줄, 제목 줄(오늘 날짜), 전형 요약(테두리 상자 안의 네 칸), 탭 줄.
+ * 치수·색·글자는 디자인 값 그대로다. 현재 위치 줄과 제목 줄은 새 화면이 같이 쓰는 조각(components/consoleUi.tsx)이고,
+ * 탭과 현재 위치의 "전형 준비" 는 보통 링크(next/link)다. 홈 화면은 없어 "홈" 은 눌러도 아무 일도 없다.
+ * 전형 요약의 칸은 폭이 모자라면 아래 줄로 내려가고(flex-wrap), 지금 탭은 파란 글자에 파란 밑줄(2px)이다.
+ * 탭 줄의 이름(aria-label)은 탭 본문의 링크가 초점을 넘길 탭을 찾는 데 쓴다(hooks/usePrepHeader.ts 의 handOverFocusToPrepTab).
  */
 export function PrepHeader({ prepPath, crumb, today, tabs }: PrepHeaderProps) {
   return (
     <>
-      <nav aria-label="현재 위치" className="mt-[24px] border-b border-b-[#AEAEAE] pb-[8px] pl-[5px]">
-        <ol className="flex flex-wrap items-center gap-x-[22px] gap-y-[4px] text-[14px] leading-[20px] font-medium tracking-[-0.02em] text-[#505050]">
-          <li>
-            {/* 홈 화면은 없다: href 없는 <a> 라서 초점을 받지 않고 눌러도 아무 일도 없다. */}
-            <a aria-disabled="true" className="cursor-default text-[#505050] no-underline">
-              홈
-            </a>
-          </li>
-          <CrumbArrow />
-          <li>
-            <Link href={prepPath} className="scroll-m-[8px] text-[#505050] no-underline">
-              전형 준비
-            </Link>
-          </li>
-          <CrumbArrow />
-          <li aria-current="page" className="font-extrabold">
-            {crumb}
-          </li>
-        </ol>
-      </nav>
+      <ConsoleCrumbs items={[{ label: "홈" }, { label: "전형 준비", href: prepPath }, { label: crumb }]} />
+      <ConsoleTitle title="전형 준비" note={today} />
 
-      <div className="mt-[17px] flex flex-wrap items-baseline gap-x-[19px] gap-y-0">
-        <h1 className="text-[28px] leading-[36px] font-extrabold tracking-[-0.02em]">전형 준비</h1>
-        <p className="text-[16px] leading-[24px] font-semibold text-[#505050]">{today}</p>
-      </div>
-
-      <dl className="mt-[11px] -mr-[10px] -ml-[6px] flex flex-wrap justify-between gap-x-[24px] gap-y-[14px] rounded-[12px] bg-white pt-[22px] pr-[24px] pb-[20px] pl-[31px]">
-        <div>
+      <dl className="mt-[20px] flex flex-wrap rounded-[8px] border border-[#E4E4E4]">
+        <div className={`${CELL_CLASS} flex-[1.4_1_240px]`}>
           <dt className={DT_CLASS}>전형</dt>
           <dd className={DD_CLASS}>{ADMISSION.trackFull}</dd>
         </div>
-        <div>
+        <div className={`${CELL_CLASS} ${CELL_LINE_CLASS} flex-[1_1_180px]`}>
           <dt className={DT_CLASS}>모집 단위</dt>
           <dd className={DD_CLASS}>
-            {ADMISSION.unit}
-            <span className="ml-[7px] text-[16px] text-[#767676]">{ADMISSION.unitExtra}</span>
+            {ADMISSION.unit} <span className={EXTRA_CLASS}>{ADMISSION.unitExtra}</span>
           </dd>
         </div>
-        <div>
+        <div className={`${CELL_CLASS} ${CELL_LINE_CLASS} flex-[1_1_180px]`}>
           <dt className={DT_CLASS}>모집 인원</dt>
           <dd className={DD_CLASS}>
-            <span className="text-[24px]">{ADMISSION.quota}</span> 명
-            <span className="ml-[12px] text-[16px] text-[#767676]">{ADMISSION.quotaTotalText}</span>
+            <span className="tabular-nums">{ADMISSION.quota}</span>{" "}
+            <span className={EXTRA_CLASS}>{ADMISSION.quotaTotalText}</span>
           </dd>
         </div>
-        <div>
+        <div className={`${CELL_CLASS} ${CELL_LINE_CLASS} flex-[1.4_1_240px]`}>
           <dt className={DT_CLASS}>평가 방식</dt>
           <dd className={DD_CLASS}>
-            {ADMISSION.methodMain} <span className="text-[24px] tracking-[-0.02em]">{ADMISSION.methodPercent}</span>
-            <span className="ml-[10px] text-[16px] text-[#767676]">{ADMISSION.methodExtra}</span>
+            {ADMISSION.methodMain} <span className="tabular-nums">{ADMISSION.methodPercent}</span>{" "}
+            <span className={EXTRA_CLASS}>{ADMISSION.methodExtra}</span>
           </dd>
         </div>
       </dl>
 
-      <nav aria-label="전형 준비 단계" className="mt-[39px] flex flex-wrap gap-x-[54px] gap-y-0 border-b border-b-[#AEAEAE]">
+      <nav aria-label="전형 준비 단계" className="mt-[16px] flex flex-wrap gap-x-[24px] gap-y-0 border-b border-b-[#E4E4E4]">
         {tabs.map((tab) => (
           <Link
             key={tab.href}
             href={tab.href}
             aria-current={tab.current ? "page" : undefined}
-            className={`-mb-[2px] scroll-m-[8px] border-b-4 px-[6px] pb-[9px] text-[20px] leading-[28px] tracking-[-0.02em] text-[#111111] no-underline ${
-              tab.current ? "border-b-[#111111] font-extrabold" : "border-b-transparent font-medium"
+            className={`-mb-px scroll-m-[8px] border-b-2 px-[2px] py-[10px] text-[14px] leading-[20px] no-underline ${
+              tab.current ? "border-b-[#001AD0] font-semibold text-[#001AD0]" : "border-b-transparent font-medium text-[#505050]"
             }`}
           >
             {tab.label}
@@ -91,23 +71,10 @@ export function PrepHeader({ prepPath, crumb, today, tabs }: PrepHeaderProps) {
   );
 }
 
-const DT_CLASS = "text-[16px] leading-[20px] font-semibold text-[#505050]";
-const DD_CLASS = "mt-[5px] text-[20px] leading-[28px] font-extrabold";
-
-/** 현재 위치 줄의 항목 사이 화살표 (장식) */
-function CrumbArrow() {
-  return (
-    <li aria-hidden="true" className="flex">
-      <svg viewBox="0 0 7 10" className="h-[10px] w-[7px]">
-        <path
-          fill="none"
-          stroke="#131927"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M1.5 1l4 4-4 4"
-        />
-      </svg>
-    </li>
-  );
-}
+/** 전형 요약의 칸 하나 (안쪽 여백 14px 20px). 둘째 칸부터는 왼쪽에 선이 있다. */
+const CELL_CLASS = "box-border px-[20px] py-[14px]";
+const CELL_LINE_CLASS = "border-l border-l-[#E4E4E4]";
+const DT_CLASS = "text-[13px] leading-[18px] font-medium text-[#767676]";
+const DD_CLASS = "mt-[4px] text-[15px] leading-[22px] font-semibold";
+/** 값 뒤에 덧붙이는 작은 글 ("외 45개", "전형 전체 412명" 등) */
+const EXTRA_CLASS = "text-[13px] font-medium text-[#505050]";

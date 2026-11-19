@@ -3,7 +3,7 @@ import { useRef, type RefObject } from "react";
 import { Area } from "@/components/Area";
 import { CriteriaExamples } from "@/components/CriteriaExamples";
 import { NewDepartmentForm, type NewDepartmentFormProps } from "@/components/NewDepartmentForm";
-import { APPLICANTS_PATH, PREP_PATH } from "@/lib/consoleMenu";
+import { APPLICANTS_PATH, EVALUATE_PATH, PREP_PATH } from "@/lib/consoleMenu";
 import { SERVICE_NAME } from "@/lib/constants";
 import type { CriteriaExample } from "@/lib/criteria/examples";
 import type { Criterion } from "@/types/analysis";
@@ -97,6 +97,9 @@ export function UploadScreen({
             </Link>
             <Link href={APPLICANTS_PATH} onNavigate={onLeave} className="underline">
               지원자 관리
+            </Link>
+            <Link href={EVALUATE_PATH} onNavigate={onLeave} className="underline">
+              평가하기
             </Link>
           </nav>
         </div>
