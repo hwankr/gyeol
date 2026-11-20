@@ -209,7 +209,7 @@ export function ApplicantsScreen({
             </p>
             {/* 채움 너비는 검토 완료 비율과 같은 값이다. 화면에 나타날 때 왼쪽에서 채워지고, 값이 바뀌면 너비가 따라 움직인다. */}
             <div aria-hidden="true" className="mt-[8px] h-[6px] overflow-hidden rounded-[3px] bg-[#E4E6EE]">
-              <div className={`h-[6px] bg-[#001AD0] ${BAR_FILL_MOTION_CLASS}`} style={{ width: `${review.percent}%` }} />
+              <div className={`chart-fill-x h-[6px] ${BAR_FILL_MOTION_CLASS}`} style={{ width: `${review.percent}%` }} />
             </div>
             {/* 이 칸의 수는 내 담당 지원자 기준이다(옆 칸의 접수 인원은 모집 단위 전체). 무엇을 센 것인지 알 수 있게 내 담당 수를 먼저 적는다. */}
             <dl className="mt-[8px] flex flex-wrap gap-x-[16px] gap-y-0 text-[13px] leading-[18px] text-[#505050]">

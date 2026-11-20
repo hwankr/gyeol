@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  ChartFillGradient,
   PANEL_CLASS,
   PANEL_HEAD_CLASS,
   PANEL_TITLE_CLASS,
@@ -137,6 +138,21 @@ export function EvaluateListScreen({
           <div className="p-[20px]">
             <div className="relative mx-auto w-[200px] max-w-full">
               <svg role="img" aria-label={progress.ringAriaLabel} viewBox="0 0 128 128" className="block h-auto w-full">
+                <defs>
+                  {/*
+                    고리의 채움 그라데이션: 화면에서 위(12시, 채움이 시작하는 곳)가 짙고 아래로 가며 밝아진다. 다 찼을 때 12시에서 이음매가 없다.
+                    채움 원이 -90도 돌아 있어, 화면 기준으로 적은 방향을 90도 돌려 맞춘다. 5·123 은 선 굵기를 넣은 고리의 위·아래 끝이다.
+                  */}
+                  <ChartFillGradient
+                    id="progress-ring-fill"
+                    gradientUnits="userSpaceOnUse"
+                    gradientTransform="rotate(90 64 64)"
+                    x1="64"
+                    y1="5"
+                    x2="64"
+                    y2="123"
+                  />
+                </defs>
                 <circle cx="64" cy="64" r={RING_RADIUS} fill="none" stroke="#E4E6EE" strokeWidth="10" />
                 {/* 채움 길이는 style 로 준다(값은 속성으로 줄 때와 같다): 사람을 고르면 CSS 전환으로 그 비율까지 움직인다. */}
                 <circle
@@ -144,7 +160,7 @@ export function EvaluateListScreen({
                   cy="64"
                   r={RING_RADIUS}
                   fill="none"
-                  stroke="#001AD0"
+                  stroke="url(#progress-ring-fill)"
                   strokeWidth="10"
                   transform="rotate(-90 64 64)"
                   className="animate-ring-grow transition-[stroke-dasharray] duration-500 ease-soft"
@@ -176,7 +192,7 @@ export function EvaluateListScreen({
                     </span>
                     <span aria-hidden="true" className="mt-[8px] block h-[6px] overflow-hidden rounded-[3px] bg-[#E4E6EE]">
                       <span
-                        className="block h-[6px] origin-left animate-bar-grow bg-[#001AD0] transition-[width] duration-500 ease-soft"
+                        className="chart-fill-x block h-[6px] origin-left animate-bar-grow transition-[width] duration-500 ease-soft"
                         style={{ width: `${person.percent}%` }}
                       />
                     </span>

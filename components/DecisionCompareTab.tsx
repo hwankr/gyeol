@@ -5,10 +5,11 @@ import type { DecisionCompareView } from "@/hooks/useDecisionCompare";
 
 /**
  * 두 지원자의 막대 색: 왼쪽은 파랑, 오른쪽은 주황. 시안은 회색 두 단계라 색을 새로 정했다.
+ * 둘 다 차트의 채움 그라데이션이다(app/globals.css 의 chart-fill-y: 아래가 짙고 위로 가며 밝아진다. 주황은 chart-fill-orange).
  * 흰 바탕에서 색각이 달라도 두 색이 갈리고(파랑·주황), 바탕과의 대비가 3:1 을 넘는 값이다. 색만으로 구분하지 않도록 지원자 코드 앞의
  * 색 점, 범례, 막대 위의 점수, 아래의 표가 같이 있다(막대는 늘 왼쪽 지원자가 왼쪽이다).
  */
-const SERIES_CLASS = ["bg-[#2F4BE0]", "bg-[#E8590C]"] as const;
+const SERIES_CLASS = ["chart-fill-y", "chart-fill-y chart-fill-orange"] as const;
 
 /** 지원자 코드 앞의 색 점 (그래프의 막대 색). 장식이라 보조 기술에는 숨긴다(코드가 옆에 있다). */
 function SeriesSwatch({ side }: { side: 0 | 1 }) {
