@@ -35,3 +35,9 @@ export const EVALUATIONS_STORAGE_KEY = "gyeol.evaluations";
 
 /** 선발 결정 · 비교하려고 고른 지원자({ version: 1, codes: ["<코드>", …] }, 2명까지)를 저장하는 localStorage 키 */
 export const DECISION_PICKS_STORAGE_KEY = "gyeol.decisionPicks";
+
+/**
+ * 선발 결정 · 위원 의견 모아보기에서 확정한 조정({ version: 1, items: [{ code, members: [[위원 1 의 자리별 점수], …] }] })을 저장하는
+ * localStorage 키. 조정한 뒤의 위원 점수를 지원자마다 통째로 저장한다(원래 점수는 예시 자료에 있다).
+ */
+export const DECISION_ADJUSTMENTS_STORAGE_KEY = "gyeol.decisionAdjustments";

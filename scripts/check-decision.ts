@@ -1,10 +1,25 @@
 // 선발 결정의 계산과 예시 자료 검사. 실행(저장소 루트에서): npx tsx scripts/check-decision.ts
 // lib/decision/decision.ts(최종 평가·순위·비교 기준·비교할 두 사람·요소별 차이·고른 지원자의 저장 값 확인)와
 // lib/decision/sampleDecision.ts(합격선 주변 예시 지원자 12명: 시안의 값과 맞는지, 평가하기의 지원자와 겹치지 않는지, 위원의 종합 의견),
-// lib/decision/opinions.ts(위원 의견 모아보기: 요소별 위원 점수와 차이, 크게 갈린 요소, 조정이 필요한 지원자)를 확인한다.
+// lib/decision/opinions.ts(위원 의견 모아보기: 요소별 위원 점수와 차이, 크게 갈린 요소, 조정이 필요한 지원자),
+// lib/decision/adjustments.ts(조정: 점수 입력 읽기, 고치는 중의 계산, 확정한 조정의 저장 값 확인과 지원자 자료에 덮어쓰기)를 확인한다.
 // 인자는 받지 않는다. 출력: 사례마다 "통과"/"실패" 한 줄, 마지막에 개수. 하나라도 실패하면 종료 코드 1.
 // node scripts/check-decision.ts 로도 돌도록(Node 의 타입 제거 실행) 값 import 는 상대 경로에 .ts 확장자를 붙인다.
 import { ADMISSION } from "../lib/admission.ts";
+import {
+  NO_ADJUSTMENTS,
+  adjustEffectText,
+  adjustPreviewOf,
+  adjustmentOf,
+  applyAdjustments,
+  draftOf,
+  editDraft,
+  parseDecisionAdjustments,
+  parseScoreText,
+  serializeDecisionAdjustments,
+  withAdjustment,
+  withoutAdjustment,
+} from "../lib/decision/adjustments.ts";
 import {
   CLOSE_MARGIN10,
   MAX_PICKS,
@@ -309,6 +324,146 @@ check(
   same(elementSpreadsOf(sixRanked[0], sixElements).map((item) => item.scores[0]), [78, 83, 94, 78, 83, 94]),
 );
 check("요소별 위원 점수: 요소가 없으면 빈 목록", a090 !== undefined && elementSpreadsOf(a090, []).length === 0);
+
+// ── 조정 (위원 의견 모아보기에서 점수를 고쳐 확정) ──
+check(
+  "점수 입력: 0~100 정수만 읽는다 (앞뒤 공백과 앞의 0 은 받는다)",
+  same(["86", " 7 ", "007", "0", "100"].map(parseScoreText), [86, 7, 7, 0, 100]) &&
+    ["", " ", "101", "1000", "8.5", "-3", "8a", "팔십"].every((text) => parseScoreText(text) === null),
+);
+const source090 = DECISION_APPLICANTS.find((applicant) => applicant.code === "A-0090");
+if (source090 === undefined) throw new Error("예시 자료에 A-0090 이 없다");
+const draft090 = draftOf(source090.members);
+check("고치는 입력: 처음에는 위원 점수 그대로의 글", same(draft090, [["86", "86", "92"], ["83", "79", "90"], ["74", "72", "91"]]));
+const edited090 = editDraft(editDraft(draft090, 2, 0, "78"), 2, 1, "77");
+check(
+  "고치는 입력: 한 칸만 바뀌고 받은 값은 그대로 둔다",
+  same(edited090, [["86", "86", "92"], ["83", "79", "90"], ["78", "77", "91"]]) && draft090[2][0] === "74",
+);
+const before090 = adjustPreviewOf(source090, draft090, ELEMENTS);
+check(
+  "고치는 중 계산: 고치기 전에는 저장된 점수와 같고(차이 12·14·2, 종합 87.2·83.2·76.8, 차이 10.4) 확정할 수 없다",
+  same(before090.columns.map((column) => column.spread), [12, 14, 2]) &&
+    same(before090.columns.map((column) => column.wide), [true, true, false]) &&
+    same(before090.memberTotal10, [872, 832, 768]) &&
+    before090.spread10 === 104 &&
+    before090.members === null,
+);
+const after090 = adjustPreviewOf(source090, edited090, ELEMENTS);
+check(
+  "고치는 중 계산: 위원 3 의 점수를 78·77 로 고치면 차이 8·9·2, 위원 3 의 종합 80.3, 확정할 수 있다",
+  same(after090.columns.map((column) => column.spread), [8, 9, 2]) &&
+    after090.columns.every((column) => !column.wide) &&
+    same(after090.memberTotal10, [872, 832, 803]) &&
+    after090.spread10 === 69 &&
+    same(after090.members, [[86, 86, 92], [83, 79, 90], [78, 77, 91]]),
+);
+const half090 = adjustPreviewOf(source090, editDraft(draft090, 2, 0, "78"), ELEMENTS);
+check(
+  "고치는 중 계산: 크게 갈린 요소가 하나라도 남으면 확정할 수 없다",
+  same(half090.columns.map((column) => column.wide), [false, true, false]) && half090.members === null,
+);
+for (const [label, text] of [["빈 칸", ""], ["100 을 넘는 값", "120"]] as const) {
+  const broken = adjustPreviewOf(source090, editDraft(edited090, 0, 1, text), ELEMENTS);
+  check(
+    `고치는 중 계산: 읽지 못하는 입력(${label})이 있으면 그 요소의 차이와 그 위원의 종합을 모르고 확정할 수 없다`,
+    same(broken.columns.map((column) => column.spread), [8, null, 2]) &&
+      same(broken.columns.map((column) => column.wide), [false, true, false]) &&
+      same(broken.columns[1].scores, [null, 79, 77]) &&
+      same(broken.memberTotal10, [null, 832, 803]) &&
+      broken.spread10 === null &&
+      broken.members === null,
+  );
+}
+check(
+  "고치는 중 계산: 요소가 여섯이면 자리를 돌려 써서 넷째 요소도 같이 바뀐다",
+  same(adjustPreviewOf(source090, edited090, sixElements).columns.map((column) => column.spread), [8, 9, 2, 8, 9, 2]),
+);
+check(
+  "고치는 중 계산: 입력의 모양이 지원자와 다르면 확정할 수 없다",
+  adjustPreviewOf(source090, edited090.slice(0, 2), ELEMENTS).members === null && adjustPreviewOf(source090, [], ELEMENTS).members === null,
+);
+
+const confirmed090 = { code: "A-0090", members: after090.members ?? source090.members };
+const oneAdjustment = withAdjustment(NO_ADJUSTMENTS, confirmed090);
+check("조정 더하기: 빈 값에 더한다", same(oneAdjustment, [confirmed090]) && adjustmentOf(oneAdjustment, "A-0090") === confirmed090);
+const replaced090 = { code: "A-0090", members: source090.members };
+check(
+  "조정 더하기: 이미 있는 지원자는 그 자리에서 바꾼다",
+  same(withAdjustment(withAdjustment(oneAdjustment, { code: "A-0118", members: DECISION_APPLICANTS[4].members }), replaced090).map((item) => item.code), ["A-0090", "A-0118"]) &&
+    adjustmentOf(withAdjustment(oneAdjustment, replaced090), "A-0090") === replaced090,
+);
+check(
+  "조정 빼기: 마지막 하나를 빼면 빈 값, 없는 지원자는 받은 값 그대로",
+  withoutAdjustment(oneAdjustment, "A-0090") === NO_ADJUSTMENTS && withoutAdjustment(oneAdjustment, "A-0118") === oneAdjustment,
+);
+check(
+  "조정 저장 값: 쓴 것을 다시 읽으면 같다",
+  same(parseDecisionAdjustments(JSON.parse(serializeDecisionAdjustments(oneAdjustment)), DECISION_APPLICANTS), oneAdjustment),
+);
+check(
+  "조정 저장 값: 모양이 틀리면 확정한 조정 없음",
+  [undefined, null, "x", [], {}, { version: 2, items: [confirmed090] }, { version: 1, items: "A-0090" }].every(
+    (value) => parseDecisionAdjustments(value, DECISION_APPLICANTS) === NO_ADJUSTMENTS,
+  ),
+);
+const goodMembers = confirmed090.members;
+check(
+  "조정 저장 값: 목록에 없는 코드·되풀이·모양이나 범위가 틀린 점수는 빼고 나머지는 살린다",
+  same(
+    parseDecisionAdjustments(
+      {
+        version: 1,
+        items: [
+          { code: "A-9999", members: goodMembers },
+          { code: "A-0118", members: [[82, 89, 62], [85, 92, 78]] },
+          { code: "A-0196", members: [[88, 80, 81, 1], [82, 66, 78], [88, 79, 81]] },
+          { code: "A-0240", members: [[83, 94, 78], [80, 86.5, 77], [71, 84, 76]] },
+          { code: "A-0263", members: [[85, 75, 82], [84, 74, 101], [83, 73, 80]] },
+          { code: "A-0289", members: "x" },
+          3,
+          confirmed090,
+          { code: "A-0090", members: source090.members },
+        ],
+      },
+      DECISION_APPLICANTS,
+    ),
+    [confirmed090],
+  ),
+);
+check("조정 덮어쓰기: 조정이 없으면 받은 목록 그대로", applyAdjustments(DECISION_APPLICANTS, NO_ADJUSTMENTS) === DECISION_APPLICANTS);
+const adjustedApplicants = applyAdjustments(DECISION_APPLICANTS, oneAdjustment);
+check(
+  "조정 덮어쓰기: 조정한 지원자는 위원 점수만 바뀌고 나머지 지원자는 그대로다",
+  adjustedApplicants.every((applicant, index) =>
+    applicant.code === "A-0090"
+      ? applicant.members === confirmed090.members && applicant.summary === source090.summary && applicant.opinions === source090.opinions
+      : applicant === DECISION_APPLICANTS[index],
+  ),
+);
+const adjustedRanked = rankDecisionApplicants(adjustedApplicants, ELEMENTS, QUOTA, DECISION_FIRST_RANK);
+const adjusted090 = adjustedRanked.find((row) => row.applicant.code === "A-0090");
+check(
+  "조정을 확정하면 최종 평가와 순위가 다시 계산된다: A-0090 은 82.4점 28위 → 83.6점 26위",
+  a090 !== undefined && tenthsText(a090.final10) === "82.4" && a090.rank === 28 && adjusted090 !== undefined && tenthsText(adjusted090.final10) === "83.6" && adjusted090.rank === 26,
+  adjusted090 === undefined ? "" : `${tenthsText(adjusted090.final10)} ${adjusted090.rank}`,
+);
+check(
+  "조정을 확정하면 조정이 필요한 지원자에서 빠진다 (넷 → 셋)",
+  same(
+    adjustedRanked.filter((row) => needsAdjustment(elementSpreadsOf(row, ELEMENTS))).map((row) => row.applicant.code),
+    ["A-0118", "A-0196", "A-0240"],
+  ),
+);
+check(
+  "조정으로 달라진 것: 최종 평가와 순위, 달라지지 않은 것은 그대로라고 적는다",
+  a090 !== undefined &&
+    adjusted090 !== undefined &&
+    adjustEffectText(a090, adjusted090) === "최종 평가 82.4 → 83.6점 · 28위 → 26위" &&
+    adjustEffectText(adjusted090, a090) === "최종 평가 83.6 → 82.4점 · 26위 → 28위" &&
+    adjustEffectText(a090, a090) === "최종 평가 82.4점 그대로 · 28위 그대로" &&
+    adjustEffectText({ final10: 824, rank: 28 }, { final10: 826, rank: 28 }) === "최종 평가 82.4 → 82.6점 · 28위 그대로",
+);
 
 if (failures.length > 0) {
   console.error(`\n선발 결정 검사 ${passed + failures.length}개 사례 중 ${failures.length}개 실패`);
