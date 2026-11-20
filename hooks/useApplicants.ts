@@ -7,6 +7,7 @@ import {
   NO_DECISIONS,
   NO_REVIEWS,
   applicantStatus,
+  assignedTo,
   competitionRate,
   maskSummary,
   matchesSearch,
@@ -84,15 +85,14 @@ function getServerReady(): boolean {
 /** 상세 스크롤 영역을 다음에 보일 때 맨 위부터 보여 주라는 표시 (다른 화면에 다녀와 처음 상태로 돌아갈 때) */
 const DETAIL_FROM_TOP = "";
 
-/** 로그인한 사정관 (내 배정 보기) */
+/** 로그인한 사정관. 이 화면은 이 사정관이 담당하는 지원자만 보여 준다(다른 사정관의 담당은 접수 인원에만 들어간다). */
 const MY_NAME = ADMISSION.reviewerName;
 
 /** 이 화면이 보이는 동안 상단 바 검색 입력란의 안내 글자이자 이름 */
 const SEARCH_LABEL = "지원자 코드 검색";
 
-/** 처음 걸러 보기와 내 배정 보기 */
+/** 처음 걸러 보기 */
 const INITIAL_FILTER: ApplicantFilter = "확인 필요";
-const INITIAL_MINE_ONLY = true;
 
 /** 상태·결정까지 붙인 지원자 한 줄 */
 type ApplicantEntry = { applicant: Applicant; status: ApplicantStatus; decisions: ApplicantDecisions };
@@ -104,13 +104,10 @@ function toEntries(applicants: readonly Applicant[], reviews: ApplicantReviews):
   });
 }
 
-/** 보이는 줄 = 걸러 보기 ∩ 내 배정 보기 ∩ 검색 (코드 순서) */
-function visibleEntries(entries: readonly ApplicantEntry[], filter: ApplicantFilter, mineOnly: boolean, query: string) {
+/** 보이는 줄 = 내 담당 지원자(entries) 가운데 걸러 보기 ∩ 검색 (코드 순서) */
+function visibleEntries(entries: readonly ApplicantEntry[], filter: ApplicantFilter, query: string) {
   return entries.filter(
-    ({ applicant, status }) =>
-      (filter === "전체" || status === filter) &&
-      (!mineOnly || applicant.assignee === MY_NAME) &&
-      matchesSearch(applicant.code, query),
+    ({ applicant, status }) => (filter === "전체" || status === filter) && matchesSearch(applicant.code, query),
   );
 }
 
@@ -119,7 +116,7 @@ function visibleEntries(entries: readonly ApplicantEntry[], filter: ApplicantFil
  * 올린 지원자는 상태가 "완료" 라 처음 걸러 보기("확인 필요")에는 보이지 않으므로 이 값을 바꾸지 않는다.
  */
 const INITIAL_SELECTED: string | null =
-  visibleEntries(toEntries(SAMPLE_APPLICANTS, NO_REVIEWS), INITIAL_FILTER, INITIAL_MINE_ONLY, "")[0]?.applicant.code ?? null;
+  visibleEntries(toEntries(assignedTo(SAMPLE_APPLICANTS, MY_NAME), NO_REVIEWS), INITIAL_FILTER, "")[0]?.applicant.code ?? null;
 
 /** 저장소에 쓰지 못해 메모리에만 둔 결정이 있을 때의 안내 */
 const STORAGE_NOTICE = "브라우저에 저장하지 못했습니다. 새로고침하면 방금 정한 내용이 사라집니다.";
@@ -159,8 +156,11 @@ function revealVertically(element: HTMLElement, margin: number) {
 
 /**
  * 지원자 관리 화면 상태: 예시 지원자(lib/applicants/sampleApplicants.ts)와 올린 지원자(학생부 올리기 화면에서 분석한 학생부,
- * lib/applicants/uploadedStorage.ts), 저장한 가림 결정(localStorage)으로 상태·숫자를 계산하고, 걸러 보기·내 배정 보기·검색(상단 바),
+ * lib/applicants/uploadedStorage.ts), 저장한 가림 결정(localStorage)으로 상태·숫자를 계산하고, 걸러 보기·검색(상단 바),
  * 지원자 선택, 저장하지 않은 가림 결정, 저장을 다룬다. 학생부 올리기와 원문보기는 다른 화면으로 가는 링크다(주소만 정한다).
+ * 이 화면에는 로그인한 사정관이 담당하는 지원자만 나온다(평가하기에 배정된 지원자와 같은 사람들이다). 표의 줄, 걸러 보기 수,
+ * 서류 검토 진행 현황이 모두 내 담당 기준이고, 접수 인원·경쟁률·제목 옆의 접수 건수만 모집 단위 전체 기준이다.
+ * 다른 위원과 얽힌 정보(다른 위원의 의견·점수·진행 현황)는 평가하기와 선발 결정에서 다룬다.
  */
 export function useApplicants() {
   const search = useConsoleSearch();
@@ -170,7 +170,6 @@ export function useApplicants() {
   const remaining = useSyncExternalStore(subscribeNothing, getRemaining, getServerRemaining);
   const ready = useSyncExternalStore(subscribeNothing, getClientReady, getServerReady);
   const [filter, setFilter] = useState<ApplicantFilter>(INITIAL_FILTER);
-  const [mineOnly, setMineOnly] = useState(INITIAL_MINE_ONLY);
   /** 고른 지원자 코드 (null: 보이는 줄이 없어 선택이 없음) */
   const [selectedCode, setSelectedCode] = useState<string | null>(INITIAL_SELECTED);
   /** 고른 지원자에 대해 이 화면에서 정했지만 아직 저장하지 않은 결정 (표현 id → 결정) */
@@ -199,7 +198,7 @@ export function useApplicants() {
   //   입력란을 켠다(켜진 동안 입력란의 안내 글자·이름은 "지원자 코드 검색" 이다). 준비 전에는 입력란에 글자를 넣을 수 없으므로 준비되는 순간
   //   읽어 올 값이 없다(입력란은 비어 있다).
   // - cacheComponents 에서는 다른 화면으로 가도 이 화면이 숨겨질 뿐 상태가 남는다. 숨겨지거나 언마운트될 때 cleanup 에서 입력 이벤트를 그만 받고
-  //   입력란을 끈다. 그리고 입력란의 실제 값을 비우고 처음 상태(걸러 보기 "확인 필요", 내 배정 보기 켜짐, 검색어 없음, 처음 선택,
+  //   입력란을 끈다. 그리고 입력란의 실제 값을 비우고 처음 상태(걸러 보기 "확인 필요", 검색어 없음, 처음 선택,
   //   저장하지 않은 결정 없음)로 되돌린다. 켜고 끄기와 비우기를 모두 이 화면이 하므로, 한 번도 준비되지 않은 화면은 남길 것이 없다.
   // - 개발 모드 StrictMode 는 effect 를 한 번 더 돌린다(cleanup 바로 뒤에 같은 흐름 안에서 다시 setup). 그 다시 돌리기는 처음 setup 과
   //   다른 차례(passive effect 를 처리할 때)에 올 수 있어서, 그 사이 켜진 입력란에 사람이 적은 글자나 고른 것을 지우면 안 된다.
@@ -217,7 +216,6 @@ export function useApplicants() {
     function resetToInitial() {
       if (input !== null) input.value = "";
       setFilter(INITIAL_FILTER);
-      setMineOnly(INITIAL_MINE_ONLY);
       setSelectedCode(INITIAL_SELECTED);
       setDraft(NO_DECISIONS);
       setQuery("");
@@ -242,16 +240,20 @@ export function useApplicants() {
     };
   }, [inputRef, listenerRef, setInputEnabled]);
 
-  /** 지원자 = 예시 314명 + 올린 지원자(코드 순서). 올린 지원자에게는 가릴지 확인이 필요한 표현이 없어 저장한 결정이 붙지 않는다. */
+  /**
+   * 모집 단위의 지원자 = 예시 314명 + 올린 지원자(코드 순서). 올린 지원자에게는 가릴지 확인이 필요한 표현이 없어 저장한 결정이 붙지 않는다.
+   * 이 전체는 접수 인원을 셀 때만 쓴다(아래 total).
+   */
   const applicants = useMemo(
     () => (uploaded.length === 0 ? SAMPLE_APPLICANTS : [...SAMPLE_APPLICANTS, ...uploaded.map(uploadedToApplicant)]),
     [uploaded],
   );
-  const entries = useMemo(() => toEntries(applicants, reviews), [applicants, reviews]);
+  /** 이 화면에 나오는 지원자: 내 담당만 (예시 24명 + 올린 지원자). 줄·걸러 보기 수·검토 진행 현황이 모두 이 목록에서 나온다. */
+  const entries = useMemo(() => toEntries(assignedTo(applicants, MY_NAME), reviews), [applicants, reviews]);
   const counts = useMemo(() => statusCounts(entries.map((entry) => entry.status)), [entries]);
-  const visible = useMemo(() => visibleEntries(entries, filter, mineOnly, query), [entries, filter, mineOnly, query]);
+  const visible = useMemo(() => visibleEntries(entries, filter, query), [entries, filter, query]);
 
-  // 선택 규칙: 걸러 보기·내 배정 보기·검색·저장으로 고른 지원자가 보이지 않게 되면 보이는 첫 줄로 옮기고, 보이는 줄이 없으면 선택이 없다
+  // 선택 규칙: 걸러 보기·검색·저장으로 고른 지원자가 보이지 않게 되면 보이는 첫 줄로 옮기고, 보이는 줄이 없으면 선택이 없다
   // (줄이 다시 생기면 첫 줄). 선택이 옮겨 가면 저장하지 않은 결정은 버린다. 렌더링 중에 바로 고쳐 그린다(이전 선택이 한 번도 그려지지 않는다).
   const selectedEntry = visible.find((entry) => entry.applicant.code === selectedCode);
   const nextSelectedCode = selectedEntry !== undefined ? selectedCode : (visible[0]?.applicant.code ?? null);
@@ -381,9 +383,12 @@ export function useApplicants() {
     setDraft(NO_DECISIONS);
   }
 
-  const total = entries.length;
+  /** 접수 인원: 모집 단위 전체 (다른 사정관의 담당까지) */
+  const total = applicants.length;
+  /** 서류 검토 진행 현황: 내 담당 가운데 완료한 수 */
+  const assigned = entries.length;
   const done = counts["완료"];
-  const percent = reviewPercent(done, total);
+  const percent = reviewPercent(done, assigned);
 
   return {
     applicantsPath: APPLICANTS_PATH,
@@ -395,9 +400,8 @@ export function useApplicants() {
     subtitle: `${ADMISSION.trackFull} · ${ADMISSION.unit} · 접수 ${total}건`,
     deadline: { label: APPLICATION_DEADLINE.label, dateText: APPLICATION_DEADLINE.dateText, remaining },
     applications: { total, quota: ADMISSION.quota, rate: competitionRate(total, ADMISSION.quota) },
-    review: { percent, done, waiting: total - done },
+    review: { percent, assigned, done, waiting: assigned - done },
     filters: APPLICANT_FILTERS.map((item) => ({ filter: item, count: counts[item], pressed: item === filter })),
-    mineOnly,
     rows: visible.map(({ applicant, status, decisions }) => {
       const mask = maskSummary(applicant, decisions);
       return {
@@ -406,7 +410,6 @@ export function useApplicants() {
         documentProblem: applicant.documentProblem,
         maskText: mask.masked,
         maskCheckText: mask.check,
-        assignee: applicant.assignee,
         status,
         selected: applicant.code === selected?.applicant.code,
       };
@@ -442,7 +445,6 @@ export function useApplicants() {
     crumbNavRef,
     contentRef,
     onSelectFilter: (next: ApplicantFilter) => setFilter(next),
-    onToggleMine: () => setMineOnly((current) => !current),
     onSelectApplicant: selectApplicant,
     onDecide: decide,
     onSave: save,

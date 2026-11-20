@@ -2,6 +2,7 @@ import type { AnalysisResult } from "@/types/analysis";
 
 // 지원자 관리 화면의 지원자 형식과 화면 숫자·문구를 만드는 순수 함수. 화면에서만 쓴다.
 // 숫자(접수 건수, 걸러 보기 수, 경쟁률, 검토 완료 비율·건수, 검토 대기 건수)는 모두 지금 데이터에서 계산한다(상수로 적지 않는다).
+// 접수 건수와 경쟁률은 모집 단위 전체, 걸러 보기 수와 검토 완료 비율·건수는 로그인한 사정관의 담당 지원자 기준이다(assignedTo).
 
 /** 지원자의 상태. 저장한 가림 결정에 따라 "확인 필요" ↔ "완료" 만 바뀐다("진행 중"·"대기" 는 바뀌지 않는다). */
 export const APPLICANT_STATUSES = ["확인 필요", "진행 중", "대기", "완료"] as const;
@@ -56,6 +57,14 @@ export type Applicant = {
    */
   original?: AnalysisResult;
 };
+
+/**
+ * 한 사정관이 담당하는 지원자만 (받은 순서 그대로). 지원자 관리 화면은 로그인한 사정관의 담당만 보여 준다:
+ * 표의 줄, 걸러 보기 수, 서류 검토 진행 현황이 모두 이 지원자들 기준이다. 다른 사정관의 담당은 접수 인원에만 들어간다.
+ */
+export function assignedTo(applicants: readonly Applicant[], reviewer: string): Applicant[] {
+  return applicants.filter((applicant) => applicant.assignee === reviewer);
+}
 
 /** 종류별 가림 수의 합 (결정과 상관없이 그대로다) */
 export function maskTotal(applicant: Applicant): number {
