@@ -31,7 +31,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 /** 바탕 평가 기준: 요소 둘(배점 60·40), guideline 있음 */
 const BASE: PrepCriteria = {
   version: 1,
-  department: "컴퓨터공학과",
+  department: "경영학과",
   elements: [
     { id: "e1", name: "학업역량", weight: 60, groups: [{ tag: "성취", name: "학업 성취", questions: ["성취가 우수한가?"] }] },
     { id: "e2", name: "공동체역량", weight: 40, groups: [{ tag: "협업", name: "협업", questions: ["협업했는가?"] }] },

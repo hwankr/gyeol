@@ -19,7 +19,7 @@ import {
 // 평가하기 화면의 평가 형식, 저장 값 확인, 화면용 계산. 브라우저와 Node 어디서나 돈다(순수 함수).
 // 평가 요소·배점·세부 평가 항목은 전형 준비에서 저장한 평가 기준(lib/prep/criteria.ts 의 PrepElement)을 그대로 쓴다.
 // 지원자는 예시 지원자(./sampleEvaluations.ts)와 올린 지원자(./uploadedEvaluation.ts)이고, 지원자 목록은 인자로 받는다.
-// 예시 자료는 평가 요소를 자리(0~3)로 적어 두었으므로 요소 순번으로 자리를 맞춘다. 올린 지원자는 요소 순번이 그대로 자리다.
+// 예시 자료는 평가 요소를 자리(0~2)로 적어 두었으므로 요소 순번으로 자리를 맞춘다. 올린 지원자는 요소 순번이 그대로 자리다.
 
 /** 저장한 평가의 상태: 고치는 중(평가 중) / 임시 저장 / 제출 완료 */
 export type EvaluationRecordStatus = "editing" | "draft" | "submitted";
@@ -194,7 +194,7 @@ export function serializeEvaluations(evaluations: Evaluations): string {
 const NO_ASSESSMENT: SlotAssessment = Object.freeze({ score: 0, confidence: 1, tagPicks: Object.freeze([]) });
 
 /**
- * 요소 순번 → 그 지원자 자료의 자리. 요소가 자리보다 많으면 자리를 돌려 쓴다(예시 지원자는 자리가 넷이다).
+ * 요소 순번 → 그 지원자 자료의 자리. 요소가 자리보다 많으면 자리를 돌려 쓴다(예시 지원자는 자리가 셋이다).
  * 올린 지원자는 자리 수가 평가 요소 수와 같아 요소 순번이 그대로 자리다.
  */
 export function slotOf(applicant: Pick<EvaluationApplicant, "ai">, elementIndex: number): number {
@@ -207,7 +207,7 @@ export function assessmentOf(applicant: EvaluationApplicant, elementIndex: numbe
 }
 
 /**
- * 평가 요소 구성을 나타내는 글: 요소의 id 와 이름을 순서대로 이은 것 ("e1:학업성취도|e2:리더십|…").
+ * 평가 요소 구성을 나타내는 글: 요소의 id 와 이름을 순서대로 이은 것 ("e1:잠재역량|e2:학업역량|…").
  * 내 점수·사유·응답은 요소 id 로 저장하는데, 전형 준비에서 모집요강 초안을 저장해 요소가 바뀌어도 id 는 e1, e2 … 로 같다.
  * 그래서 평가마다 적은 때의 구성을 같이 저장해 두고, 지금 구성과 다르면 그 평가를 쓰지 않는다(예전 요소에 준 값이 새 요소에 붙지 않게).
  * 배점만 바꾼 것은 구성이 같으므로 평가가 그대로 남고 종합 점수만 새 배점으로 다시 계산된다.
@@ -228,7 +228,7 @@ export function evaluationBasis(applicant: Pick<EvaluationApplicant, "stamp">, e
 
 /**
  * 처음 평가 상태(자리별)를 지금 평가 기준의 요소 id 로 옮긴 평가. 처음 상태가 없으면("대기") null.
- * 앞의 네 요소에만 처음 점수·사유가 붙고, 다섯째부터는 AI 점수 그대로다.
+ * 앞의 세 요소에만 처음 점수·사유가 붙고, 넷째부터는 AI 점수 그대로다.
  */
 export function seedRecord(seed: EvaluationSeed | null, elements: readonly PrepElement[]): EvaluationRecord | null {
   if (seed === null) return null;
@@ -297,13 +297,13 @@ export function myTotalOf(
   );
 }
 
-/** 배점 줄: "30·20·25·25" */
+/** 배점 줄: "50·30·20" */
 export function weightsLine(elements: readonly PrepElement[]): string {
   return elements.map((element) => element.weight).join("·");
 }
 
 /**
- * 그 요소의 AI 태그 줄: "# 탐구심화 # 자기주도" (겹치는 태그는 한 번만).
+ * 그 요소의 AI 태그 줄: "# 전공활동탐색 # 자기주도성" (겹치는 태그는 한 번만).
  * 올린 지원자는 분석할 때 정한 태그(tags)를 그대로, 예시 자료는 고른 묶음(tagPicks)의 태그를 잇는다.
  */
 export function assessmentTags(assessment: SlotAssessment, element: PrepElement): string {
@@ -326,7 +326,7 @@ export const MAX_CONFIDENCE = 4;
 
 /**
  * 근거로 쓰이는 자리의 수: 지금 평가 기준에 그 자리를 쓰는 요소가 있어야 한다(요소가 자리보다 적으면 뒤 자리는 근거가 아니다).
- * 예시 지원자는 자리가 넷이라 요소가 셋이면 앞의 세 자리만 근거다.
+ * 예시 지원자는 자리가 셋이라 요소가 둘이면 앞의 두 자리만 근거다.
  */
 export function evidenceSlotCount(applicant: Pick<EvaluationApplicant, "ai">, elementCount: number): number {
   return Math.min(elementCount, applicant.ai.length);
@@ -342,12 +342,12 @@ function gradePrefix(passage: Passage): string {
   return passage.grade === null ? "" : `${passage.grade}학년 · `;
 }
 
-/** 원문 위에 적는 출처: "2학년 · 물리학II" */
+/** 원문 위에 적는 출처: "2학년 · 경제" */
 export function passageSource(passage: Passage): string {
   return `${gradePrefix(passage)}${passage.subject}`;
 }
 
-/** 근거에 적는 출처: "2학년 · 세특 · 물리학II" */
+/** 근거에 적는 출처: "2학년 · 세특 · 경제" */
 export function evidenceSource(passage: Passage): string {
   return `${gradePrefix(passage)}${passage.area} · ${passage.subject}`;
 }
@@ -389,7 +389,7 @@ export function evidencesOf(
 /**
  * 원문 조각의 형광펜 색 순번(평가 요소 순번)과 지금 고른 요소의 근거인지. 근거가 아닌 조각은 null.
  * 조각이 지금 고른 요소의 근거면 그 요소의 색이고, 아니면 그 조각을 근거로 쓴 요소 가운데 맨 앞 요소의 색이다
- * (자리가 요소 순번과 같다: 예시 지원자는 앞의 네 요소, 올린 지원자는 모든 요소).
+ * (자리가 요소 순번과 같다: 예시 지원자는 앞의 세 요소, 올린 지원자는 모든 요소).
  */
 export function segmentTone(
   segment: PassageSegment,
@@ -490,7 +490,7 @@ export function queuePosition(
 
 /**
  * 검색어가 지원자 코드나 한 줄 요약에 들어 있는지. 코드는 공백·"-" 를 빼고 대소문자 없이("a0187" → A-0187), 요약은 공백을 빼고
- * 견준다("물리탐구" → "물리 탐구…"). 검색어가 비어 있으면 거르지 않는다.
+ * 견준다("소비자료" → "소비 자료…"). 검색어가 비어 있으면 거르지 않는다.
  */
 export function matchesEvaluationSearch(applicant: Pick<EvaluationApplicant, "code" | "summary">, query: string): boolean {
   const text = query.replace(/\s/g, "").toUpperCase();

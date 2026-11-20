@@ -18,7 +18,7 @@ import { MAX_GUIDELINE_TEXT_LENGTH, scoreGuidelinePage, selectGuidelineText } fr
 import { readGuidelinePages } from "../lib/pipeline/guidelineText.ts";
 
 const SAMPLE_PDF = "samples/virtual-admission-guide.pdf";
-const DEPARTMENT = "컴퓨터공학과";
+const DEPARTMENT = "경영학과";
 
 let passed = 0;
 const failures: string[] = [];
@@ -168,12 +168,12 @@ function checkPageSelection() {
   {
     check(
       "쪽 점수: 모집 단위 이름(공백을 빼고)과 낱말을 센다",
-      scoreGuidelinePage("컴퓨터 공학과 모집\n배점과 배점", "컴퓨터공학과") === 3 &&
-        scoreGuidelinePage("컴퓨터공학과", "컴퓨터 공학과") === 1 &&
+      scoreGuidelinePage("경영 학과 모집\n배점과 배점", "경영학과") === 3 &&
+        scoreGuidelinePage("경영학과", "경영 학과") === 1 &&
         scoreGuidelinePage("배점배점", DEPARTMENT) === 2,
     );
     const pages = Array.from({ length: 10 }, () => filler(5_000));
-    pages[8] = `컴퓨터 공학과\n${filler(5_000)}`;
+    pages[8] = `경영 학과\n${filler(5_000)}`;
     const result = selectGuidelineText(pages, DEPARTMENT);
     check(
       "쪽 고르기: 모집 단위 이름이 든 쪽(9쪽)이 먼저 담긴다",

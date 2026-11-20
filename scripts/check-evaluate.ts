@@ -64,7 +64,7 @@ function keysOf(element: PrepElement): string[] {
 /** 모든 질문에 같은 값으로 응답한 AI 응답 (지어낸 값) */
 function rawWith(rating: number, confidence = 3): { summary: string; elements: Record<string, unknown>[]; growth: unknown[] } {
   return {
-    summary: "알고리즘 구현을 스스로 넓혀 간 학생",
+    summary: "가격 전략 탐구를 스스로 넓혀 간 학생",
     elements: ELEMENTS.map((element, index) => ({
       id: CRITERIA.criteria[index].id,
       ratings: keysOf(element).map((key) => ({ key, rating })),
@@ -220,7 +220,7 @@ function checkNormalize() {
           ]);
     check(
       "신뢰도: 근거가 없는 요소는 1 로 낮추고 근거가 있는 요소는 그대로 둔다",
-      adjusted !== null && same(adjusted.elements.map((element) => element.confidence), [4, 1, 1, 1]),
+      adjusted !== null && same(adjusted.elements.map((element) => element.confidence), [4, 1, 1]),
       JSON.stringify(adjusted?.elements.map((element) => element.confidence)),
     );
   }
@@ -267,26 +267,26 @@ function checkFingerprint() {
 
 // ---------------------------------------------------------------- 분석 결과 → 평가할 지원자
 
-const DETAIL_TEXT = "정렬 알고리즘을 직접 구현하고 실행 시간을 비교함. 친구에게 풀이를 설명함.";
+const DETAIL_TEXT = "매점 판매 자료를 직접 모으고 가격별 판매량을 비교함. 친구에게 결과를 설명함.";
 
 /** 지어낸 분석 결과 (전형 준비의 기본 평가 기준으로 분석한 것). 실제 학생부가 아니다. */
 function fakeResult(assessment: Assessment | undefined): AnalysisResult {
-  const [c1, c2, c3, c4] = CRITERIA.criteria.map((criterion) => criterion.id);
+  const [c1, c2, c3] = CRITERIA.criteria.map((criterion) => criterion.id);
   return {
     criteria: CRITERIA,
     sections: [
       { id: "s1", category: "인적·학적사항", grade: null, page: 1, text: "[블라인드]" },
       { id: "s2", category: "교과 성적", grade: 1, page: 2, text: "학기 | 과목 | 성취도\n1 | 국어 | A" },
-      { id: "s3", category: "세부능력 및 특기사항", grade: 2, subject: "정보", page: 3, text: DETAIL_TEXT },
+      { id: "s3", category: "세부능력 및 특기사항", grade: 2, subject: "경제", page: 3, text: DETAIL_TEXT },
       { id: "s4", category: "동아리활동", grade: 2, page: 2, text: "동아리 부장으로 활동 계획을 세움." },
       { id: "s5", category: "독서활동상황", grade: 1, subject: "국어", page: 4, text: "과학 분야 책을 읽음." },
       { id: "s6", category: "행동특성 및 종합의견", grade: 3, page: 4, text: "책임감이 강함." },
     ],
     evidences: [
       // 받은 순서는 원문 순서와 다르게 둔다(e3 이 e1 보다 먼저)
-      { id: "e3", criterionId: c2, sectionId: "s3", quote: "친구에게 풀이를 설명함.", reason: "설명하는 역할" },
-      { id: "e1", criterionId: c1, sectionId: "s3", quote: "정렬 알고리즘을 직접 구현하고 실행 시간을 비교함.", reason: "직접 구현" },
-      { id: "e2", criterionId: c4, sectionId: "s3", quote: "직접 구현하고 실행 시간을 비교함. 친구에게", reason: "전공 관련" },
+      { id: "e3", criterionId: c2, sectionId: "s3", quote: "친구에게 결과를 설명함.", reason: "설명하는 역할" },
+      { id: "e1", criterionId: c1, sectionId: "s3", quote: "매점 판매 자료를 직접 모으고 가격별 판매량을 비교함.", reason: "직접 조사" },
+      { id: "e2", criterionId: c3, sectionId: "s3", quote: "직접 모으고 가격별 판매량을 비교함. 친구에게", reason: "나눔" },
       { id: "e4", criterionId: c2, sectionId: "s4", quote: "동아리 부장으로 활동 계획을 세움.", reason: "  " },
       { id: "e5", criterionId: c3, sectionId: "s6", quote: "책임감이 강함.", reason: "책임감" },
       { id: "e6", criterionId: c1, sectionId: "s5", quote: "과학 분야 책을 읽음.", reason: "독서" },
@@ -352,7 +352,7 @@ function checkUploaded() {
       ...item.result,
       assessment: {
         ...assessment,
-        elements: assessment.elements.slice(0, 3).map((element, index) => (index === 0 ? { ...element, score: 120, confidence: 0 } : element)),
+        elements: assessment.elements.slice(0, 2).map((element, index) => (index === 0 ? { ...element, score: 120, confidence: 0 } : element)),
         growth: [{ grade: 2, label: "가", index: 50.5 }],
       },
     };
@@ -409,7 +409,7 @@ function checkUploaded() {
       applicant.passages.map((passage) => [passage.area, passage.grade, passage.subject]),
       [
         ["교과", 1, "교과 성적"],
-        ["세특", 2, "정보"],
+        ["세특", 2, "경제"],
         ["창체", 2, "동아리활동"],
         ["독서", 1, "국어"],
         ["행특", 3, "행동특성 및 종합의견"],
@@ -429,11 +429,11 @@ function checkUploaded() {
       detail !== undefined &&
         detail.segments.map((segment) => segment.text).join("") === DETAIL_TEXT &&
         same(detail.segments, [
-          { text: "정렬 알고리즘을 ", slots: [0] },
-          { text: "직접 구현하고 실행 시간을 비교함.", slots: [0, 3] },
-          { text: " ", slots: [3] },
-          { text: "친구에게", slots: [1, 3] },
-          { text: " 풀이를 설명함.", slots: [1] },
+          { text: "매점 판매 자료를 ", slots: [0] },
+          { text: "직접 모으고 가격별 판매량을 비교함.", slots: [0, 2] },
+          { text: " ", slots: [2] },
+          { text: "친구에게", slots: [1, 2] },
+          { text: " 결과를 설명함.", slots: [1] },
         ]),
       JSON.stringify(detail?.segments),
     );
@@ -444,15 +444,17 @@ function checkUploaded() {
       ELEMENTS.map((_, index) => evidencesOf(applicant, index, ELEMENTS.length).map((evidence) => [evidence.source, evidence.text, evidence.reason])),
       [
         [
-          ["2학년 · 세특 · 정보", "정렬 알고리즘을 직접 구현하고 실행 시간을 비교함.", "직접 구현"],
+          ["2학년 · 세특 · 경제", "매점 판매 자료를 직접 모으고 가격별 판매량을 비교함.", "직접 조사"],
           ["1학년 · 독서 · 국어", "과학 분야 책을 읽음.", "독서"],
         ],
         [
-          ["2학년 · 세특 · 정보", "친구에게 풀이를 설명함.", "설명하는 역할"],
+          ["2학년 · 세특 · 경제", "친구에게 결과를 설명함.", "설명하는 역할"],
           ["2학년 · 창체 · 동아리활동", "동아리 부장으로 활동 계획을 세움.", undefined],
         ],
-        [["3학년 · 행특 · 행동특성 및 종합의견", "책임감이 강함.", "책임감"]],
-        [["2학년 · 세특 · 정보", "직접 구현하고 실행 시간을 비교함. 친구에게", "전공 관련"]],
+        [
+          ["2학년 · 세특 · 경제", "직접 모으고 가격별 판매량을 비교함. 친구에게", "나눔"],
+          ["3학년 · 행특 · 행동특성 및 종합의견", "책임감이 강함.", "책임감"],
+        ],
       ],
     ),
     JSON.stringify(ELEMENTS.map((_, index) => evidencesOf(applicant, index, ELEMENTS.length))),
@@ -596,35 +598,35 @@ function checkSample() {
     return;
   }
   check(
-    "예시: A-0187 의 근거 수는 디자인대로 학업 2·리더십 1·Y형 1·전공 2",
+    "예시: A-0187 의 근거 수는 잠재역량 2·학업역량 3·공동체역량 1 (세특 두 건만 근거다)",
     same(
       ELEMENTS.map((_, index) => evidencesOf(sample, index, ELEMENTS.length).length),
-      [2, 1, 1, 2],
+      [2, 3, 1],
     ),
   );
   check(
-    "예시: A-0187 의 AI 점수와 태그는 디자인대로다",
+    "예시: A-0187 의 AI 점수와 태그는 정해 둔 값이다",
     same(
       ELEMENTS.map((element, index) => [assessmentOf(sample, index).score, assessmentTags(assessmentOf(sample, index), element)]),
       [
-        [85, "# 탐구심화 # 자기주도"],
-        [78, "# 소통"],
-        [88, "# 진취성 # 전문성"],
-        [80, "# 전공탐구 # 전공교과이수"],
+        [88, "# 전공활동탐색 # 자기주도성"],
+        [85, "# 탐구력 # 학습태도"],
+        [78, "# 사회역량"],
       ],
     ),
     JSON.stringify(ELEMENTS.map((element, index) => [assessmentOf(sample, index).score, assessmentTags(assessmentOf(sample, index), element)])),
   );
   check(
-    "예시: 요소가 셋뿐이면 넷째 자리의 조각은 근거가 아니다",
-    evidencesOf(sample, 0, 3).length === 2 && evidencesOf(sample, 3, 3).length === 0,
+    "예시: 요소가 둘뿐이면 셋째 자리의 조각은 근거가 아니다",
+    evidencesOf(sample, 0, 2).length === 2 && evidencesOf(sample, 1, 2).length === 3 && evidencesOf(sample, 2, 2).length === 0,
   );
   check(
-    "예시: 요소가 여섯이면 다섯째 요소는 첫 자리를 다시 쓴다",
-    same(
-      evidencesOf(sample, 4, 6).map((evidence) => evidence.text),
-      evidencesOf(sample, 0, 6).map((evidence) => evidence.text),
-    ),
+    "예시: 요소가 여섯이면 넷째 요소는 첫 자리를 다시 쓴다",
+    evidencesOf(sample, 3, 6).length === 2 &&
+      same(
+        evidencesOf(sample, 3, 6).map((evidence) => evidence.text),
+        evidencesOf(sample, 0, 6).map((evidence) => evidence.text),
+      ),
   );
   check(
     "예시: 근거 문장의 자리는 그 원문 조각의 범위다",
@@ -643,8 +645,8 @@ function checkSample() {
       segmentTone({ text: "가", slots: [3] }, 0, 0, 3) === null,
   );
   check(
-    "형광펜: 요소가 여섯이면 다섯째 요소를 골랐을 때 첫 자리의 조각이 다섯째 요소의 색이다",
-    same(segmentTone({ text: "가", slots: [0] }, slotOf(sample, 4), 4, 4), { tone: 4, selected: true }),
+    "형광펜: 요소가 여섯이면 넷째 요소를 골랐을 때 첫 자리의 조각이 넷째 요소의 색이다",
+    same(segmentTone({ text: "가", slots: [0] }, slotOf(sample, 3), 3, 3), { tone: 3, selected: true }),
   );
   check(
     "예시: 평가 순서의 첫 지원자는 앞이 없고 24명이다",

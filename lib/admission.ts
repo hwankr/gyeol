@@ -13,7 +13,7 @@ export const ADMISSION = {
   /** 전형 요약 카드의 전형 */
   trackFull: "2027 수시 · 학생부종합 (일반학생)",
   /** 모집 단위와 덧붙이는 글 */
-  unit: "컴퓨터공학과",
+  unit: "경영학과",
   unitExtra: "외 45개",
   /** 모집 인원(명)과 덧붙이는 글 */
   quota: 30,

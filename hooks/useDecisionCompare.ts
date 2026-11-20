@@ -44,7 +44,7 @@ function leadText(diff10: number, leftCode: string, rightCode: string, format: (
   return `${diff10 > 0 ? leftCode : rightCode} +${format(Math.abs(diff10))}`;
 }
 
-/** 그 지원자가 앞선 요소들: "리더십 +18 · Y형 인재 +3" (없으면 "앞선 요소 없음") */
+/** 그 지원자가 앞선 요소들: "잠재역량 +4 · 학업역량 +6" (없으면 "앞선 요소 없음") */
 function leadsText(gaps: readonly ElementGap[], side: Side): string {
   const leads = gaps.filter((gap) => (side === 0 ? gap.diff10 > 0 : gap.diff10 < 0));
   if (leads.length === 0) return "앞선 요소 없음";
