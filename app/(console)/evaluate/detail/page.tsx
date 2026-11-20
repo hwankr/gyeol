@@ -33,8 +33,9 @@ function DetailByCode() {
   const applicant = findEvaluationApplicant(applicants, params.get("code"));
   if (applicant === undefined) return <EvaluateMissing note={`${ADMISSION.trackFull} · ${ADMISSION.unit}`} />;
   const itemId = params.get("item");
-  // 지원자나 평가 요소가 바뀌면 새로 그려서 서류 구분·안내 글을 처음 상태로 시작한다(응답은 저장소에 있어 그대로다).
-  return <Detail key={`${applicant.code}:${itemId ?? ""}`} applicant={applicant} itemId={itemId} />;
+  // 지원자(올린 지원자는 그 분석)가 바뀌면 새로 그려서 서류 원문·안내 글을 처음 상태로 시작한다(응답은 저장소에 있어 그대로다).
+  // 평가 요소만 바뀔 때에는 새로 그리지 않는다: 서류 원문에서 보던 자리(원본 PDF 의 스크롤·배율)가 그대로 남아야 한다.
+  return <Detail key={`${applicant.code}@${applicant.stamp ?? ""}`} applicant={applicant} itemId={itemId} />;
 }
 
 function Detail({ applicant, itemId }: { applicant: EvaluationApplicant; itemId: string | null }) {

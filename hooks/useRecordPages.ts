@@ -25,19 +25,31 @@ export type RecordPagesView = {
 };
 
 /**
+ * 쪽 그림을 불러온 상태. loading: 불러오는 중. none: 열쇠가 없거나(예시 지원자) 남긴 것이 없다. ready: 불러왔다(view 가 있다).
+ */
+export type RecordPagesState = { status: "loading" | "none"; view: null } | { status: "ready"; view: RecordPagesView };
+
+const NO_PAGES: RecordPagesState = { status: "none", view: null };
+const LOADING_PAGES: RecordPagesState = { status: "loading", view: null };
+
+/**
  * 올린 학생부의 가린 쪽 그림과 자리를 브라우저 저장소(IndexedDB, lib/recordPagesStorage.ts)에서 불러온다.
- * 열쇠가 null 이거나(예시 지원자) 남긴 것이 없으면 null 이다. 불러오는 동안에도 null 이다(원문보기는 글만 보여 주다가 PDF 보기가 나타난다).
+ * 열쇠가 null 이거나(예시 지원자) 남긴 것이 없으면 none, 불러오는 동안은 loading 이다.
  * 그림은 이 페이지 안에서만 쓰는 주소(blob)로 만들고, 화면이 숨겨지거나 열쇠가 바뀌면 그 주소를 없앤다.
  */
-export function useRecordPages(key: string | null): RecordPagesView | null {
-  const [loaded, setLoaded] = useState<{ key: string; view: RecordPagesView } | null>(null);
+export function useRecordPagesState(key: string | null): RecordPagesState {
+  const [loaded, setLoaded] = useState<{ key: string; view: RecordPagesView | null } | null>(null);
 
   useEffect(() => {
     if (key === null) return;
     let alive = true;
     const urls: string[] = [];
     void loadRecordPages(key).then((data) => {
-      if (!alive || data === null) return;
+      if (!alive) return;
+      if (data === null) {
+        setLoaded({ key, view: null });
+        return;
+      }
       const pages = data.pages.map((page, index): RecordPageView => {
         const url = page.image === null ? null : URL.createObjectURL(page.image);
         if (url !== null) urls.push(url);
@@ -52,5 +64,15 @@ export function useRecordPages(key: string | null): RecordPagesView | null {
     };
   }, [key]);
 
-  return loaded !== null && loaded.key === key ? loaded.view : null;
+  if (key === null) return NO_PAGES;
+  if (loaded === null || loaded.key !== key) return LOADING_PAGES;
+  return loaded.view === null ? NO_PAGES : { status: "ready", view: loaded.view };
+}
+
+/**
+ * 쪽 그림과 자리만 필요할 때. 열쇠가 null 이거나 남긴 것이 없으면 null 이고, 불러오는 동안에도 null 이다
+ * (원문보기는 글만 보여 주다가 PDF 보기가 나타난다).
+ */
+export function useRecordPages(key: string | null): RecordPagesView | null {
+  return useRecordPagesState(key).view;
 }

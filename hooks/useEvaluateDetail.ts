@@ -1,4 +1,5 @@
 import { useRouter } from "next/navigation";
+import { useEvaluationDocument } from "@/hooks/useEvaluationDocument";
 import { useEvaluationSession } from "@/hooks/useEvaluationSession";
 import { EVALUATE_PATH } from "@/lib/consoleMenu";
 import {
@@ -20,16 +21,26 @@ import type { EvaluationApplicant } from "@/lib/evaluate/sampleEvaluations";
  * (평균 × 20)을 그 요소의 내 점수로 가져가고 총평 화면으로 돌아간다. 그 점수가 AI 점수와 다르고 수정 사유가 비어 있으면
  * 사유에 "세부 평가 항목 N문 평균 X점 반영" 을 채워 둔다(총평 화면에서 고칠 수 있다).
  * itemId 가 지금 평가 기준에 없는 요소면 첫 요소를 보여 준다.
+ * 평가 요소를 바꿔도 이 훅을 쓰는 컴포넌트는 새로 그려지지 않는다(지원자가 바뀔 때만 새로 그린다). 그래서 서류 원문에서 보던 자리·보기·배율이
+ * 그대로 남고, 방금 한 일의 안내 글만 요소마다 따로다(hooks/useEvaluationSession.ts 의 noteScope).
  */
 export function useEvaluateDetail(applicant: EvaluationApplicant, itemId: string | null) {
   const router = useRouter();
   // 앞뒤 지원자로 갈 때도 같은 평가 요소의 세부 항목 평가로 간다.
-  const session = useEvaluationSession(applicant, (code) => detailPath(code, itemId ?? ""));
+  const session = useEvaluationSession(applicant, (code) => detailPath(code, itemId ?? ""), itemId ?? "");
   const { elements, record, locked, write } = session;
   const elementIndex = Math.max(
     0,
     elements.findIndex((element) => element.id === itemId),
   );
+  // 서류 원문: 지금 응답하는 요소의 근거가 짙게 칠해지고, 근거 줄(이전·다음)로 그 근거를 원본에서 차례로 본다.
+  const document = useEvaluationDocument({
+    applicant,
+    elements,
+    highlightIndex: elementIndex,
+    maskReported: session.maskReported,
+    onToggleMaskReport: session.onToggleMaskReport,
+  });
   const element = elements[elementIndex];
   const answers = validAnswers(record, element);
   const total = questionCount(element);
@@ -70,13 +81,17 @@ export function useEvaluateDetail(applicant: EvaluationApplicant, itemId: string
     ],
     headNote: session.headNote,
     bar: { ...session.bar, backHref: summaryHref, backLabel: "총평" },
-    document: session.documentView(elementIndex),
+    /** 넓은 배치인지 (올린 지원자: 원본을 크게 보고, 세 단이 화면 높이 안에서 각자 스크롤한다) */
+    wide: document.view.wide,
+    document: document.view,
     /** 가운데 단: 평가 요소 목록. 지금 요소가 선택된 모양이고, 응답이 있는 요소에는 응답 수를 붙인다. */
     items: elements.map((item, index) => {
       const count = Object.keys(validAnswers(record, item)).length;
       return {
         id: item.id,
         name: item.name,
+        /** 그 요소의 형광펜 색 순번 */
+        tone: index,
         href: detailPath(applicant.code, item.id),
         current: index === elementIndex,
         progressText: index === elementIndex || count > 0 ? `${count} / ${questionCount(item)}` : null,

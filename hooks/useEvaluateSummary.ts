@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEvaluationDocument } from "@/hooks/useEvaluationDocument";
 import { useEvaluationSession } from "@/hooks/useEvaluationSession";
 import { EVALUATE_PATH } from "@/lib/consoleMenu";
 import {
@@ -23,10 +24,15 @@ import type { EvaluationApplicant } from "@/lib/evaluate/sampleEvaluations";
 /** 학생 성장 요약 그림에서 건수 막대 눈금의 끝 (디자인 값) */
 const GROWTH_COUNT_MAX = 5;
 
+/** 근거 문장 목록을 스크롤할 때 고른 근거 문장 위에 남기는 여백(px): 그 문장의 출처 줄이 보일 만큼 */
+const EVIDENCE_LIST_MARGIN = 32;
+
 /**
  * 평가하기 · 총평 화면 상태: 지원자 한 명의 학생 성장 요약, 서류 원문, 항목별 AI 점수와 근거(평가 요소 고르기), 내 평가 입력
  * (요소별 내 점수, AI 점수와 다른 요소의 수정 사유, 종합 의견, 보류·재검토 요청, 제출), 제출한 뒤의 다른 위원 의견.
  * 고친 값은 그때마다 저장된다(hooks/useEvaluationSession.ts). 제출한 평가는 잠겨 고칠 수 없다.
+ * 근거 문장을 누르면 서류 원문(올린 지원자는 실제 PDF)이 그 자리로 스크롤되고 그 구절이 짙게 표시된다(hooks/useEvaluationDocument.ts).
+ * 원본의 형광펜을 눌러 근거를 고르면 그 근거 문장이 목록에서 보이게 목록이 스크롤된다.
  */
 export function useEvaluateSummary(applicant: EvaluationApplicant) {
   const session = useEvaluationSession(applicant, summaryPath);
@@ -49,6 +55,32 @@ export function useEvaluateSummary(applicant: EvaluationApplicant) {
   const selected = elements[selectedIndex];
   const selectedAssessment = assessmentOf(applicant, selectedIndex);
   const evidences = evidencesOf(applicant, selectedIndex, elements.length);
+  const document = useEvaluationDocument({
+    applicant,
+    elements,
+    highlightIndex: selectedIndex,
+    maskReported: session.maskReported,
+    onToggleMaskReport: session.onToggleMaskReport,
+    // 원본 PDF 에서 다른 평가 요소의 형광펜을 누르면 그 요소의 근거를 보여 준다.
+    onPickElement: (index) => setSelectedId(elements[index]?.id ?? null),
+  });
+  /** 근거 문장 목록의 스크롤 영역(넓은 배치에서만 안에서 스크롤한다)과 고른 근거 문장 */
+  const evidenceListRef = useRef<HTMLDivElement>(null);
+  const focusedEvidenceRef = useRef<HTMLButtonElement>(null);
+
+  // 근거를 고를 때마다(원본의 형광펜이나 서류 원문의 이전·다음으로 고른 것 포함) 그 근거 문장이 목록 안에서 보이게 목록만 스크롤한다.
+  // 목록이 안에서 스크롤하지 않는 배치(좁은 배치)에서는 아무것도 하지 않는다(문서를 움직이지 않는다).
+  const { focusRequest } = document;
+  useEffect(() => {
+    const container = evidenceListRef.current;
+    const card = focusedEvidenceRef.current;
+    if (focusRequest === 0 || container === null || card === null || container.scrollHeight <= container.clientHeight) return;
+    const containerRect = container.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    if (cardRect.top >= containerRect.top && cardRect.bottom <= containerRect.bottom) return;
+    const top = cardRect.top - containerRect.top + container.scrollTop - EVIDENCE_LIST_MARGIN;
+    container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  }, [focusRequest]);
 
   /** 요소마다: AI 점수, 내 점수, 수정 사유 */
   const items = elements.map((element, index) => {
@@ -105,24 +137,38 @@ export function useEvaluateSummary(applicant: EvaluationApplicant) {
         applicant.original === undefined ? "활동 건수" : "근거 건수"
       }: ${applicant.growth.map((point) => `${point.grade}학년 ${point.count}건`).join(", ")}`,
     },
-    document: session.documentView(selectedIndex),
+    /** 넓은 배치인지 (올린 지원자: 원본을 크게 보고, 근거 문장이 그 옆에 놓인다) */
+    wide: document.view.wide,
+    document: document.view,
     basis: {
       aiTotal: aiTotalOf(applicant, elements),
       weightsText: `${session.criteriaVersion} ${weightsLine(elements)}`,
       criteria: items.map((item) => ({
         id: item.element.id,
         name: item.element.name,
+        /** 그 요소의 형광펜 색 순번 (원문의 근거 구절이 이 색으로 칠해진다) */
+        tone: item.index,
         aiScore: item.assessment.score,
         flag: item.assessment.confidence <= LOW_CONFIDENCE ? "사람 확인 권장" : null,
         on: item.index === selectedIndex,
         onPick: () => setSelectedId(item.element.id),
       })),
       selectedName: selected.name,
-      evidences,
+      /** 고른 평가 요소의 근거 문장. 누르면 서류 원문이 그 자리로 간다(on: 지금 고른 근거) */
+      evidences: evidences.map((evidence) => ({
+        id: evidence.id,
+        source: evidence.source,
+        text: evidence.text,
+        reason: evidence.reason,
+        on: evidence.id === document.focusedEvidenceId,
+        onPick: () => document.onSelectEvidence(evidence.id),
+      })),
       confidenceText: `신뢰도 ${selectedAssessment.confidence} / ${MAX_CONFIDENCE} · 근거 ${evidences.length}건`,
       tagsText: assessmentTags(selectedAssessment, selected),
       aiScore: selectedAssessment.score,
     },
+    evidenceListRef,
+    focusedEvidenceRef,
     mine: {
       locked,
       /** 세부 평가 항목 가져오기: 요소마다 세부 항목 평가 화면으로 가는 링크와 응답 수 */

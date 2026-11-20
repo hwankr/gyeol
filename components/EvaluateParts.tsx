@@ -14,10 +14,14 @@ import {
   type ChipTone,
   type ConsoleCrumb,
 } from "@/components/consoleUi";
+import { toneSwatchClass, toneTextClass } from "@/components/evidenceTone";
+import { PdfZoomButtons, RecordModeButtons, RecordPdf, type PdfPickable, type RecordViewMode } from "@/components/RecordPdf";
+import type { PdfPan, PdfZoom } from "@/hooks/usePdfViewport";
 import { EVALUATE_PATH } from "@/lib/consoleMenu";
 import type { EvaluationStatus } from "@/lib/evaluate/evaluation";
 import type { DocumentArea } from "@/lib/evaluate/sampleEvaluations";
 import { SWAP_TRANSITION } from "@/lib/motion";
+import type { PdfPageView } from "@/lib/recordPdfMarks";
 
 // 평가하기 세 화면(평가 대기 목록, 총평, 세부 항목 평가)이 같이 쓰는 조각. 치수·색·글자는 디자인 값 그대로다.
 
@@ -159,155 +163,328 @@ function StepLink({ href, label, linkRef }: { href: string | null; label: string
   );
 }
 
-/** 원문 조각의 강조: 지금 고른 평가 요소의 근거는 색 면과 실선 밑줄, 다른 요소의 근거는 점선 밑줄. 평가 요소를 바꾸면 색 면이 150ms 에 걸쳐 옮겨 간다. */
-const SEGMENT_CLASS = {
-  selected: "motion-colors bg-[#DCE0FF] underline decoration-[#001AD0] decoration-solid underline-offset-[4px]",
-  other: "motion-colors underline decoration-[#505050] decoration-dotted underline-offset-[4px]",
-  none: "",
-} as const;
+/**
+ * 넓은 배치(올린 지원자)에서 단의 높이: 화면 높이에서 위의 것(상단 바, 현재 위치·제목·지원자 줄, 여백)을 뺀 만큼이고 480px 보다 작아지지 않는다.
+ * 단이 각자 안에서 스크롤하므로 평가를 입력하는 동안 원본이 화면에 그대로 남는다(원문보기 화면의 두 단과 같은 높이다).
+ * 좁은 화면에서 단이 위아래로 쌓여도 같은 높이다.
+ */
+export const WORKBENCH_HEIGHT_CLASS = "h-[max(480px,calc(100vh-280px))]";
+
+/** 단 안에서 스크롤하는 영역의 가는 스크롤바 (원문보기 화면과 같은 모양) */
+export const WORKBENCH_SCROLL_CLASS =
+  "min-h-0 flex-[1_1_auto] scroll-m-[8px] overflow-y-auto [scrollbar-color:#CFCFCF_transparent] [scrollbar-width:thin]";
+
+/** 평가 요소의 형광펜 색 점 (평가 요소 목록의 이름 앞, 색 풀이). 장식이라 보조 기술에는 숨긴다(이름이 옆에 있다). */
+export function ToneSwatch({ tone }: { tone: number }) {
+  return <span aria-hidden="true" className={`inline-block h-[10px] w-[10px] flex-none rounded-[3px] ${toneSwatchClass(tone)}`} />;
+}
 
 type DocumentPanelProps = {
-  /** 바깥 <section> 에 줄 클래스 (단의 너비·왼쪽 선은 화면마다 다르다) */
+  /** 바깥 <section> 에 줄 클래스 (단의 너비·높이·왼쪽 선은 화면마다 다르다) */
   className: string;
   /** 머리 줄의 모서리 (상자 안에서의 자리에 따라 다르다) */
   headClassName: string;
   /** 머리 줄 제목의 id (한 화면에 하나) */
   titleId: string;
-  /** 아래에 밑줄·색 면 풀이를 적을지 (총평 화면만) */
+  /** 아래에 평가 요소별 형광펜 색 풀이를 둘지 (평가 요소 목록이 이 단과 떨어져 있는 화면만) */
   showLegend: boolean;
+  /**
+   * 고른 근거의 출처와 AI 가 적은 이유를 아래에 적을지. "always": 늘(근거 문장 목록이 따로 없는 화면).
+   * "stacked": 근거 문장 목록이 이 단 옆에 있지 못하고 아래로 내려갔을 때만(바깥 상자 @container/bench 의 폭이 700px 미만일 때).
+   * "never": 적지 않는다(근거 문장 목록이 늘 가까이 있는 화면).
+   */
+  showEvidenceNote: "always" | "stacked" | "never";
+  /** 넓은 배치인지 (올린 지원자): 단이 주어진 높이를 채우고 원문이 그 안에서 스크롤한다 */
+  wide: boolean;
   areas: { area: DocumentArea; on: boolean; onPick: () => void }[];
   passages: {
     id: string;
     source: string;
-    /** 그 원문의 PDF 쪽 번호와, 원문보기 화면에서 실제 PDF 의 그 자리를 여는 주소 (올린 지원자만. 없으면 null) */
-    page: { label: string; href: string } | null;
-    segments: { key: string; text: string; emphasis: keyof typeof SEGMENT_CLASS }[];
+    /** 그 원문의 PDF 쪽 번호와 학생부 항목의 id (올린 지원자만. 없으면 null) */
+    page: { label: string; sectionId: string } | null;
+    /** 조각마다: 형광펜 색의 순번과 세기(근거가 아니면 level 이 null), 스크롤 대상인지 */
+    segments: { key: string; text: string; tone: number; level: "focus" | "strong" | "soft" | null; isTarget: boolean }[];
   }[];
+  /** 평가 요소와 그 형광펜 색 */
+  legend: { id: string; name: string; tone: number }[];
   /** 가림 누락을 신고했는지 */
   maskReported: boolean;
   onToggleMaskReport: () => void;
   /** 원문보기 화면의 주소 (그 지원자의 학생부 원문과 기준별 근거) */
   originalHref: string;
+  /** 글 보기의 스크롤 영역과 그 안의 스크롤 대상(고른 근거의 첫 조각) */
+  textScrollRef: Ref<HTMLDivElement>;
+  textTargetRef: Ref<HTMLElement>;
+  /** 글 보기의 쪽 번호를 누름: 이 단에서 실제 PDF 의 그 항목 자리를 보여 준다. null 이면 쪽 번호가 눌리지 않는다(쪽 그림이 없다) */
+  onShowSection: ((sectionId: string) => void) | null;
+  /** 실제 PDF 보기 (올린 지원자의 가린 쪽 그림) */
+  pdf: {
+    available: boolean;
+    loading: boolean;
+    mode: RecordViewMode;
+    pages: readonly PdfPageView[];
+    currentPage: number;
+    zoom: PdfZoom;
+    pan: PdfPan;
+    scrollRef: Ref<HTMLDivElement>;
+    targetRef: Ref<HTMLSpanElement>;
+    /** 누를 수 있는 형광펜: 모든 요소의 근거("all") 또는 지금 요소의 근거만("current") */
+    pickable: PdfPickable;
+    onSelectMode: (mode: RecordViewMode) => void;
+  };
+  /** 지금 평가 요소의 근거를 원본에서 차례로 보는 줄 */
+  evidenceNav: {
+    /** "근거 2 / 7" (아직 고르지 않았으면 "근거 7건") */
+    text: string;
+    /** 지금 평가 요소의 형광펜 색 순번 */
+    tone: number;
+    /** 근거가 없어 움직일 수 없는지 */
+    disabled: boolean;
+    onPrevious: () => void;
+    onNext: () => void;
+    /** 고른 근거의 출처와 AI 가 적은 이유 (고르지 않았으면 null) */
+    current: { source: string; reason: string | null } | null;
+  };
 };
 
 /**
- * 서류 원문: 서류 구분(교과·세특·창체·행특)과 그 구분의 가려진 학생부 문장. AI 가 근거로 쓴 문장에 밑줄이 있고,
- * 지금 고른 평가 요소의 근거는 색 면으로 강조한다. 가림 누락 신고는 누르면 신고한 것으로 표시되고 다시 누르면 거둔다.
+ * 서류 원문: 평가하면서 근거를 원본에서 바로 확인하는 단.
+ * - AI 가 근거로 쓴 구절은 평가 요소마다 다른 형광펜 색으로 칠해져 있다(components/evidenceTone.ts). 지금 고른 평가 요소의 근거는
+ *   제 색과 실선 밑줄, 다른 요소의 근거는 옅은 색과 점선 밑줄, 지금 고른 근거는 더 짙은 색과 굵은 밑줄이다.
+ * - 올린 지원자는 실제 학생부 PDF 의 가린 쪽 그림을 본다(머리 줄의 "글 / PDF" 로 바꾼다. PDF 보기의 모습·배율·움직이기는
+ *   원문보기 화면과 같다: components/RecordPdf.tsx). 형광펜을 누르면 그 근거를 고른다. 글 보기의 쪽 번호를 누르면 PDF 의 그 자리를 보여 준다.
+ * - 아래의 근거 줄(이전 · "근거 2 / 7" · 다음)로 지금 평가 요소의 근거를 원본에서 차례로 본다. 고르면 원본이 그 자리로 스크롤된다.
+ * - 글 보기는 서류 구분(교과·세특·창체·행특)과 그 구분의 가려진 학생부 문장이다.
+ * 가림 누락 신고는 누르면 신고한 것으로 표시되고 다시 누르면 거둔다.
+ * 넓은 배치에서는 단이 주어진 높이를 채우고(className 이 높이를 준다) 원문만 그 안에서 스크롤한다.
  */
 export function DocumentPanel({
   className,
   headClassName,
   titleId,
   showLegend,
+  showEvidenceNote,
+  wide,
   areas,
   passages,
+  legend,
   maskReported,
   onToggleMaskReport,
   originalHref,
+  textScrollRef,
+  textTargetRef,
+  onShowSection,
+  pdf,
+  evidenceNav,
 }: DocumentPanelProps) {
+  const areaButtons = (
+    <div role="group" aria-label="서류 구분" className="flex flex-none">
+      {areas.map((item, index) => (
+        <button
+          key={item.area}
+          type="button"
+          aria-pressed={item.on}
+          onClick={item.onPick}
+          className={`${segmentClass(index, areas.length, item.on)} h-[28px] scroll-m-[8px] px-[12px]`}
+        >
+          {item.area}
+        </button>
+      ))}
+    </div>
+  );
+  /*
+    원문이 길면(올린 학생부의 세특은 과목 수십 건이다) 이 상자 안에서 세로로 스크롤한다. 넓은 배치에서는 단의 남는 높이를 채우고,
+    그 밖에는 화면 높이의 60%(360px 보다 작아지지 않음)까지다. 예시 지원자의 원문은 짧아 스크롤이 생기지 않는다. 키보드로도 스크롤할 수 있게 초점을 받는다.
+  */
+  const passageList = (
+    <div
+      ref={textScrollRef}
+      role="group"
+      aria-label="서류 원문 내용"
+      tabIndex={0}
+      className={wide ? `${WORKBENCH_SCROLL_CLASS} mt-[12px]` : "mt-[12px] max-h-[max(360px,60vh)] scroll-m-[8px] overflow-y-auto"}
+    >
+      {/* 서류 구분을 바꾸면 그 구분의 문장들이 옅게 나타난다(문장마다 새로 그려지는 것에 건다. 자리는 바로 잡힌다). */}
+      {passages.map((passage, index) => (
+        <div key={passage.id} className={`animate-fade-in border-t border-t-[#E4E4E4] pt-[12px] ${index === 0 ? "" : "mt-[12px]"}`}>
+          <p className="flex flex-wrap items-baseline gap-x-[8px] text-[12px] leading-[16px] font-semibold text-[#505050]">
+            {passage.source}
+            {/* 올린 지원자: 쪽 그림이 있으면 쪽 번호가 버튼이다. 누르면 이 단이 PDF 보기로 바뀌어 실제 PDF 의 그 자리를 보여 준다. */}
+            {passage.page !== null &&
+              (onShowSection !== null ? (
+                <button
+                  type="button"
+                  aria-label={`${passage.source} PDF ${passage.page.label} 보기`}
+                  onClick={onShowSection.bind(null, passage.page.sectionId)}
+                  className="motion-colors cursor-pointer scroll-m-[8px] rounded-[4px] border-0 bg-transparent p-0 text-[12px] leading-[16px] font-medium text-[#001AD0] tabular-nums hover-on:underline"
+                >
+                  PDF {passage.page.label}
+                </button>
+              ) : (
+                <span className="font-medium tabular-nums">{passage.page.label}</span>
+              ))}
+          </p>
+          <p className="mt-[6px] text-[14px] leading-[24px] [overflow-wrap:anywhere] break-keep whitespace-pre-line">
+            {passage.segments.map((segment) =>
+              segment.level === null ? (
+                <span key={segment.key}>{segment.text}</span>
+              ) : (
+                <mark
+                  key={segment.key}
+                  ref={segment.isTarget ? textTargetRef : undefined}
+                  className={toneTextClass(segment.tone, segment.level)}
+                >
+                  {segment.text}
+                </mark>
+              ),
+            )}
+          </p>
+        </div>
+      ))}
+      {passages.length === 0 && (
+        <p className="border-t border-t-[#E4E4E4] pt-[12px] text-[13px] leading-[18px] text-[#505050]">이 구분의 원문이 없습니다.</p>
+      )}
+    </div>
+  );
   return (
-    <section aria-labelledby={titleId} className={className}>
-      <div className={`${PANEL_HEAD_CLASS} ${headClassName} flex h-[40px] items-center justify-between gap-[8px] px-[16px]`}>
+    <section aria-labelledby={titleId} className={`${className} ${wide ? "flex flex-col" : ""}`}>
+      <div
+        className={`${PANEL_HEAD_CLASS} ${headClassName} box-border flex min-h-[40px] flex-none flex-wrap items-center justify-between gap-x-[8px] gap-y-[4px] px-[16px] py-[4px]`}
+      >
         <h3 id={titleId} className={PANEL_TITLE_CLASS}>
           서류 원문
         </h3>
-        <button
-          type="button"
-          aria-pressed={maskReported}
-          onClick={onToggleMaskReport}
-          className="inline-flex cursor-pointer scroll-m-[8px] items-center gap-[4px] rounded-[4px] border-0 bg-transparent p-0 text-[12px] font-medium text-[#BA1A1A] hover-on:underline"
-        >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="#BA1A1A"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-[14px] w-[14px]"
+        <div className="flex flex-wrap items-center gap-x-[10px] gap-y-[4px]">
+          {/* 쪽 그림이 있을 때: PDF 보기의 배율(축소 · 배율 · 확대)과 보기 고르기(글 / PDF) */}
+          {pdf.mode === "pdf" && <PdfZoomButtons zoom={pdf.zoom} />}
+          {pdf.available && <RecordModeButtons mode={pdf.mode} onSelect={pdf.onSelectMode} />}
+          <button
+            type="button"
+            aria-pressed={maskReported}
+            onClick={onToggleMaskReport}
+            className="inline-flex cursor-pointer scroll-m-[8px] items-center gap-[4px] rounded-[4px] border-0 bg-transparent p-0 text-[12px] font-medium text-[#BA1A1A] hover-on:underline"
           >
-            <path d="M8 2.5 14 13H2z" />
-            <path d="M8 6.8v2.8M8 11.3v.1" />
-          </svg>
-          {maskReported ? "가림 누락 신고함" : "가림 누락 신고"}
-        </button>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="#BA1A1A"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-[14px] w-[14px]"
+            >
+              <path d="M8 2.5 14 13H2z" />
+              <path d="M8 6.8v2.8M8 11.3v.1" />
+            </svg>
+            {maskReported ? "가림 누락 신고함" : "가림 누락 신고"}
+          </button>
+        </div>
       </div>
-      <div className="px-[16px] pt-[12px] pb-[16px]">
-        <div role="group" aria-label="서류 구분" className="flex">
-          {areas.map((item, index) => (
-            <button
-              key={item.area}
-              type="button"
-              aria-pressed={item.on}
-              onClick={item.onPick}
-              className={`${segmentClass(index, areas.length, item.on)} h-[28px] scroll-m-[8px] px-[12px]`}
-            >
-              {item.area}
-            </button>
-          ))}
+      {pdf.mode === "pdf" ? (
+        <RecordPdf
+          scrollRef={pdf.scrollRef}
+          targetRef={pdf.targetRef}
+          pages={pdf.pages}
+          currentPage={pdf.currentPage}
+          scale={pdf.zoom.scale}
+          pan={pdf.pan}
+          compact
+          pickable={pdf.pickable}
+        />
+      ) : pdf.loading ? (
+        // 쪽 그림을 불러오는 동안: 자리만 잡아 둔다(글이 잠깐 보였다가 PDF 로 바뀌지 않게).
+        <div aria-hidden="true" className="min-h-0 flex-[1_1_auto] bg-[#EEF0F6]" />
+      ) : (
+        <div className={`px-[16px] pt-[12px] ${wide ? "flex min-h-0 flex-[1_1_auto] flex-col" : ""}`}>
+          {areaButtons}
+          {passageList}
         </div>
-        {/*
-          원문이 길면(올린 학생부의 세특은 과목 수십 건이다) 이 상자 안에서 세로로 스크롤한다. 높이는 화면 높이의 60%(360px 보다 작아지지 않음)까지다.
-          예시 지원자의 원문은 짧아 스크롤이 생기지 않는다. 키보드로도 스크롤할 수 있게 초점을 받는다.
-        */}
-        <div
-          role="group"
-          aria-label="서류 원문 내용"
-          tabIndex={0}
-          className="mt-[12px] max-h-[max(360px,60vh)] scroll-m-[8px] overflow-y-auto"
-        >
-          {/* 서류 구분을 바꾸면 그 구분의 문장들이 옅게 나타난다(문장마다 새로 그려지는 것에 건다. 자리는 바로 잡힌다). */}
-          {passages.map((passage, index) => (
-            <div
-              key={passage.id}
-              className={`animate-fade-in border-t border-t-[#E4E4E4] pt-[12px] ${index === 0 ? "" : "mt-[12px]"}`}
-            >
-              <p className="flex flex-wrap items-baseline gap-x-[8px] text-[12px] leading-[16px] font-semibold text-[#505050]">
-                {passage.source}
-                {/* 올린 지원자: 실제 PDF 의 그 쪽에서 이 원문의 자리를 본다(원문보기 화면). */}
-                {passage.page !== null && (
-                  <Link
-                    href={passage.page.href}
-                    aria-label={`${passage.source} PDF ${passage.page.label} 보기`}
-                    className="motion-colors scroll-m-[8px] font-medium text-[#001AD0] tabular-nums no-underline hover-on:underline"
-                  >
-                    PDF {passage.page.label}
-                  </Link>
-                )}
-              </p>
-              <p className="mt-[6px] text-[14px] leading-[24px] [overflow-wrap:anywhere] break-keep whitespace-pre-line">
-                {passage.segments.map((segment) => (
-                  <span key={segment.key} className={SEGMENT_CLASS[segment.emphasis]}>
-                    {segment.text}
-                  </span>
-                ))}
-              </p>
-            </div>
-          ))}
-          {passages.length === 0 && (
-            <p className="border-t border-t-[#E4E4E4] pt-[12px] text-[13px] leading-[18px] text-[#505050]">
-              이 구분의 원문이 없습니다.
-            </p>
-          )}
+      )}
+      <div
+        className={`flex flex-none flex-wrap items-center gap-x-[12px] gap-y-[8px] border-t border-t-[#E4E4E4] ${
+          wide ? "px-[16px] py-[10px]" : "mx-[16px] mt-[12px] pt-[12px] pb-[16px]"
+        }`}
+      >
+        {/* 근거 줄: 지금 평가 요소의 근거를 원본에서 차례로 본다(끝에서는 반대쪽 끝으로 돈다). 색 점은 지금 요소의 형광펜 색이다. */}
+        <div role="group" aria-label="근거 이동" className="flex flex-none">
+          <button
+            type="button"
+            aria-label="이전 근거"
+            disabled={evidenceNav.disabled}
+            onClick={evidenceNav.onPrevious}
+            className={`${segmentClass(0, 3, false)} ${STEP_BUTTON_CLASS}`}
+          >
+            <StepIcon next={false} />
+          </button>
+          <span
+            role="status"
+            className="relative -ml-px box-border inline-flex h-[28px] items-center gap-[6px] border border-[#CFCFCF] bg-white px-[10px] text-[13px] font-medium text-[#111111] tabular-nums"
+          >
+            <ToneSwatch tone={evidenceNav.tone} />
+            {evidenceNav.text}
+          </span>
+          <button
+            type="button"
+            aria-label="다음 근거"
+            disabled={evidenceNav.disabled}
+            onClick={evidenceNav.onNext}
+            className={`${segmentClass(2, 3, false)} ${STEP_BUTTON_CLASS}`}
+          >
+            <StepIcon next />
+          </button>
         </div>
-        <div
-          className={`mt-[12px] flex flex-wrap items-center gap-[8px] border-t border-t-[#E4E4E4] pt-[12px] ${
-            showLegend ? "justify-between" : "justify-end"
-          }`}
-        >
-          {showLegend && (
-            <span className="text-[12px] leading-[16px] text-[#505050]">
-              밑줄은 AI가 근거로 쓴 문장, 색 면은 지금 고른 항목의 근거입니다.
-            </span>
-          )}
-          {/* 원문보기 화면으로 가는 링크다(디자인의 버튼 모양 그대로). */}
-          <Link href={originalHref} className={`${BUTTON_SECONDARY_CLASS} h-[28px] scroll-m-[8px] px-[10px] leading-[normal]`}>
-            원문보기
-          </Link>
-        </div>
+        {showLegend && (
+          <ul
+            aria-label="평가 요소별 형광펜 색"
+            className="flex flex-wrap items-center gap-x-[10px] gap-y-[4px] text-[12px] leading-[16px] text-[#505050]"
+          >
+            {legend.map((item) => (
+              <li key={item.id} className="inline-flex items-center gap-[5px]">
+                <ToneSwatch tone={item.tone} />
+                {item.name}
+              </li>
+            ))}
+          </ul>
+        )}
+        {/* 원문보기 화면으로 가는 링크다(디자인의 버튼 모양 그대로). */}
+        <Link href={originalHref} className={`${BUTTON_SECONDARY_CLASS} ml-auto h-[28px] scroll-m-[8px] px-[10px] leading-[normal]`}>
+          원문보기
+        </Link>
+        {/* 고른 근거의 출처와 AI 가 적은 이유 (근거 문장 목록이 곁에 없을 때, 원본 아래에서 바로 읽는다) */}
+        {showEvidenceNote !== "never" && evidenceNav.current !== null && (
+          <p
+            className={`m-0 animate-fade-in basis-full text-[13px] leading-[19px] text-[#111111] [overflow-wrap:anywhere] break-keep ${
+              showEvidenceNote === "stacked" ? "hidden @max-[700px]/bench:block" : ""
+            }`}
+          >
+            <span className="mr-[8px] text-[12px] text-[#505050]">{evidenceNav.current.source}</span>
+            {evidenceNav.current.reason}
+          </p>
+        )}
       </div>
     </section>
+  );
+}
+
+/** 근거 줄의 이전·다음 버튼: 28px 정사각형. 근거가 없으면 옅은 회색이고 눌리지 않는다. */
+const STEP_BUTTON_CLASS = "h-[28px] w-[28px] scroll-m-[8px] justify-center p-0 disabled:cursor-default disabled:text-[#AEAEAE]";
+
+/** 근거 줄의 꺾쇠 (선은 글자색을 따른다) */
+function StepIcon({ next }: { next: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-[14px] w-[14px]"
+    >
+      <path d={next ? "M6 3.5 10.5 8 6 12.5" : "M10 3.5 5.5 8l4.5 4.5"} />
+    </svg>
   );
 }
 

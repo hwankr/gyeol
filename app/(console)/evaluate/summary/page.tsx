@@ -32,7 +32,7 @@ function SummaryByCode() {
   const applicant = findEvaluationApplicant(applicants, useSearchParams().get("code"));
   if (applicant === undefined) return <EvaluateMissing note={`${ADMISSION.trackFull} · ${ADMISSION.unit}`} />;
   // 지원자가 바뀌면 새로 그려서 고른 평가 요소·서류 구분·안내 글을 처음 상태로 시작한다(저장한 평가는 저장소에 있어 그대로다).
-  return <Summary key={applicant.code} applicant={applicant} />;
+  return <Summary key={`${applicant.code}@${applicant.stamp ?? ""}`} applicant={applicant} />;
 }
 
 function Summary({ applicant }: { applicant: EvaluationApplicant }) {

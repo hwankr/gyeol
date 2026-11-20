@@ -3,22 +3,15 @@ import { useEvaluationData } from "@/hooks/useEvaluationData";
 import { ADMISSION } from "@/lib/admission";
 import {
   EMPTY_EVALUATION,
-  documentAreasOf,
   effectiveRecord,
-  evaluateOriginalPath,
   evaluationBasis,
   evaluationStatus,
-  evidenceSlotCount,
-  evidenceSlotsOf,
-  passageSource,
-  passagesIn,
   queuePosition,
-  slotOf,
   type EvaluationMark,
   type EvaluationRecord,
 } from "@/lib/evaluate/evaluation";
 import { updateEvaluation } from "@/lib/evaluate/evaluationStorage";
-import { INITIAL_DOCUMENT_AREA, type DocumentArea, type EvaluationApplicant } from "@/lib/evaluate/sampleEvaluations";
+import type { EvaluationApplicant } from "@/lib/evaluate/sampleEvaluations";
 
 /** 저장소에 쓰지 못했을 때의 안내 (이 페이지의 메모리에는 남아 있다) */
 const UNSAVED_NOTE = "브라우저 저장소에 쓰지 못했습니다. 이 탭을 닫으면 지금 내용이 사라집니다.";
@@ -28,22 +21,22 @@ const MARKS: readonly { key: EvaluationMark; label: string; onNote: string; offN
   { key: "recheck", label: "재검토 요청", onNote: "재검토를 요청했습니다.", offNote: "재검토 요청을 거두었습니다." },
 ];
 
-/** 원문의 조각이 어떻게 보이는지: 지금 고른 평가 요소의 근거 / 다른 요소의 근거 / 근거 아님 */
-export type SegmentEmphasis = "selected" | "other" | "none";
-
 /**
  * 총평 화면과 세부 항목 평가 화면이 같이 쓰는 지원자 한 명의 평가 상태: 지금 평가(저장한 평가 또는 처음 상태), 고치기(쓸 때마다 저장),
- * 임시저장, 보류·재검토 요청 표시, 가림 누락 신고, 서류 원문(서류 구분 고르기, 근거 강조), 원문보기 화면의 주소, 평가 순서의 앞뒤 지원자.
- * 지원자가 바뀌면 이 훅을 쓰는 컴포넌트를 새로 그린다(key). 그래서 안내 글·서류 구분은 지원자마다 처음 상태로 시작한다.
+ * 임시저장, 보류·재검토 요청 표시, 가림 누락 신고, 평가 순서의 앞뒤 지원자. 서류 원문은 hooks/useEvaluationDocument.ts 가 맡는다.
+ * 지원자가 바뀌면 이 훅을 쓰는 컴포넌트를 새로 그린다(key). 그래서 안내 글은 지원자마다 처음 상태로 시작한다.
  * pathOf 는 앞뒤 지원자로 갈 주소를 만든다(총평은 총평으로, 세부 항목 평가는 같은 평가 요소의 세부 항목 평가로).
+ * noteScope 는 안내 글이 속한 범위다: 범위가 바뀌면(세부 항목 평가에서 평가 요소를 바꿈) 앞의 범위에서 적은 안내 글은 보이지 않는다.
+ * 세부 항목 평가는 평가 요소를 바꿔도 새로 그리지 않는다(원본 PDF 를 보던 자리가 그대로 남게). 그래서 안내 글만 범위로 가른다.
  */
-export function useEvaluationSession(applicant: EvaluationApplicant, pathOf: (code: string) => string) {
+export function useEvaluationSession(applicant: EvaluationApplicant, pathOf: (code: string) => string, noteScope = "") {
   const { elements, criteriaVersion, stored, unsaved, applicants } = useEvaluationData();
   const record = effectiveRecord(applicant, stored, elements);
   const locked = record?.status === "submitted";
-  /** 방금 한 일의 안내 ("방금 임시 저장했습니다." 등). 다른 것을 고치면 지운다. */
-  const [note, setNote] = useState("");
-  const [area, setArea] = useState<DocumentArea>(INITIAL_DOCUMENT_AREA);
+  /** 방금 한 일의 안내 ("방금 임시 저장했습니다." 등)와 그 글을 적은 범위. 다른 것을 고치면 지운다. */
+  const [noteState, setNoteState] = useState({ text: "", scope: noteScope });
+  const note = noteState.scope === noteScope ? noteState.text : "";
+  const setNote = (text: string) => setNoteState({ text, scope: noteScope });
   /** 앞뒤 지원자로 가는 링크 (제출한 뒤 초점을 옮길 곳) */
   const nextLinkRef = useRef<HTMLAnchorElement>(null);
   const backLinkRef = useRef<HTMLAnchorElement>(null);
@@ -90,36 +83,6 @@ export function useEvaluationSession(applicant: EvaluationApplicant, pathOf: (co
   const queue = queuePosition(applicants, applicant.code);
   const mark = MARKS.find((item) => item.key === record?.mark);
 
-  /**
-   * 서류 원문: 고른 서류 구분의 원문과 조각마다의 강조. highlightIndex 는 근거를 강조할 평가 요소의 순번이다.
-   * 조각이 여러 요소의 근거면(올린 지원자의 겹친 구절) 지금 요소가 그 가운데 있을 때 "selected", 없으면 "other" 다.
-   */
-  function documentView(highlightIndex: number) {
-    const selectedSlot = slotOf(applicant, highlightIndex);
-    const slotLimit = evidenceSlotCount(applicant, elements.length);
-    return {
-      areas: documentAreasOf(applicant).map((item) => ({ area: item, on: item === area, onPick: () => setArea(item) })),
-      passages: passagesIn(applicant, area).map((passage) => ({
-        id: passage.id,
-        source: passageSource(passage),
-        // 올린 지원자의 원문은 실제 PDF 의 쪽으로 가는 링크가 있다(원문보기 화면이 그 항목의 자리를 보여 준다).
-        page:
-          passage.origin === undefined
-            ? null
-            : { label: `${passage.origin.page}쪽`, href: evaluateOriginalPath(applicant.code, passage.origin.sectionId) },
-        segments: passage.segments.map((segment, index) => {
-          const slots = evidenceSlotsOf(segment, slotLimit);
-          const emphasis: SegmentEmphasis = slots.length === 0 ? "none" : slots.includes(selectedSlot) ? "selected" : "other";
-          return { key: `${passage.id}-${index}`, text: segment.text, emphasis };
-        }),
-      })),
-      maskReported: record?.maskReported === true,
-      onToggleMaskReport: toggleMaskReport,
-      // 원문보기 화면(/evaluate/original). 올린 지원자는 그 학생부의 분석 결과를, 예시 지원자는 미리 만든 샘플 결과를 보여 준다.
-      originalHref: evaluateOriginalPath(applicant.code),
-    };
-  }
-
   return {
     elements,
     criteriaVersion,
@@ -154,6 +117,8 @@ export function useEvaluationSession(applicant: EvaluationApplicant, pathOf: (co
       on: record?.mark === item.key,
       onToggle: () => toggleMark(item.key),
     })),
-    documentView,
+    /** 가림 누락을 신고했는지와 신고하기·거두기 (서류 원문의 머리 줄에 있다) */
+    maskReported: record?.maskReported === true,
+    onToggleMaskReport: toggleMaskReport,
   };
 }
