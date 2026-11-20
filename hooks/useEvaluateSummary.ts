@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEvaluateLinkage } from "@/hooks/useEvaluateLinkage";
 import { useEvaluationDocument } from "@/hooks/useEvaluationDocument";
 import { useEvaluationSession } from "@/hooks/useEvaluationSession";
 import { EVALUATE_PATH, HOME_CRUMB } from "@/lib/consoleMenu";
@@ -28,7 +29,8 @@ const GROWTH_COUNT_MAX = 5;
 const EVIDENCE_LIST_MARGIN = 32;
 
 /**
- * 평가하기 · 총평 화면 상태: 지원자 한 명의 학생 성장 요약, 서류 원문, 항목별 AI 점수와 근거(평가 요소 고르기), 내 평가 입력
+ * 평가하기 · 총평 화면 상태: 지원자 한 명의 학생 성장 요약, 서류 원문, 항목별 AI 점수와 근거(평가 요소 고르기), 학년별 연계
+ * (hooks/useEvaluateLinkage.ts), 내 평가 입력
  * (요소별 내 점수, AI 점수와 다른 요소의 수정 사유, 종합 의견, 보류·재검토 요청, 제출), 제출한 뒤의 다른 위원 의견.
  * 고친 값은 그때마다 저장된다(hooks/useEvaluationSession.ts). 제출한 평가는 잠겨 고칠 수 없다.
  * 근거 문장을 누르면 서류 원문(올린 지원자는 실제 PDF)이 그 자리로 스크롤되고 그 구절이 짙게 표시된다(hooks/useEvaluationDocument.ts).
@@ -67,6 +69,32 @@ export function useEvaluateSummary(applicant: EvaluationApplicant) {
   /** 근거 문장 목록의 스크롤 영역(넓은 배치에서만 안에서 스크롤한다)과 고른 근거 문장 */
   const evidenceListRef = useRef<HTMLDivElement>(null);
   const focusedEvidenceRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * 학년별 연계의 "원문에서 보기": 그 근거를 골라 서류 원문을 그 자리로 보내고, 서류 원문 단이 화면에 다 보이지 않으면 보이게 문서를 스크롤한다
+   * (넓은 배치에서는 서류 원문이 학년별 연계 상자보다 한 화면쯤 위에 있다). 근거 문장을 누르는 것과 달리 문서를 움직이는 것은 이 버튼뿐이다.
+   */
+  function showEvidenceInDocument(evidenceId: string) {
+    document.onSelectEvidence(evidenceId);
+    const panel = document.view.panelRef.current;
+    if (panel === null) return;
+    const rect = panel.getBoundingClientRect();
+    if (rect.top >= 0 && rect.bottom <= window.innerHeight) return;
+    panel.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      // 단이 화면보다 길면(좁은 배치의 긴 원문) 위쪽을 맞춘다.
+      block: rect.height > window.innerHeight ? "start" : "center",
+    });
+  }
+
+  /** 학년별 연계 상자: 탭은 위의 평가 요소 선택과 같은 것이다(탭을 바꾸면 근거 목록과 원문의 짙은 형광펜도 같이 바뀐다) */
+  const linkage = useEvaluateLinkage({
+    applicant,
+    elements,
+    selectedIndex,
+    onPickElement: setSelectedId,
+    onShowEvidence: showEvidenceInDocument,
+  });
 
   // 근거를 고를 때마다(원본의 형광펜이나 서류 원문의 이전·다음으로 고른 것 포함) 그 근거 문장이 목록 안에서 보이게 목록만 스크롤한다.
   // 목록이 안에서 스크롤하지 않는 배치(좁은 배치)에서는 아무것도 하지 않는다(문서를 움직이지 않는다).
@@ -169,6 +197,7 @@ export function useEvaluateSummary(applicant: EvaluationApplicant) {
     },
     evidenceListRef,
     focusedEvidenceRef,
+    linkage,
     mine: {
       locked,
       /** 세부 평가 항목 가져오기: 요소마다 세부 항목 평가 화면으로 가는 링크와 응답 수 */

@@ -1,4 +1,4 @@
-import type { AnalysisResult, Assessment } from "@/types/analysis";
+import type { AnalysisResult, Assessment, Linkage } from "@/types/analysis";
 import { DOCUMENT_AREAS as AREA_CATEGORIES, type UploadedApplicant } from "../applicants/uploaded.ts";
 import { PREP_CRITERIA_ID, rubricFingerprint } from "../prep/analysisCriteria.ts";
 import { recordFormGroup } from "../recordForm.ts";
@@ -8,12 +8,15 @@ import { evidenceSource } from "./evaluation.ts";
 import {
   EVALUATION_APPLICANTS,
   type ApplicantEvidence,
+  type ApplicantLink,
+  type ApplicantLinkCard,
   type DocumentArea,
   type EvaluationApplicant,
   type GrowthPoint,
   type Passage,
   type PassageSegment,
   type SlotAssessment,
+  type SlotLinkage,
 } from "./sampleEvaluations.ts";
 
 // 올린 지원자(학생부 올리기 화면에서 분석한 학생부, lib/applicants/uploaded.ts)를 평가하기 화면의 지원자로 바꾼다. 순수 함수.
@@ -98,6 +101,7 @@ export function splitBySlots(
  * - 근거 문장: 요소마다 근거 구절과 AI 가 적은 이유를 원문 순서대로(항목 순서, 항목 안에서는 구절이 나오는 순서).
  *   근거마다 서류 원문에서의 자리(place)와 분석 결과의 근거 id·항목 id(origin: 실제 PDF 에서 자리를 찾는 열쇠)를 붙인다.
  * - 학년별 성장: 이름표와 지수는 AI 제안, 건수는 그 학년 항목에서 나온 근거 구절의 수.
+ * - 학년별 연계: 분석 결과에 연계가 있으면 자리별 카드와 연결로 옮긴다(applicantLinkage). 없으면 연계가 없는 지원자다.
  * - 처음 평가 상태는 없고("대기") 다른 위원 의견도 없다. 원문보기는 이 분석 결과를 연다. 평가는 이 분석(남긴 때)에 묶는다(stamp).
  */
 export function uploadedEvaluationApplicant(
@@ -112,6 +116,9 @@ export function uploadedEvaluationApplicant(
   const passages: Passage[] = [];
   const evidenceLists: ApplicantEvidence[][] = elements.map(() => []);
   const countByGrade = new Map<number, number>();
+  /** 학생부 항목 id → 그 항목의 서류 원문, 분석 결과의 근거 id → 근거 문장 id (학년별 연계를 옮길 때 쓴다) */
+  const passageOfSection = new Map<string, Passage>();
+  const evidenceIdOf = new Map<string, string>();
   sections.forEach((section, sectionIndex) => {
     const area = areaOf(section.category);
     if (area === null) return;
@@ -138,6 +145,7 @@ export function uploadedEvaluationApplicant(
       ),
     };
     passages.push(passage);
+    passageOfSection.set(section.id, passage);
     // 원문에서 나오는 순서대로(원문에서 찾지 못한 구절은 그 항목의 맨 뒤). Array.prototype.sort 는 안정 정렬이라 같은 자리면 받은 순서다.
     const ordered = [...marks].sort(
       (a, b) => (a.start < 0 ? Number.MAX_SAFE_INTEGER : a.start) - (b.start < 0 ? Number.MAX_SAFE_INTEGER : b.start),
@@ -145,6 +153,7 @@ export function uploadedEvaluationApplicant(
     for (const mark of ordered) {
       const list = evidenceLists[mark.slot];
       const reason = mark.evidence.reason.trim();
+      evidenceIdOf.set(mark.evidence.id, `${item.code}-e${mark.slot}-${list.length}`);
       list.push({
         id: `${item.code}-e${mark.slot}-${list.length}`,
         source: evidenceSource(passage),
@@ -182,6 +191,10 @@ export function uploadedEvaluationApplicant(
     };
   }) as unknown as EvaluationApplicant["growth"];
   const summary = assessment.summary.trim();
+  const linkage =
+    item.result.linkage === undefined
+      ? undefined
+      : applicantLinkage(item.result.linkage, slotOfCriterion, elements.length, passageOfSection, evidenceIdOf);
 
   return {
     code: item.code,
@@ -192,9 +205,69 @@ export function uploadedEvaluationApplicant(
     seed: null,
     peers: [],
     evidences: evidenceLists,
+    ...(linkage === undefined ? {} : { linkage }),
     original: item.result,
     stamp: item.at,
   };
+}
+
+/**
+ * 분석 결과의 학년별 연계를 평가할 지원자의 자리별 연계로 옮긴다(자리 = 평가 요소 순번, slotCount 개).
+ * - 카드: 기준이 평가 요소에 있고, 항목이 서류 원문에 나오며 학년이 1~3 이고, 근거 가운데 근거 문장으로 옮겨진 것이 하나라도 있어야 한다.
+ *   옮기지 못한 근거는 빼고, 남은 것이 없으면 카드를 버린다. 제목이 비면 그 원문의 과목·활동 이름을 쓴다. 깊이가 1~3 이 아니면 null.
+ * - 연결: 두 카드가 같은 자리에 남아 있고 앞 카드의 학년이 뒤 카드보다 낮아야 한다. 기록에 적힌 연속은 그 구절이 든 항목이 서류 원문에
+ *   나오고 구절이 비지 않았을 때만이고, 아니면 AI 가 제안한 연관으로 둔다.
+ * 저장소에서 읽은 결과는 모양만 확인된 것이라(lib/validateResult.ts 의 isLinkage) 내용이 어긋난 카드·연결은 여기서 걸러진다.
+ */
+function applicantLinkage(
+  linkage: Linkage,
+  slotOfCriterion: ReadonlyMap<string, number>,
+  slotCount: number,
+  passageOfSection: ReadonlyMap<string, Passage>,
+  evidenceIdOf: ReadonlyMap<string, string>,
+): SlotLinkage[] {
+  const slots = Array.from({ length: slotCount }, () => ({ cards: [] as ApplicantLinkCard[], links: [] as ApplicantLink[] }));
+  const placed = new Map<string, { slot: number; card: ApplicantLinkCard }>();
+  for (const card of linkage.cards) {
+    const slot = slotOfCriterion.get(card.criterionId);
+    const passage = passageOfSection.get(card.sectionId);
+    if (slot === undefined || slot >= slotCount || passage === undefined || passage.grade === null || placed.has(card.id)) continue;
+    const evidenceIds = card.evidenceIds.flatMap((id) => {
+      const mapped = evidenceIdOf.get(id);
+      return mapped === undefined ? [] : [mapped];
+    });
+    if (evidenceIds.length === 0) continue;
+    const title = card.title.trim();
+    const converted: ApplicantLinkCard = {
+      id: card.id,
+      passageId: passage.id,
+      grade: passage.grade,
+      title: title === "" ? passage.subject : title,
+      theme: card.theme.trim(),
+      depth: card.depth === 1 || card.depth === 2 || card.depth === 3 ? card.depth : null,
+      evidenceIds,
+    };
+    slots[slot].cards.push(converted);
+    placed.set(card.id, { slot, card: converted });
+  }
+  const linkIds = new Set<string>();
+  for (const link of linkage.links) {
+    const from = placed.get(link.fromCardId);
+    const to = placed.get(link.toCardId);
+    if (from === undefined || to === undefined || from.slot !== to.slot || from.card.grade >= to.card.grade || linkIds.has(link.id)) continue;
+    linkIds.add(link.id);
+    const quote = link.kind === "stated" ? (link.statedQuote?.trim() ?? "") : "";
+    const statedPassage = quote === "" || link.statedSectionId === undefined ? undefined : passageOfSection.get(link.statedSectionId);
+    slots[from.slot].links.push({
+      id: link.id,
+      fromCardId: link.fromCardId,
+      toCardId: link.toCardId,
+      kind: statedPassage === undefined ? "suggested" : "stated",
+      stated: statedPassage === undefined ? null : { quote, passageId: statedPassage.id },
+      reason: link.reason.trim(),
+    });
+  }
+  return slots;
 }
 
 /** 평가할 지원자 목록과 올린 지원자의 수 */

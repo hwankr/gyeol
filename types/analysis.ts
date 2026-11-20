@@ -55,10 +55,47 @@ export type Assessment = {
   growth: GradeGrowth[];         // 1·2·3학년 순서로 세 건
 };
 
+/**
+ * 학년별 연계의 카드: 한 평가 요소의 근거 가운데 같은 항목에서 같은 활동을 가리키는 것들 (AI 제안).
+ * 평가하기 총평의 학년별 연계 상자가 학년 줄에 놓는다.
+ */
+export type LinkageCard = {
+  id: string;              // 예: "k1"
+  criterionId: string;     // Criterion.id
+  sectionId: string;       // 이 카드의 근거가 모두 든 항목 (학년이 1~3 인 항목)
+  evidenceIds: string[];   // Evidence.id, 1개 이상, 원문에 나오는 순서
+  title: string;           // 활동을 가리키는 짧은 명사구
+  theme: string;           // 관심 주제 태그. 없으면 빈 문자열
+  depth: 1 | 2 | 3 | null; // 탐구 깊이(1 수업 참여 수준, 2 주어진 과제 안의 탐구, 3 스스로 정한 심화). AI 가 주지 않은 카드는 null
+};
+
+/** 학년별 연계의 연결: 같은 평가 요소의 앞 학년 카드 → 뒤 학년 카드 (AI 제안. 인과를 뜻하지 않는다) */
+export type LinkageLink = {
+  id: string;               // 예: "n1"
+  criterionId: string;      // Criterion.id (두 카드의 기준과 같다)
+  fromCardId: string;       // 앞 학년 카드
+  toCardId: string;         // 뒤 학년 카드
+  kind: "stated" | "suggested"; // 기록에 적힌 연속 / AI 가 제안한 연관
+  statedQuote?: string;     // kind 가 "stated" 일 때만: 이어짐을 적은 원문 구절 (statedSectionId 항목의 text 에 글자 그대로 있다)
+  statedSectionId?: string; // 그 구절이 든 항목 (앞 카드나 뒤 카드의 항목)
+  reason: string;           // 이어진다고 본 까닭 한 문장
+};
+
+/** 학년별 연계 (lib/pipeline/linkEvidence.ts 가 만들고 lib/evaluate/linkage.ts 가 정리한다) */
+export type Linkage = {
+  cards: LinkageCard[];
+  links: LinkageLink[];
+};
+
 export type AnalysisResult = {
   criteria: DepartmentCriteria;
   sections: Section[];   // 블라인드 처리(lib/pipeline/blind.ts)를 거친 항목. 가리기 전 원문은 들어 있지 않다
   evidences: Evidence[];
   masks: { type: string; count: number }[]; // 블라인드 처리 내역: 가린 정보 종류(예: "학교명")와 가린 곳 수. 가린 것이 없으면 빈 배열
   assessment?: Assessment; // AI 제안. 전형 준비의 평가 기준으로 분석했을 때만 있다(그 밖의 학과 기준으로 분석한 결과와 예전 결과에는 없다)
+  /**
+   * 학년별 연계. /api/analyze 의 응답에는 없고, 분석한 뒤 브라우저가 /api/linkage 로 받아 붙인다(lib/linkageClient.ts).
+   * 없으면 연계가 아직 없는 분석이다(이 기능 전의 분석, 연결 찾기가 실패했거나 아직 하지 않은 분석).
+   */
+  linkage?: Linkage;
 };

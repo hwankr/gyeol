@@ -1,6 +1,7 @@
 import type { AnalysisResult } from "@/types/analysis";
 import type { PrepCriteria } from "./prep/criteria.ts";
 import { CONNECTION_ERROR, RequestCanceledError, readErrorMessage } from "./apiClient.ts";
+import { requestLinkage } from "./linkageClient.ts";
 import type { RecordPages } from "./recordPages.ts";
 import type { OpenedRecord, RecordImagePage } from "./recordPdf.ts";
 import { mergeRecordSections, readPageSections, type PageReading, type PageSection } from "./recordSections.ts";
@@ -55,15 +56,19 @@ export type AnalysisProgress =
   /** 이미지 쪽을 AI 가 읽는 중. done 은 다 읽은 쪽 수, total 은 읽어야 하는 쪽 수 */
   | { stage: "pages"; done: number; total: number }
   | { stage: "analyzing" }
+  /** 분석이 끝나 근거 사이의 학년별 연계를 찾는 중 (AI 를 한 번 더 부른다) */
+  | { stage: "linking" }
   /** 분석이 끝나 가린 쪽 그림을 만드는 중 */
   | { stage: "rendering" };
 
 /** 분석이 돌려주는 것 */
 export type AnalysisOutcome = {
-  /** 분석 결과(가려진 원문, 근거, AI 제안) */
+  /** 분석 결과(가려진 원문, 근거, AI 제안, 만들었으면 학년별 연계) */
   result: AnalysisResult;
   /** 가린 쪽 그림과 항목·근거의 자리. 만들지 못했으면 null(원문보기는 글만 보여 준다) */
   pages: RecordPages | null;
+  /** 학년별 연계를 결과에 붙였는지. 근거가 없어 만들 것이 없었거나 연결 찾기가 실패했으면 false */
+  linked: boolean;
 };
 
 /**
@@ -73,7 +78,9 @@ export type AnalysisOutcome = {
  * 3. 항목을 쪽 순서로 합쳐(mergeRecordSections) 평가 기준과 함께 POST /api/analyze 로 보낸다.
  *    평가 기준은 { version, department, elements } 만 보낸다(모집요강 파일 이름과 변경 사항(guideline)은 분석에 쓰이지 않는다.
  *    배점은 저장 값 확인이 합계를 보므로 들어가지만 서버는 AI 에 보내지 않는다).
- * 4. 받은 결과(가려진 원문)와 보낸 항목(가리기 전)을 견주어 가린 정보의 자리를 덮은 쪽 그림을 만든다(record.buildPages).
+ * 4. 근거가 있으면 받은 결과로 학년별 연계를 받아 결과에 붙인다(POST /api/linkage. lib/linkageClient.ts). AI 를 한 번 더 부른다.
+ *    실패해도 분석은 성공이다(linked 가 false 이고 결과에 linkage 가 없다. 평가하기의 총평에서 다시 만들 수 있다).
+ * 5. 받은 결과(가려진 원문)와 보낸 항목(가리기 전)을 견주어 가린 정보의 자리를 덮은 쪽 그림을 만든다(record.buildPages).
  *    만들지 못해도 분석은 성공이다(pages 가 null).
  * - onProgress 로 단계가 바뀔 때와 이미지 쪽을 하나 읽을 때마다 알린다.
  * - 실패하면 화면에 보여 줄 문구를 담은 Error 를 던진다. 서버가 준 { error } 문구가 있으면(공백만 있는 문자열 제외) 그대로 쓴다.
@@ -98,10 +105,24 @@ export async function requestAnalysis(
     const data = await postJson("/api/analyze", { sections, prepCriteria: { version, department, elements } }, signal, FALLBACK_ERROR);
     if (!isAnalysisResult(data)) throw new Error(FALLBACK_ERROR);
 
+    // 분석이 끝난 뒤 근거 사이의 학년별 연계를 따로 받아 결과에 붙인다. 실패해도(취소가 아니면) 분석은 성공이고 연계 없이 남긴다
+    // (평가하기의 총평에서 다시 만들 수 있다). 근거가 없으면 연계를 만들 것이 없어 부르지 않는다.
+    let result: AnalysisResult = data;
+    let linked = false;
+    if (data.evidences.length > 0) {
+      onProgress?.({ stage: "linking" });
+      try {
+        result = { ...data, linkage: await requestLinkage(data, signal) };
+        linked = true;
+      } catch (error) {
+        if (error instanceof RequestCanceledError || signal?.aborted) throw new RequestCanceledError();
+      }
+    }
+
     onProgress?.({ stage: "rendering" });
-    const pages = await record.buildPages(sections, data, signal);
+    const pages = await record.buildPages(sections, result, signal);
     if (signal?.aborted) throw new RequestCanceledError();
-    return { result: data, pages };
+    return { result, pages, linked };
   } finally {
     record.close();
   }

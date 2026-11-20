@@ -1,6 +1,6 @@
-import type { AnalysisResult, Section } from "@/types/analysis";
+import type { AnalysisResult, Linkage, Section } from "@/types/analysis";
 import { ADMISSION } from "../admission.ts";
-import { isAnalysisResult } from "../validateResult.ts";
+import { isAnalysisResult, isLinkage } from "../validateResult.ts";
 import type { Applicant } from "./applicants.ts";
 import { SAMPLE_APPLICANT_COUNT, sampleApplicantCode } from "./sampleApplicants.ts";
 
@@ -59,7 +59,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** 항목 하나를 확인한다: 코드가 "A-" + 네 자리이고 번호가 315 이상, at 이 날짜로 읽힘, result 가 결과 모양 검사(isAnalysisResult)를 통과. */
+/**
+ * 항목 하나를 확인한다: 코드가 "A-" + 네 자리이고 번호가 315 이상, at 이 날짜로 읽힘, result 가 결과 모양 검사(isAnalysisResult)를 통과.
+ * result 의 학년별 연계(linkage)만 모양이 틀리면 연계를 뺀 결과로 남긴다.
+ */
 function parseItem(value: unknown): UploadedApplicant | null {
   if (!isRecord(value)) return null;
   const { code, at, result } = value;
@@ -67,8 +70,16 @@ function parseItem(value: unknown): UploadedApplicant | null {
   const number = codeNumber(code);
   if (number === null || number < FIRST_UPLOADED_NUMBER) return null;
   if (Number.isNaN(Date.parse(at))) return null;
-  if (!isAnalysisResult(result)) return null;
-  return { code, at, result };
+  // 학년별 연계의 모양이 틀리면 연계만 버리고 지원자는 남긴다(연계는 다시 만들 수 있지만 분석 결과는 그렇지 않다).
+  const checked = isRecord(result) && result.linkage !== undefined && !isLinkage(result.linkage) ? withoutLinkage(result) : result;
+  if (!isAnalysisResult(checked)) return null;
+  return { code, at, result: checked };
+}
+
+function withoutLinkage(result: Record<string, unknown>): Record<string, unknown> {
+  const { linkage: _linkage, ...rest } = result;
+  void _linkage;
+  return rest;
 }
 
 /**
@@ -111,6 +122,22 @@ export function arrangeUploadedApplicants(items: readonly UploadedApplicant[]): 
   unique.sort((a, b) => (codeNumber(a.code) ?? 0) - (codeNumber(b.code) ?? 0));
   const kept = unique.slice(-MAX_UPLOADED_APPLICANTS);
   return kept.length === 0 ? NO_UPLOADED_APPLICANTS : kept;
+}
+
+/**
+ * 올린 지원자 한 명의 분석 결과에 학년별 연계를 붙인 새 목록. 코드와 남긴 때(at)가 모두 같은 지원자만 바꾸고(코드는 다른 학생부에
+ * 다시 붙을 수 있다), 그 지원자의 코드·남긴 때·결과의 다른 필드는 그대로 둔다(적어 둔 평가와 가린 쪽 그림이 코드와 남긴 때에 묶여 있다).
+ * 그런 지원자가 없으면 null 이다. 받은 목록은 바꾸지 않는다.
+ */
+export function withUploadedLinkage(
+  items: readonly UploadedApplicant[],
+  code: string,
+  at: string,
+  linkage: Linkage,
+): readonly UploadedApplicant[] | null {
+  const index = items.findIndex((item) => item.code === code && item.at === at);
+  if (index < 0) return null;
+  return items.map((item, position) => (position === index ? { ...item, result: { ...item.result, linkage } } : item));
 }
 
 /**

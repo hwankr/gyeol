@@ -1,4 +1,4 @@
-import type { AnalysisResult } from "@/types/analysis";
+import type { AnalysisResult, Linkage } from "@/types/analysis";
 import { UPLOADED_APPLICANTS_STORAGE_KEY } from "../constants.ts";
 import {
   NO_UPLOADED_APPLICANTS,
@@ -6,6 +6,7 @@ import {
   nextUploadedCode,
   parseUploadedApplicants,
   serializeUploadedApplicants,
+  withUploadedLinkage,
   type UploadedApplicant,
 } from "./uploaded.ts";
 
@@ -75,6 +76,29 @@ export function addUploadedApplicant(result: AnalysisResult, now: Date): string 
   memoryItems = saved ? NO_UPLOADED_APPLICANTS : arrangeUploadedApplicants(pending);
   notify();
   return code;
+}
+
+/**
+ * 올린 지원자 한 명의 분석 결과에 학년별 연계를 붙여 남긴다(평가하기 총평의 "연계 만들기"). 붙였으면 true.
+ * 저장소를 이 순간 다시 읽고, 코드와 남긴 때(at)가 모두 같은 지원자를 찾아 그 결과의 linkage 만 바꾼다(코드·남긴 때는 그대로라
+ * 적어 둔 평가와 가린 쪽 그림이 그대로 묶여 있다).
+ * - 저장소의 목록에 있으면 바꾼 목록을 쓴다. 저장소를 읽지 못했거나 쓰지 못하면 붙이지 않고 false 다(화면이 다시 누르게 한다).
+ * - 저장소에 쓰지 못해 메모리에만 둔 지원자면 메모리의 것을 바꾼다(다음에 저장할 수 있을 때 같이 저장된다).
+ * - 그 지원자가 어디에도 없으면(목록에서 밀려남) 아무것도 하지 않고 false 다.
+ */
+export function setUploadedLinkage(code: string, at: string, linkage: Linkage): boolean {
+  const read = readStored();
+  const inMemory = withUploadedLinkage(memoryItems, code, at, linkage);
+  if (inMemory !== null) {
+    memoryItems = inMemory;
+    notify();
+    return true;
+  }
+  if (!read.ok) return false;
+  const changed = withUploadedLinkage(read.items, code, at, linkage);
+  if (changed === null || !writeStored(changed)) return false;
+  notify();
+  return true;
 }
 
 /** 저장소를 읽는다. 읽으면 "마지막으로 읽은 목록"을 바꾸고 그 목록을, 읽지 못하면 그 목록을 그대로 두고 ok: false 를 돌려준다. */

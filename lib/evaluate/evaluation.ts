@@ -9,6 +9,7 @@ import {
   EXTRA_DOCUMENT_AREAS,
   SLOT_COUNT,
   type ApplicantEvidence,
+  type ApplicantLinkCard,
   type DocumentArea,
   type EvaluationApplicant,
   type EvaluationSeed,
@@ -16,6 +17,7 @@ import {
   type PassageSegment,
   type Slot,
   type SlotAssessment,
+  type SlotLinkage,
 } from "./sampleEvaluations.ts";
 
 // 평가하기 화면의 평가 형식, 저장 값 확인, 화면용 계산. 브라우저와 Node 어디서나 돈다(순수 함수).
@@ -394,6 +396,45 @@ export function evidencesOf(
     });
   }
   return items;
+}
+
+/** 연계는 있지만 그 자리에 카드가 없을 때 쓰는 값 */
+const NO_SLOT_LINKAGE: SlotLinkage = Object.freeze({ cards: Object.freeze([]), links: Object.freeze([]) });
+
+/** 학년별 연계의 학년 줄 */
+export const LINKAGE_COLUMN_GRADES = [1, 2, 3] as const;
+
+/**
+ * 그 요소의 학년별 연계(카드와 연결). 연계가 없는 지원자면 null 이다(연계 예시를 넣지 않은 예시 지원자, 연계가 아직 없는 분석).
+ * 근거로 쓰이지 않는 자리(요소가 자리보다 적을 때의 뒤 자리. evidenceSlotCount)와 그 자리의 값이 없을 때는 빈 연계다.
+ * 요소 순번 → 자리는 근거 문장과 같은 규칙이다(evidencesOf).
+ */
+export function linkageOf(applicant: EvaluationApplicant, elementIndex: number, elementCount: number): SlotLinkage | null {
+  if (applicant.linkage === undefined) return null;
+  const slot = slotOf(applicant, elementIndex);
+  if (slot >= evidenceSlotCount(applicant, elementCount)) return NO_SLOT_LINKAGE;
+  return applicant.linkage[slot] ?? NO_SLOT_LINKAGE;
+}
+
+/**
+ * 학년 줄(1·2·3학년 순서, 늘 셋)마다 그 학년의 카드. 한 줄 안에서는 서류 원문 순서이고(지원자의 원문 목록에서의 자리),
+ * 같은 원문의 카드는 받은 순서다. 원문 목록에 없는 원문의 카드는 그 줄의 맨 뒤에 둔다.
+ */
+export function linkageColumns(
+  applicant: Pick<EvaluationApplicant, "passages">,
+  linkage: SlotLinkage,
+): readonly (readonly ApplicantLinkCard[])[] {
+  const position = new Map(applicant.passages.map((passage, index) => [passage.id, index]));
+  const at = (card: ApplicantLinkCard) => position.get(card.passageId) ?? Number.MAX_SAFE_INTEGER;
+  return LINKAGE_COLUMN_GRADES.map((grade) =>
+    // Array.prototype.sort 는 안정 정렬이라 같은 원문이면 받은 순서다.
+    linkage.cards.filter((card) => card.grade === grade).sort((a, b) => at(a) - at(b)),
+  );
+}
+
+/** 학년별 연계 카드에 적는 출처: "세특 · 경제" (학년은 카드가 놓인 줄이 말해 준다) */
+export function linkCardSource(passage: Passage): string {
+  return `${passage.area} · ${passage.subject}`;
 }
 
 /**
