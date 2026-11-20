@@ -617,6 +617,7 @@ npx tsx scripts/check-consensus.ts   # 공통 기준 초안의 위원 의견 확
 npx tsx scripts/check-evaluate.ts    # 평가하기의 AI 제안 정리·올린 지원자 연결 검사 (AI 를 부르지 않는다)
 npx tsx scripts/check-decision.ts    # 선발 결정의 최종 평가·순위·비교 기준·비교할 두 사람 계산과 예시 자료 검사 (AI 를 부르지 않는다)
 npx tsx scripts/check-applicants.ts  # 지원자 관리의 내 담당 지원자가 평가하기에 배정된 지원자와 같은지, 처음 보이는 수 검사 (AI 를 부르지 않는다)
+npx tsx scripts/check-agreement.ts   # 일치율 재기의 계산 검사: 문장 나누기, 인용 구절 → 문장, 표시 시트 읽기, 일치율·카파 (AI 를 부르지 않는다. 통과하면 `일치율 검사 통과: 64건`)
 ```
 
 `npx tsx scripts/check-parse.ts` 는 첫 줄에 `파싱 성공: 항목 57개, 경고 0개 (samples/virtual-student-record.pdf)` 를 출력하고, 이어서 항목별 개수와 경고 목록을 출력한다.
@@ -675,10 +676,10 @@ npm run make:sample
 ```
 
 저장소 루트에서 실행한다. 가상 학생부 PDF(`samples/virtual-student-record.pdf`)를 경영학과 기준으로 실제 파이프라인(`parsePdf` → `blind` → `extractEvidence`)에 한 번 돌려 `lib/mock/sample-result.json` 에 저장한다. 저장하는 결과는 가려진 항목과 블라인드 처리 내역(`masks`)을 담는다.
-Claude API 를 한 번 부르므로 비용이 든다(가상 학생부 기준 약 16~17초). `AI_API_KEY` 가 프로세스 환경에 없으면 `.env.local` 을 읽어 온다. 저장 전에 결과를 검사해 문제가 있으면 저장하지 않고 종료 코드 1 로 끝난다.
+Claude API 를 한 번 부르므로 비용이 든다(가상 학생부 기준 약 30초). `AI_API_KEY` 가 프로세스 환경에 없으면 `.env.local` 을 읽어 온다. 저장 전에 결과를 검사해 문제가 있으면 저장하지 않고 종료 코드 1 로 끝난다.
 출력은 항목 수, 근거 통과·버림 개수, 기준별 근거 수, 걸린 시간이다. `npx tsx scripts/make-sample.ts` 로도 같은 결과가 나온다. `sample-result.json` 은 손으로 고치지 않는다.
 
-지금 커밋된 `sample-result.json` 은 블라인드 처리를 넣기 전에 `make:sample` 로 만든 결과에, AI 를 다시 부르지 않고 `scripts/blind-sample.ts` 로 블라인드 처리를 적용한 것이다(근거는 그대로).
+지금 `sample-result.json` 은 근거를 기준마다 최대 12개 고르게 한 뒤 `make:sample` 로 다시 만든 것이다(근거 34개). 그 전의 파일은 블라인드 처리를 넣기 전에 만든 결과에, AI 를 다시 부르지 않고 `scripts/blind-sample.ts` 로 블라인드 처리를 적용한 것이었다. 그 스크립트는 그렇게 가리기 전에 만든 결과를 고칠 때만 쓴다.
 
 ```text
 npx tsx scripts/blind-sample.ts   # node scripts/blind-sample.ts 로도 돈다
@@ -688,6 +689,25 @@ npx tsx scripts/blind-sample.ts   # node scripts/blind-sample.ts 로도 돈다
 - 저장 전에 결과를 검사하고(`isAnalysisResult`, `validateResult`: 모든 근거의 `quote` 가 해당 항목 `text` 에 글자 그대로 있는지 등) 문제가 있으면 저장하지 않고 종료 코드 1 로 끝난다. 저장한 뒤 파일을 다시 읽어 같은 검사를 한 번 더 하고, 근거 수와 `masks`, 요약을 출력한다.
 - 이미 `masks` 가 있는 파일(이미 블라인드 처리된 파일)이면 가리지도 저장하지도 않고 검사만 한다. 가린 항목에 다시 적용하면 `masks` 가 빈 배열이 되어 처리 내역이 지워지기 때문이다.
 - 처리 전 파일의 `sections`·`evidences` 는 가리기 전 원문이므로, 실패할 때도 그 내용을 출력하지 않는다. 실패 출력은 경로와 고정 문구, 오류 종류·코드(예: 파일이 없으면 `Error, ENOENT`), 검사 문제 문장뿐이다. 검사 문제 문장에는 기준·항목·근거 id 와 블라인드 처리 내역의 종류 이름·순번·개수만 들어가고(예: `근거 e1: 인용 구절이 항목 s15 원문에 글자 그대로 없음`), 항목 원문·인용 구절·이유는 들어가지 않는다. JSON 이 아니면 `샘플 결과가 올바른 JSON 이 아닙니다: <경로>` 만 출력하고 JSON 해석 오류의 내용(파일 조각이 들어 있다)은 출력하지 않는다. `criteria` 가 객체가 아니거나 `sections`·`evidences` 가 배열이 아니면 `criteria 는 객체, sections·evidences 는 배열이어야 합니다` 를 출력한다. 모두 종료 코드 1 이다.
+
+## 근거 추출 재기 (일치율)
+
+AI 가 고른 근거를 얼마나 믿을 수 있는지를 숫자로 보려고 만든 스크립트다. 같은 학생부에서 사정관과 AI 가 고른 문장이 얼마나 겹치는지, 같은 학생부를 여러 번 분석하면 결과가 얼마나 흔들리는지를 잰다.
+
+```text
+npm run measure:sheet       # 사정관이 표시할 빈 시트(CSV) 만들기 (AI 를 부르지 않는다)
+npm run measure:runs        # 같은 학생부를 5번 분석해 흔들림 재기 (Claude API 를 5번 부른다)
+npm run measure:agreement   # 사정관끼리, AI 와 사정관, AI 끼리의 일치율 보기 (AI 를 부르지 않는다)
+```
+
+- 견주는 단위는 문장이다. AI 가 읽는 서술형 항목을 문장으로 나누고 (기준, 문장) 마다 골랐는지를 본다. AI 의 인용 구절은 그 구절이 걸친 문장을 고른 것으로 옮긴다. 일치율은 `둘 다 고른 문장 × 2 ÷ 두 쪽이 고른 문장 수의 합` 이다(고르지 않은 문장이 대부분이라 고른 것만으로 계산한다).
+- 기본 학생부는 가상 학생부(`samples/virtual-student-record.pdf`), 기준은 전형 준비의 기본 평가 기준이다. 다른 학생부는 `--pdf <경로>` 로 준다(글자가 들어 있는 PDF 만. 스캔본은 읽지 못한다).
+- 결과는 `measure/<PDF 이름>/` 에 둔다(`sheet.csv`, `ai-1.json` …). 학생부 원문이 들어 있어 `.gitignore` 에 넣어 두었다.
+- 사정관은 `sheet.csv` 를 복사해 엑셀로 열고, 근거라고 보는 문장의 기준 칸에 O 를 적어 같은 폴더에 저장한다(줄을 지우거나 순서를 바꾸지 않는다. 엑셀의 CP949 저장도 읽는다). 사정관 두 명 이상이 표시해야 "사람끼리" 와 "AI 와 사람" 을 견줄 수 있다.
+- `measure:runs` 는 `--effort`, `--max <개수|none>`, `--timeout <초>` 로 조건을 바꿔 잴 수 있다(그때는 폴더 이름에 조건이 붙는다). 사용법은 각 스크립트의 머리말에 있다.
+- 스크립트는 파일 이름·id·개수만 출력하고 학생부 원문은 출력하지 않는다.
+
+2026-11-20 에 가상 학생부 한 건으로 잰 값(실행끼리의 일치율): 기준마다 최대 6개였을 때 평균 76%·최저 50%(10번), 12개로 평균 87%·최저 85%(5번), 개수 제한이 없으면 평균 81% 에 고르는 개수가 54~81개로 흔들렸다. 근거로 볼 문장이 기준마다 12~17개쯤 꾸준히 나오는데 6개만 고르게 한 것이 흔들림의 주된 원인이라 상한을 12개로 바꿨다. 생각 깊이(low·medium)는 차이가 없었다. 사정관과의 일치율은 아직 재지 못했다(표시한 시트가 없다).
 
 ## 폴더 구조
 
@@ -838,15 +858,18 @@ lib/
   errorKind.ts            서버 로그에 남길 오류 종류 (API 라우트 공용)
   pdf.ts                  PDF 파일인지 확인 (이름·형식만), 최대 크기(모집요강 10MB, 학생부 50MB), 파싱 오류를 한국어 문구로 바꾸기 (파서의 안내 문구만 그대로, 나머지는 고정 문구)
   pdfPick.ts              화면에서 PDF 를 고를 때 같이 쓰는 것 (고른 파일 확인, 크기 글, 파일 입력란에서 파일 꺼내기)
+  measure/                근거 추출 재기 (스크립트가 쓴다)
+    agreement.ts          문장 나누기, AI 인용 구절 → 문장, 표시 시트(CSV) 만들기·읽기·확인, 일치율·카파, 여러 번 돌린 결과의 흔들림 — 순수 함수
+    source.ts             잴 학생부 PDF 읽기(parsePdf → blind), 재는 데 쓰는 기준, 결과 폴더 (파일을 읽으므로 스크립트만 가져온다)
   mock/
-    sample-result.json    가상 학생부를 경영학과 기준으로 실제 파이프라인에 돌린 결과 (npm run make:sample), 블라인드 처리됨 (scripts/blind-sample.ts)
+    sample-result.json    가상 학생부를 경영학과 기준으로 실제 파이프라인에 돌린 결과 (npm run make:sample. 블라인드 처리된 항목과 처리 내역을 담는다)
     sampleResult.ts       예시 지원자의 원문보기에 쓰는 샘플 결과 (위 파일 그대로)
   pipeline/               분석 파이프라인 (claude·extractEvidence·assessRecord·readRecordPage·guidelineText·generateGuidelineDraft 는 서버에서만 가져온다. parsePdf 는 브라우저와 스크립트가 가져온다)
     parsePdf.ts           PDF → 항목(Section[]) 실제 파서 (unpdf. 학생부 올리기 화면이 브라우저에서 부르고 스크립트가 Node 에서 부른다)
     readRecordPage.ts     학생부 쪽 그림 → 그 쪽의 항목 (Claude API 가 옮겨 적는다. 서버 전용)
     blind.ts              블라인드 처리: 식별 정보 가리기와 처리 내역(masks) (제공받은 코드에 규칙을 보강함. 규칙별 사례는 scripts/check-blind-rules.ts)
     claude.ts             Claude API 호출 공용 (제한 시간 기본 60초, 그림 입력, stop_reason 확인, JSON 읽기, 오류 분류와 로그)
-    extractEvidence.ts    근거 추출 (Claude API)
+    extractEvidence.ts    근거 추출 (Claude API. 기준마다 최대 12개. 조건을 바꿔 재 볼 때 쓰는 옵션이 있다)
     assessRecord.ts       AI 제안: 세부 평가 항목 질문별 응답·신뢰도·한 줄 요약·학년별 성장 받기 (Claude API, system 프롬프트 전문이 여기 있다. 점수 계산은 lib/evaluate/assessment.ts)
     guidelineText.ts      모집요강 PDF → 쪽별 글 (unpdf)
     generateGuidelineDraft.ts  모집요강으로 전형 준비 평가 기준 초안 생성 (Claude API, system 프롬프트 전문이 여기 있다)
@@ -872,6 +895,10 @@ scripts/
   check-evaluate.ts       평가하기의 AI 제안 정리·올린 지원자 연결 검사 스크립트 (npx tsx scripts/check-evaluate.ts, AI 호출 없음)
   check-decision.ts       선발 결정의 계산과 예시 자료 검사 스크립트 (npx tsx scripts/check-decision.ts, AI 호출 없음)
   check-applicants.ts     지원자 관리의 내 담당 지원자·처음 보이는 수 검사 스크립트 (npx tsx scripts/check-applicants.ts, AI 호출 없음)
+  check-agreement.ts      일치율 재기의 계산 검사 스크립트 (npx tsx scripts/check-agreement.ts, AI 호출 없음)
+  make-label-sheet.ts     사정관이 근거를 표시할 빈 시트 만들기 (npm run measure:sheet, AI 호출 없음)
+  measure-runs.ts         같은 학생부를 여러 번 분석해 흔들림 재기 (npm run measure:runs, Claude API 호출)
+  measure-agreement.ts    사정관의 표시 시트와 AI 결과의 일치율 보기 (npm run measure:agreement, AI 호출 없음)
   make-sample.ts          샘플 결과 만들기 (npm run make:sample, Claude API 호출)
   blind-sample.ts         샘플 결과에 블라인드 처리를 적용하는 한 번 실행 스크립트 (AI 호출 없음, 이미 처리된 파일은 바꾸지 않음)
 types/analysis.ts         데이터 형식 (Section, Criterion, DepartmentCriteria, Evidence, Assessment(AI 제안), AnalysisResult(블라인드 처리 내역 masks, 전형 준비 기준이면 assessment 포함))
@@ -890,7 +917,7 @@ types/analysis.ts         데이터 형식 (Section, Criterion, DepartmentCriter
 ## 알려진 한계 (평가하기의 올린 지원자, AI 제안)
 
 - AI 점수는 AI 가 질문마다 고른 1~5 의 평균이라 참고 값이다. 같은 학생부라도 호출마다 몇 점 다를 수 있고, 근거 추출과 따로 부르므로 화면에 보이는 근거 문장만으로 그 점수가 설명되지는 않는다(AI 제안은 학생부의 서술형 항목과 교과 성적 전체를 본다). 점수를 다시 받으려면 학생부를 다시 올려 분석해야 한다(다시 계산하는 버튼은 없다).
-- 학년별 성장 지수는 AI 가 그 학년 기록의 깊이를 0~100 으로 적은 값이고 정해진 산식이 없다. 건수는 근거 구절의 수라 근거 추출이 요소마다 6개까지만 고르는 것에 묶인다.
+- 학년별 성장 지수는 AI 가 그 학년 기록의 깊이를 0~100 으로 적은 값이고 정해진 산식이 없다. 건수는 근거 구절의 수라 근거 추출이 요소마다 12개까지만 고르는 것에 묶인다.
 - 평가할 수 있는 올린 지원자는 지금 평가 기준으로 분석한 것뿐이다. 모집요강 초안을 저장해 세부 평가 항목이 바뀌면 그 전에 분석한 학생부는 목록에서 빠지고(안내 줄에 수가 나온다) 다시 올려 분석해야 한다. 그 지원자에게 저장한 평가는 요소 구성이 같으면 다시 분석해도 이어지지 않는다(평가는 분석에 묶인다).
 - 올린 지원자는 한 브라우저의 localStorage 에 최근 30건만 남는다. 여러 위원이 같은 지원자를 평가하거나 배정하는 기능은 없다(서버 저장소와 계정이 없다). 그래서 올린 지원자에게는 다른 위원 의견이 없고, 평가 진행 현황의 다른 위원 수는 예시 값 그대로다.
 - 서류 원문은 분석 결과의 항목을 글자 그대로 보여 준다. 교과 성적과 봉사활동실적은 표를 `|` 로 이은 줄글이다. 근거 구절이 원문에 여러 번 나오면 처음 나오는 자리에만 표시한다.

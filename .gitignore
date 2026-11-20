@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# 일치율 재기의 표시 시트·AI 결과 (학생부 원문이 들어 있다. scripts/make-label-sheet.ts, measure-runs.ts)
+/measure/
+
 # vercel
 .vercel
 

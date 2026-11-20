@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "check:mock": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/checkMock.ts",
-    "make:sample": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-sample.ts"
+    "make:sample": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-sample.ts",
+    "measure:sheet": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/make-label-sheet.ts",
+    "measure:runs": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/measure-runs.ts",
+    "measure:agreement": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/measure-agreement.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.10.0",
