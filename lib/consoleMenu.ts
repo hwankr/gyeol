@@ -27,6 +27,9 @@ export const DECISION_PATH = "/decision";
 /** 선발 결정 · 지원자 비교 탭의 주소 */
 export const DECISION_COMPARE_PATH = "/decision/compare";
 
+/** 선발 결정 · 위원 의견 모아보기 탭의 주소 */
+export const DECISION_OPINIONS_PATH = "/decision/opinions";
+
 export const CONSOLE_MENUS: readonly ConsoleMenu[] = [
   { key: "home", label: "홈", href: null },
   { key: "prep", label: "전형 준비", href: "/prep" },
@@ -72,6 +75,6 @@ export type DecisionTab = {
 export const DECISION_TABS: readonly DecisionTab[] = [
   { key: "recommend", href: DECISION_PATH, label: "인재상 적합 추천" },
   { key: "compare", href: DECISION_COMPARE_PATH, label: "지원자 비교" },
-  { key: "opinions", href: null, label: "위원 의견 모아보기" },
+  { key: "opinions", href: DECISION_OPINIONS_PATH, label: "위원 의견 모아보기" },
   { key: "confirm", href: null, label: "최종 확정" },
 ];

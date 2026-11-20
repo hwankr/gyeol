@@ -1,6 +1,7 @@
 // 선발 결정의 계산과 예시 자료 검사. 실행(저장소 루트에서): npx tsx scripts/check-decision.ts
 // lib/decision/decision.ts(최종 평가·순위·비교 기준·비교할 두 사람·요소별 차이·고른 지원자의 저장 값 확인)와
-// lib/decision/sampleDecision.ts(합격선 주변 예시 지원자 12명: 시안의 값과 맞는지, 평가하기의 지원자와 겹치지 않는지)를 확인한다.
+// lib/decision/sampleDecision.ts(합격선 주변 예시 지원자 12명: 시안의 값과 맞는지, 평가하기의 지원자와 겹치지 않는지, 위원의 종합 의견),
+// lib/decision/opinions.ts(위원 의견 모아보기: 조정이 필요한 지원자, 가장 높게·낮게 준 위원, 요소별 위원 점수와 차이)를 확인한다.
 // 인자는 받지 않는다. 출력: 사례마다 "통과"/"실패" 한 줄, 마지막에 개수. 하나라도 실패하면 종료 코드 1.
 // node scripts/check-decision.ts 로도 돌도록(Node 의 타입 제거 실행) 값 import 는 상대 경로에 .ts 확장자를 붙인다.
 import { ADMISSION } from "../lib/admission.ts";
@@ -26,6 +27,14 @@ import {
   weightedTenths,
   widestGapOf,
 } from "../lib/decision/decision.ts";
+import {
+  deviationText,
+  elementSpreadsOf,
+  extremesOf,
+  memberNamesText,
+  needsAdjustment,
+  widestSpreadOf,
+} from "../lib/decision/opinions.ts";
 import { DECISION_APPLICANTS, DECISION_FIRST_RANK } from "../lib/decision/sampleDecision.ts";
 import { EVALUATION_APPLICANTS } from "../lib/evaluate/sampleEvaluations.ts";
 import type { PrepElement } from "../lib/prep/criteria.ts";
@@ -87,6 +96,19 @@ check(
 check(
   "예시 자료: 자리마다 위원 세 명의 평균이 정수다",
   DECISION_APPLICANTS.every((applicant) => [0, 1, 2].every((slot) => applicant.members.reduce((sum, member) => sum + member[slot], 0) % 3 === 0)),
+);
+check(
+  "예시 자료: 지원자마다 위원 세 명의 종합 의견이 있다 (앞뒤 공백 없음, 1~80자)",
+  DECISION_APPLICANTS.every(
+    (applicant) =>
+      applicant.opinions.length === applicant.members.length &&
+      applicant.opinions.every((opinion) => opinion.trim() === opinion && opinion.length > 0 && opinion.length <= 80),
+  ),
+  String(Math.max(...DECISION_APPLICANTS.flatMap((applicant) => applicant.opinions.map((opinion) => opinion.length)))),
+);
+check(
+  "예시 자료: 종합 의견에 평가 요소의 이름을 적지 않았다 (요소 이름을 바꿔도 어긋나지 않게)",
+  DECISION_APPLICANTS.every((applicant) => applicant.opinions.every((opinion) => ELEMENTS.every((element) => !opinion.includes(element.name)))),
 );
 check(
   "예시 자료: 25위부터이고 합격선(30위) 위로 여섯, 아래로 여섯 명",
@@ -229,6 +251,61 @@ check(
     { id: "a", name: "가", weight: 50, left10: 800, right10: 820, diff10: -20 },
     { id: "b", name: "나", weight: 50, left10: 820, right10: 800, diff10: 20 },
   ])?.id === "a" && widestGapOf([{ id: "a", name: "가", weight: 100, left10: 800, right10: 800, diff10: 0 }]) === null,
+);
+
+// ── 위원 의견 모아보기 ──
+check(
+  "조정 필요: 위원 간 차이가 큰 네 명 (위원 간 차이 큼과 같은 사람들)",
+  same(ranked.filter(needsAdjustment).map((row) => row.applicant.code), flagged("spread")),
+);
+check(
+  `조정 필요: 차이가 ${tenthsText(WIDE_SPREAD10)}점이면 해당하고 그보다 작으면 아니다`,
+  needsAdjustment({ spread10: WIDE_SPREAD10 }) && !needsAdjustment({ spread10: WIDE_SPREAD10 - 1 }),
+);
+check("가장 높게·낮게 준 위원: 871·822·779 는 위원 1 과 위원 3", same(extremesOf([871, 822, 779]), { high: [0], low: [2] }));
+check("가장 높게·낮게 준 위원: 같은 값이 여럿이면 모두", same(extremesOf([89, 80, 89]), { high: [0, 2], low: [1] }));
+check(
+  "가장 높게·낮게 준 위원: 값이 모두 같거나 없으면 비어 있다",
+  same(extremesOf([80, 80, 80]), { high: [], low: [] }) && same(extremesOf([]), { high: [], low: [] }),
+);
+check(
+  "위원 이름 묶음: 위원 1, 위원 1·3, 없으면 빈 글",
+  memberNamesText([0]) === "위원 1" && memberNamesText([0, 2]) === "위원 1·3" && memberNamesText([]) === "",
+);
+const a090 = byCode("A-0090");
+const spreads090 = a090 === undefined ? [] : elementSpreadsOf(a090, ELEMENTS);
+check(
+  "요소별 위원 점수: A-0090 은 86·81·76 / 83·79·75 / 96·90·87, 차이 10·8·9",
+  same(spreads090.map((item) => item.scores), [[86, 81, 76], [83, 79, 75], [96, 90, 87]]) && same(spreads090.map((item) => item.spread), [10, 8, 9]),
+);
+check(
+  "요소별 위원 점수: 평균은 순위 계산의 요소 점수와 같고 AI 점수가 같이 있다",
+  same(spreads090.map((item) => item.mean10), a090?.element10) && same(spreads090.map((item) => item.ai), [81, 80, 89]),
+);
+check(
+  "요소별 위원 점수: 요소마다 가장 높게·낮게 준 위원 (A-0090 은 모두 위원 1 과 위원 3)",
+  spreads090.length === 3 && spreads090.every((item) => same(item.extremes, { high: [0], low: [2] })),
+);
+check("위원들이 가장 크게 갈린 요소: A-0090 은 잠재역량", widestSpreadOf(spreads090)?.name === "잠재역량");
+const a196 = byCode("A-0196");
+check(
+  "요소별 위원 점수: 같은 점수를 준 위원이 둘이면 둘 다 (A-0196 의 잠재역량은 위원 1·3 이 89)",
+  a196 !== undefined && same(elementSpreadsOf(a196, ELEMENTS)[0].extremes, { high: [0, 2], low: [1] }),
+);
+check(
+  "위원들이 가장 크게 갈린 요소: 차이가 같으면 앞의 요소, 모두 같으면 null",
+  a196 !== undefined &&
+    widestSpreadOf(elementSpreadsOf(a196, ELEMENTS).slice(1))?.name === "학업역량" &&
+    widestSpreadOf(spreads090.map((item) => ({ ...item, spread: 0 }))) === null &&
+    widestSpreadOf([]) === null,
+);
+check(
+  "요소별 위원 점수: 요소가 여섯이면 자리를 돌려 쓴다",
+  same(elementSpreadsOf(sixRanked[0], sixElements).map((item) => item.scores[0]), [78, 83, 94, 78, 83, 94]),
+);
+check(
+  "평균에서 떨어진 정도: +4.7, −4.5, 같음",
+  deviationText(871, 824) === "평균 대비 +4.7" && deviationText(779, 824) === "평균 대비 −4.5" && deviationText(824, 824) === "평균과 같음",
 );
 
 if (failures.length > 0) {
