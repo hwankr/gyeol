@@ -6,8 +6,11 @@ export type ConsoleMenu = {
   href: string | null;
 };
 
-/** 홈 화면의 주소 (주 메뉴, 현재 위치 줄의 "홈", 로그인 화면의 "계속") */
+/** 홈 화면의 주소 (주 메뉴, 현재 위치 줄의 "홈", 개인정보 처리방침 동의 화면의 "동의하고 계속") */
 export const HOME_PATH = "/home";
+
+/** 로그인 2단계인 개인정보 처리방침 동의 화면의 주소 (로그인 화면의 "계속") */
+export const CONSENT_PATH = "/consent";
 
 /** 현재 위치 줄의 첫 칸: 홈 화면으로 가는 "홈" */
 export const HOME_CRUMB = { label: "홈", href: HOME_PATH } as const;
