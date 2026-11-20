@@ -16,6 +16,7 @@ import {
 } from "@/components/consoleUi";
 import type { ApplicantFilter, ApplicantStatus, MaskDecision, ReviewExpression } from "@/lib/applicants/applicants";
 import type { DeadlineRemaining } from "@/lib/applicants/deadline";
+import { HOME_CRUMB } from "@/lib/consoleMenu";
 
 type ApplicantsScreenProps = {
   /** 현재 위치 줄의 "지원자 관리" 가 가는 주소 */
@@ -139,10 +140,10 @@ export function ApplicantsScreen({
   onDecide,
   onSave,
 }: ApplicantsScreenProps) {
-  // 현재 위치: 홈 / 지원자 관리(링크) / 접수현황 / 서류 검토 / 걸러 보기 이름 / 고른 지원자 코드. 마지막 칸이 지금 위치다(굵게).
-  // 고른 지원자가 없으면 걸러 보기 이름이 마지막 칸이다. 나머지는 갈 곳 없는 링크다.
+  // 현재 위치: 홈(링크) / 지원자 관리(링크) / 접수현황 / 서류 검토 / 걸러 보기 이름 / 고른 지원자 코드. 마지막 칸이 지금 위치다(굵게).
+  // 고른 지원자가 없으면 걸러 보기 이름이 마지막 칸이다. 접수현황·서류 검토·걸러 보기 이름은 갈 곳 없는 링크다.
   const crumbs: ConsoleCrumb[] = [
-    { label: "홈" },
+    HOME_CRUMB,
     { label: "지원자 관리", href: applicantsPath },
     { label: "접수현황" },
     { label: "서류 검토" },

@@ -17,7 +17,7 @@ import {
 import { toneSwatchClass, toneTextClass } from "@/components/evidenceTone";
 import { PdfZoomButtons, RecordModeButtons, RecordPdf, type PdfPickable, type RecordViewMode } from "@/components/RecordPdf";
 import type { PdfPan, PdfZoom } from "@/hooks/usePdfViewport";
-import { EVALUATE_PATH } from "@/lib/consoleMenu";
+import { EVALUATE_PATH, HOME_CRUMB } from "@/lib/consoleMenu";
 import type { EvaluationStatus } from "@/lib/evaluate/evaluation";
 import type { DocumentArea } from "@/lib/evaluate/sampleEvaluations";
 import { SWAP_TRANSITION } from "@/lib/motion";
@@ -567,7 +567,7 @@ export function MarkButtons({ marks, locked }: MarkButtonsProps) {
 export function EvaluateMissing({ note }: { note: string }) {
   return (
     <>
-      <EvaluateHead crumbs={[{ label: "홈" }, { label: "평가하기", href: EVALUATE_PATH }, { label: "지원자 없음" }]} note={note} />
+      <EvaluateHead crumbs={[HOME_CRUMB, { label: "평가하기", href: EVALUATE_PATH }, { label: "지원자 없음" }]} note={note} />
       <div className={`${PANEL_CLASS} mt-[20px] flex flex-col items-center gap-[6px] px-[20px] py-[32px] text-center`}>
         <p className="text-[15px] leading-[22px] font-semibold">평가할 지원자를 찾지 못했습니다.</p>
         <p className="text-[14px] leading-[20px] text-[#505050]">

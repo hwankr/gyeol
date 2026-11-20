@@ -33,6 +33,12 @@ export function formatSeoulToday(date: Date): string {
   return `오늘 ${year}. ${month}. ${day}. (${weekday})`;
 }
 
+/** 그 순간의 한국 날짜: "2026-11-18" (월·일은 두 자리). 같은 꼴의 날짜끼리 글자 순서로 앞뒤를 견줄 수 있다. */
+export function seoulDateKey(date: Date): string {
+  const { year, month, day } = seoulParts(date);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 /** 기록의 시각: "2026. 11. 18. 14:05" (24시간제). 날짜로 읽을 수 없으면 받은 글 그대로. */
 export function formatSeoulDateTime(iso: string): string {
   const time = Date.parse(iso);

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ViewTransition } from "react";
 import { ConsoleCrumbs, ConsoleTitle } from "@/components/consoleUi";
 import { ADMISSION } from "@/lib/admission";
+import { HOME_CRUMB } from "@/lib/consoleMenu";
 
 type PrepHeaderProps = {
   /** 현재 위치 줄의 "전형 준비" 가 가는 주소 */
@@ -17,7 +18,7 @@ type PrepHeaderProps = {
 /**
  * 전형 준비 화면 네 탭의 공통 머리: 현재 위치 줄, 제목 줄(오늘 날짜), 전형 요약(테두리 상자 안의 네 칸), 탭 줄.
  * 치수·색·글자는 디자인 값 그대로다. 현재 위치 줄과 제목 줄은 새 화면이 같이 쓰는 조각(components/consoleUi.tsx)이고,
- * 탭과 현재 위치의 "전형 준비" 는 보통 링크(next/link)다. 홈 화면은 없어 "홈" 은 눌러도 아무 일도 없다.
+ * 탭과 현재 위치의 "홈"·"전형 준비" 는 보통 링크(next/link)다.
  * 전형 요약의 칸은 폭이 모자라면 아래 줄로 내려가고(flex-wrap), 지금 탭은 파란 글자에 파란 밑줄(2px)이다.
  * 탭 줄의 이름(aria-label)은 탭 본문의 링크가 초점을 넘길 탭을 찾는 데 쓴다(hooks/usePrepHeader.ts 의 handOverFocusToPrepTab).
  * 파란 밑줄은 지금 탭 안에 따로 그린 줄이다(자리·굵기는 링크의 아래 테두리와 같다). 탭을 옮기면 전의 탭에서 지금 탭으로 미끄러져 간다
@@ -26,7 +27,7 @@ type PrepHeaderProps = {
 export function PrepHeader({ prepPath, crumb, today, tabs }: PrepHeaderProps) {
   return (
     <>
-      <ConsoleCrumbs items={[{ label: "홈" }, { label: "전형 준비", href: prepPath }, { label: crumb }]} />
+      <ConsoleCrumbs items={[HOME_CRUMB, { label: "전형 준비", href: prepPath }, { label: crumb }]} />
       <ConsoleTitle title="전형 준비" note={today} />
 
       <dl className="mt-[20px] flex flex-wrap rounded-[8px] border border-[#E4E4E4]">

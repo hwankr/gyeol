@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useEvaluationDocument } from "@/hooks/useEvaluationDocument";
 import { useEvaluationSession } from "@/hooks/useEvaluationSession";
-import { EVALUATE_PATH } from "@/lib/consoleMenu";
+import { EVALUATE_PATH, HOME_CRUMB } from "@/lib/consoleMenu";
 import {
   EVALUATION_LIMITS,
   LOW_CONFIDENCE,
@@ -121,7 +121,7 @@ export function useEvaluateSummary(applicant: EvaluationApplicant) {
 
   return {
     crumbs: [
-      { label: "홈" },
+      HOME_CRUMB,
       { label: "평가하기", href: EVALUATE_PATH },
       { label: "평가 대기 목록", href: EVALUATE_PATH },
       { label: applicant.code },

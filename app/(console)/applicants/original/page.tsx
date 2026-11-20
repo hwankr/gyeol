@@ -9,7 +9,7 @@ import { ADMISSION } from "@/lib/admission";
 import { SAMPLE_ORIGINAL_NOTE, originalRecordOf, type OriginalRecord } from "@/lib/applicants/original";
 import { NO_UPLOADED_APPLICANTS, type UploadedApplicant } from "@/lib/applicants/uploaded";
 import { loadUploadedApplicants, subscribeUploadedApplicants } from "@/lib/applicants/uploadedStorage";
-import { APPLICANTS_PATH } from "@/lib/consoleMenu";
+import { APPLICANTS_PATH, HOME_CRUMB } from "@/lib/consoleMenu";
 
 const HEAD_NOTE = `${ADMISSION.trackFull} · ${ADMISSION.unit}`;
 const BACK = { href: APPLICANTS_PATH, label: "목록" };
@@ -41,7 +41,7 @@ function OriginalByCode() {
   if (record === null) {
     return (
       <OriginalMissing
-        crumbs={[{ label: "홈" }, { label: "지원자 관리", href: APPLICANTS_PATH }, { label: "원문 없음" }]}
+        crumbs={[HOME_CRUMB, { label: "지원자 관리", href: APPLICANTS_PATH }, { label: "원문 없음" }]}
         title="지원자 관리"
         headNote={HEAD_NOTE}
         back={{ href: APPLICANTS_PATH, label: "지원자 관리로 가기" }}
@@ -57,7 +57,7 @@ function Original({ record }: { record: OriginalRecord }) {
   return (
     <OriginalScreen
       {...view}
-      crumbs={[{ label: "홈" }, { label: "지원자 관리", href: APPLICANTS_PATH }, { label: record.code }, { label: "원문보기" }]}
+      crumbs={[HOME_CRUMB, { label: "지원자 관리", href: APPLICANTS_PATH }, { label: record.code }, { label: "원문보기" }]}
       title="지원자 관리"
       headNote={HEAD_NOTE}
       back={BACK}

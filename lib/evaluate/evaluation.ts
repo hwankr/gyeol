@@ -2,6 +2,8 @@ import { normalizeSearchText } from "../applicants/applicants.ts";
 import { isUploadedCode, uploadedCodeNumber } from "../applicants/uploaded.ts";
 import type { PrepElement } from "../prep/criteria.ts";
 import {
+  ASSIGNED_COUNT,
+  DEPARTMENT_PROGRESS,
   DOCUMENT_AREAS,
   EVALUATION_APPLICANTS,
   EXTRA_DOCUMENT_AREAS,
@@ -504,6 +506,17 @@ export function matchesEvaluationSearch(applicant: Pick<EvaluationApplicant, "co
 export function percentText(done: number, total: number): string {
   if (total <= 0) return "0";
   return ((done / total) * 100).toFixed(1).replace(/\.0$/, "");
+}
+
+/**
+ * 모집 단위 전체의 평가 진행 (제출 수 / 전체 건수). 예시 값(전체 312건, 내 것을 뺀 나머지의 제출 227건)에 내 제출 수를 더하고,
+ * 평가할 지원자에 들어온 올린 지원자 수만큼 전체가 는다. 평가 대기 목록의 "모집 단위 전체" 줄과 홈 화면의 내 모집 단위 줄이 같이 쓴다.
+ */
+export function departmentProgressOf(myDone: number, myTotal: number): { done: number; total: number } {
+  return {
+    done: DEPARTMENT_PROGRESS.othersDone + myDone,
+    total: DEPARTMENT_PROGRESS.total + Math.max(0, myTotal - ASSIGNED_COUNT),
+  };
 }
 
 /** 총평 화면 주소 */
