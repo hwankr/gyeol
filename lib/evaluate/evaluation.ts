@@ -1,6 +1,6 @@
 import { normalizeSearchText } from "../applicants/applicants.ts";
 import { isUploadedCode, uploadedCodeNumber } from "../applicants/uploaded.ts";
-import type { PrepElement } from "../prep/criteria.ts";
+import { MAX_QUESTION_REVISION, questionRevisionOf, type PrepElement } from "../prep/criteria.ts";
 import {
   ASSIGNED_COUNT,
   DEPARTMENT_PROGRESS,
@@ -34,6 +34,9 @@ export type EvaluationMark = "hold" | "recheck";
  * - scores: 평가 요소 id → 내 점수(0~100 정수). 키가 없는 요소는 AI 점수와 같다.
  * - reasons: 평가 요소 id → 수정 사유 (내 점수가 AI 점수와 다를 때 필요하다)
  * - answers: 평가 요소 id → 세부 평가 항목 응답 (질문 키 "q1", "q2" … → 1~5)
+ * - answerRevisions: 평가 요소 id → 그 요소의 응답을 적은 때의 질문 목록 번호(PrepElement.questionRevision, 없으면 0).
+ *   지금 값과 다르면 그 요소의 응답은 쓰지 않는다(validAnswers). 이 필드가 생기기 전에 저장한 평가에는 없고 0 으로 읽는다
+ *   (그때의 평가 기준에도 questionRevision 이 없어 0 이라, 질문을 한 번도 고치지 않았으면 예전 응답이 그대로 보인다).
  * - basis: 이 평가를 적은 때의 평가 요소 구성(criteriaBasis). 지금 구성과 다르면 이 평가는 쓰지 않는다(effectiveRecord).
  */
 export type EvaluationRecord = {
@@ -43,6 +46,7 @@ export type EvaluationRecord = {
   reasons: Readonly<Record<string, string>>;
   opinion: string;
   answers: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  answerRevisions: Readonly<Record<string, number>>;
   mark: EvaluationMark | null;
   maskReported: boolean;
 };
@@ -83,6 +87,7 @@ export const EMPTY_EVALUATION: EvaluationRecord = Object.freeze({
   reasons: Object.freeze({}),
   opinion: "",
   answers: Object.freeze({}),
+  answerRevisions: Object.freeze({}),
   mark: null,
   maskReported: false,
 });
@@ -150,6 +155,9 @@ function parseRecord(value: unknown): EvaluationRecord | null {
     ),
     opinion: typeof opinion === "string" ? opinion.slice(0, EVALUATION_LIMITS.opinionLength) : "",
     answers: pickByElement(value.answers, parseAnswers),
+    answerRevisions: pickByElement(value.answerRevisions, (item) =>
+      isIntegerIn(item, 0, MAX_QUESTION_REVISION) ? item : undefined,
+    ),
     mark: mark === "hold" || mark === "recheck" ? mark : null,
     maskReported: maskReported === true,
   };
@@ -444,17 +452,40 @@ export function questionCount(element: PrepElement): number {
   return element.groups.reduce((sum, group) => sum + group.questions.length, 0);
 }
 
-/** 그 요소의 응답 가운데 지금 질문에 해당하는 것만 (평가 기준이 바뀌어 남은 응답은 빼고) */
+/**
+ * 그 요소의 응답 가운데 지금 질문에 해당하는 것만 (평가 기준이 바뀌어 남은 응답은 빼고).
+ * 응답은 질문 번호로 저장하므로, 응답을 적은 때의 질문 목록 번호(answerRevisions)가 지금 요소의 것(questionRevision)과 다르면
+ * 전형 준비에서 그 요소의 질문을 고치거나 더하거나 뺀 것이라 그 요소의 응답을 하나도 쓰지 않는다(예전 응답이 다른 질문에 붙지 않게).
+ * 그 응답은 저장소에 그대로 있다가, 이 요소에 다시 응답하면 그때 새 응답으로 바뀐다(answersWith).
+ */
 export function validAnswers(record: EvaluationRecord | null, element: PrepElement): Record<string, number> {
   const stored = record?.answers[element.id];
   const result: Record<string, number> = {};
-  if (stored === undefined) return result;
+  if (record === null || stored === undefined) return result;
+  if ((record.answerRevisions[element.id] ?? 0) !== questionRevisionOf(element)) return result;
   const count = questionCount(element);
   for (let number = 1; number <= count; number += 1) {
     const answer = stored[`q${number}`];
     if (answer !== undefined) result[`q${number}`] = answer;
   }
   return result;
+}
+
+/**
+ * 그 요소의 질문 하나에 응답한 뒤의 값: 평가에 고쳐 쓸 answers 와 answerRevisions.
+ * 그 요소의 응답은 지금 질문에 해당하는 것(validAnswers)에 새 응답을 더한 것이 되고, 질문 목록 번호는 지금 요소의 것으로 적는다.
+ * 다른 요소의 응답과 번호는 건드리지 않는다.
+ */
+export function answersWith(
+  record: EvaluationRecord | null,
+  element: PrepElement,
+  key: string,
+  value: number,
+): Pick<EvaluationRecord, "answers" | "answerRevisions"> {
+  return {
+    answers: { ...record?.answers, [element.id]: { ...validAnswers(record, element), [key]: value } },
+    answerRevisions: { ...record?.answerRevisions, [element.id]: questionRevisionOf(element) },
+  };
 }
 
 /** 응답의 평균 (응답이 없으면 null) */

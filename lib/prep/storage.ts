@@ -1,6 +1,6 @@
 import { PREP_CRITERIA_STORAGE_KEY, PREP_HISTORY_STORAGE_KEY } from "../constants.ts";
 import type { ConsensusPoint } from "./consensusDraft.ts";
-import { PREP_LIMITS, parsePrepCriteria, type PrepCriteria } from "./criteria.ts";
+import { PREP_LIMITS, carryQuestionRevisions, parsePrepCriteria, type PrepCriteria } from "./criteria.ts";
 import { DEFAULT_PREP_CRITERIA } from "./defaultCriteria.ts";
 import type { GuidelineChange } from "./guidelineChanges.ts";
 import { NO_HISTORY, arrangeHistory, parsePrepHistory, type PrepHistoryEntry } from "./history.ts";
@@ -117,15 +117,20 @@ export function hasUnsavedPrepChanges(): boolean {
 }
 
 /**
- * 배점을 바꾼 평가 기준을 저장하고 기록을 한 건 남긴다. 순서: 기록 저장소를 이 순간 다시 읽고 → 평가 기준을 쓰고 →
+ * 고친 평가 기준(배점, 세부 평가 항목)을 저장하고 기록을 한 건 남긴다. 순서: 기록 저장소를 이 순간 다시 읽고 → 평가 기준을 쓰고 →
  * 새 기록을 맨 앞에 더한 기록을 쓴다. 평가 기준도 쓰기 직전에 읽어 보고, 읽지 못하면 쓰지 않는다.
+ * 쓰는 값은 요소마다 questionRevision 을 매긴 것이다(carryQuestionRevisions: 지금 쓰이는 평가 기준과 견주어 질문 목록이 달라진
+ * 요소만 1 을 더한다). 초안 저장(savePrepDraft)도 이 함수를 거치므로 평가 기준이 저장되는 모든 길에서 같은 규칙이다.
  * 쓰지 않았거나 쓰지 못한 값은 메모리에만 둔다. 둘 다 저장소에 저장했으면 true.
  */
 export function savePrepCriteria(next: PrepCriteria, entry: PrepHistoryEntry): boolean {
   const historyRead = readHistory();
 
-  const criteriaSaved = readCriteria().ok && writeCriteria(next);
-  memoryCriteria = criteriaSaved ? null : next;
+  const criteriaRead = readCriteria();
+  // 지금 쓰이는 평가 기준(화면과 평가하기가 보는 값)과 견준다: 메모리에만 둔 값 → 저장소의 값 → 기본값.
+  const revised = carryQuestionRevisions(memoryCriteria ?? lastCriteria ?? DEFAULT_PREP_CRITERIA, next);
+  const criteriaSaved = criteriaRead.ok && writeCriteria(revised);
+  memoryCriteria = criteriaSaved ? null : revised;
 
   const pending = [entry, ...memoryHistory];
   const historySaved = historyRead.ok && writeHistory(arrangeHistory([...pending, ...historyRead.list]));

@@ -11,12 +11,19 @@ export type PrepGroup = {
   questions: readonly string[];
 };
 
-/** 평가 요소 하나: 배점은 0~100 정수 */
+/**
+ * 평가 요소 하나: 배점은 0~100 정수.
+ * questionRevision 은 이 요소의 질문 목록(번호 순서대로의 질문 글)을 바꿔 저장한 횟수다. 없으면 0(한 번도 바꾸지 않음)이고,
+ * 저장할 때 저장소가 매긴다(carryQuestionRevisions. 화면이나 AI 가 준 값은 쓰지 않는다). 세부 항목 평가의 응답은 질문 번호로
+ * 저장하므로, 평가하기 화면이 응답을 적은 때의 이 값을 같이 두었다가 지금 값과 다르면 그 응답을 쓰지 않는다
+ * (lib/evaluate/evaluation.ts 의 validAnswers. 예전 응답이 다른 질문에 붙지 않게).
+ */
 export type PrepElement = {
   id: string;
   name: string;
   weight: number;
   groups: readonly PrepGroup[];
+  questionRevision?: number;
 };
 
 /**
@@ -61,6 +68,9 @@ export const PREP_LIMITS = {
 export const MIN_WEIGHT = 0;
 export const MAX_WEIGHT = 100;
 export const TOTAL_WEIGHT = 100;
+
+/** 저장 값으로 받아들이는 questionRevision 의 최댓값 */
+export const MAX_QUESTION_REVISION = 1_000_000;
 
 /** 앞뒤 공백을 뺀 길이가 1~max 인 문자열이면 공백을 뺀 값, 아니면 null (문자열이 아닌 값도 null) */
 function boundedText(value: unknown, max: number): string | null {
@@ -133,7 +143,13 @@ function parseElement(value: unknown): PrepElement | null {
     if (group === null) return null;
     groups.push(group);
   }
-  return { id, name, weight, groups };
+  const questionRevision = record.questionRevision;
+  return isQuestionRevision(questionRevision) ? { id, name, weight, groups, questionRevision } : { id, name, weight, groups };
+}
+
+/** 저장된 questionRevision 으로 쓸 수 있는 값인지: 1 이상 최댓값 이하의 정수 (0 은 적지 않는다) */
+function isQuestionRevision(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= MAX_QUESTION_REVISION;
 }
 
 /**
@@ -141,6 +157,7 @@ function parseElement(value: unknown): PrepElement | null {
  * 벗어나면 null 을 돌려준다(일부만 살리지 않는다). 확인: version 1, department 1~50자, 요소 1~6개, 요소 id 1~64자이고 서로 다름,
  * 이름 1~30자, 배점 0~100 정수이고 합이 100, 요소마다 묶음 1~6개, 태그 1~12자, 묶음 이름 1~20자, 묶음마다 질문 1~8개, 질문 1~200자.
  * guideline 은 키가 없으면 통과하고, 있으면 파일 이름 1~255자·변경 사항 0~6건(제목 1~40자, 내용 1~300자)이어야 한다.
+ * 요소의 questionRevision 만은 예외로, 쓸 수 없는 값(정수가 아님, 1 미만, 1,000,000 초과)이면 평가 기준은 살리고 그 값만 없는 것(0)으로 읽는다.
  */
 export function parsePrepCriteria(value: unknown): PrepCriteria | null {
   const record = asRecord(value);
@@ -191,6 +208,45 @@ export function numberedGroups(element: PrepElement): NumberedGroup[] {
     next += group.questions.length;
   }
   return groups;
+}
+
+/** 그 요소의 질문 목록을 바꿔 저장한 횟수 (적혀 있지 않으면 0) */
+export function questionRevisionOf(element: PrepElement): number {
+  return element.questionRevision ?? 0;
+}
+
+/** 그 요소의 질문 글을 번호 순서대로(묶음을 넘어 이어서) */
+function questionList(element: PrepElement): string[] {
+  return element.groups.flatMap((group) => group.questions);
+}
+
+/** 두 요소의 질문 목록이 같은지: 번호마다 질문 글이 같다(묶음의 이름·태그·나뉜 자리는 보지 않는다) */
+export function sameQuestionList(a: PrepElement, b: PrepElement): boolean {
+  const left = questionList(a);
+  const right = questionList(b);
+  return left.length === right.length && left.every((text, index) => text === right[index]);
+}
+
+/**
+ * 저장할 평가 기준(after)의 요소마다 questionRevision 을 매긴 새 평가 기준. before 는 지금 쓰이는(바로 앞에 저장한) 평가 기준이다.
+ * - 같은 id 의 요소가 before 에 있으면 그 값을 잇고, 질문 목록이 달라졌으면(sameQuestionList) 1 을 더한다.
+ * - before 에 없는 id 면(모집요강 초안으로 요소가 늘어난 경우) before 의 가장 큰 값 + 1 이다. 예전에 같은 id 를 쓰던 요소의 응답과
+ *   값이 우연히 같아지지 않게 한다.
+ * after 에 적혀 있던 questionRevision 은 쓰지 않는다. 값이 0 이면 필드를 두지 않는다(한 번도 바꾸지 않은 기준은 예전 모양 그대로다).
+ * 배점·묶음 이름·태그만 바꾼 저장에서는 값이 그대로다.
+ */
+export function carryQuestionRevisions(before: PrepCriteria, after: PrepCriteria): PrepCriteria {
+  const previous = new Map(before.elements.map((element) => [element.id, element]));
+  const highest = before.elements.reduce((max, element) => Math.max(max, questionRevisionOf(element)), 0);
+  const elements = after.elements.map((element): PrepElement => {
+    const old = previous.get(element.id);
+    const next =
+      old === undefined ? highest + 1 : questionRevisionOf(old) + (sameQuestionList(old, element) ? 0 : 1);
+    const questionRevision = Math.min(MAX_QUESTION_REVISION, next);
+    const { id, name, weight, groups } = element;
+    return questionRevision === 0 ? { id, name, weight, groups } : { id, name, weight, groups, questionRevision };
+  });
+  return { ...after, elements };
 }
 
 /**
