@@ -5,6 +5,7 @@ import {
   invalidResponseError,
   readApiKey,
   toTaggedJson,
+  type Effort,
 } from "./claude.ts";
 import { describeRecordFormForAnalysis, recordFormPath } from "../recordForm.ts";
 import { NARRATIVE_CATEGORIES } from "../recordSections.ts";
@@ -25,10 +26,38 @@ const LOG_TAG = "extractEvidence";
 
 /**
  * 생각 깊이. 이 모델은 thinking 을 끌 수 없고(항상 adaptive) effort 로만 조절하며, 기본값은 medium 이다.
- * 기본값에 기대지 않고 명시한다. 가상 학생부(서술형 46개, 약 7천 자)로 재 보니 low 와 medium 모두 근거 18개가
- * 전부 통과하고 기준 3개에 6개씩 나왔으며, AI 호출은 low 17초·medium 29초였다. 품질이 같아 60초 제한에 여유가 큰 low 를 쓴다.
+ * 기본값에 기대지 않고 명시한다. 가상 학생부(서술형 46개, 약 7천 자)로 재 보니 low 와 medium 은 고르는 근거가 구별되지 않았고
+ * (상한 6개에서 실행끼리 일치율 76%·77%) 호출 시간도 같았다. 60초 제한에 여유가 큰 low 를 쓴다.
  */
-const EFFORT = "low";
+const EFFORT: Effort = "low";
+
+/**
+ * 기준마다 고르는 근거의 최대 개수. 화면의 분석은 늘 이 값을 쓴다.
+ * 6개였을 때는 같은 학생부를 다시 분석하면 고르는 문장이 많이 바뀌었다(가상 학생부 10번: 실행끼리 일치율 평균 76%, 최저 50%).
+ * 근거로 볼 문장이 기준마다 12~17개쯤 꾸준히 나오는데 그중 6개만 고르게 했기 때문이다. 12개로는 평균 87%, 최저 85%(5번)였고
+ * 호출은 약 30초였다. 상한을 없애면 고르는 개수가 54~81개로 흔들리고 60초 제한을 넘기기도 했다.
+ * (2026-11-20 에 scripts/measure-runs.ts 로 잰 값. 일치율은 문장 단위: lib/measure/agreement.ts)
+ */
+const MAX_PER_CRITERION = 12;
+
+/** 화면의 분석이 쓰는 조건. 재는 스크립트가 "기본 조건" 을 알아볼 때 쓴다 */
+export const EXTRACT_DEFAULTS: { readonly effort: Effort; readonly maxPerCriterion: number } = {
+  effort: EFFORT,
+  maxPerCriterion: MAX_PER_CRITERION,
+};
+
+/**
+ * 근거 추출의 조건을 바꿔 가며 재 볼 때만 쓰는 값(scripts/measure-runs.ts). 화면의 분석(app/api/analyze)과 샘플 만들기는 넘기지 않는다.
+ * 넘기지 않은 값은 위의 기본값(EFFORT, MAX_PER_CRITERION, 60초)이다.
+ */
+export type ExtractOptions = {
+  /** 생각 깊이 */
+  effort?: Effort;
+  /** 기준마다 고르는 근거의 최대 개수. null 이면 개수를 정하지 않고 근거를 모두 고르게 한다 */
+  maxPerCriterion?: number | null;
+  /** 제한 시간(밀리초). 근거를 많이 내거나 깊이 생각하는 조건은 60초를 넘길 수 있다 */
+  timeoutMs?: number;
+};
 
 /** 응답 최대 토큰. 생각 토큰도 여기에 포함된다. */
 const MAX_TOKENS = 16000;
@@ -42,8 +71,16 @@ export { NARRATIVE_CATEGORIES };
 /** AI 가 거절했을 때 화면에 보여 줄 문구. 나머지 오류 문구(키 없음, 시간 초과 등)는 ./claude.ts 에 있다. */
 const REFUSAL_MESSAGE = "AI 가 이 요청에 대한 응답을 거절해 근거를 찾지 못했습니다.";
 
-/** AI 에 주는 지시. 학생부 자료는 user 메시지에 따로 넣는다. */
-const SYSTEM_PROMPT = `당신은 대학 입학사정관의 학생부 서류 검토를 돕는 보조입니다.
+/** 근거를 몇 개 고를지 정하는 규칙 한 줄 */
+function countRule(maxPerCriterion: number | null): string {
+  return maxPerCriterion === null
+    ? "기준마다 그 기준의 근거가 되는 구절을 빠짐없이 모두 고릅니다. 개수 제한은 없습니다. 근거가 없으면 억지로 만들지 않습니다."
+    : `기준마다 가장 관련 깊은 근거를 최대 ${maxPerCriterion}개 고릅니다. 근거가 없으면 억지로 만들지 않습니다.`;
+}
+
+/** AI 에 주는 지시. 학생부 자료는 user 메시지에 따로 넣는다. 개수를 주지 않으면 화면의 분석이 쓰는 지시다. */
+export function systemPrompt(maxPerCriterion: number | null = MAX_PER_CRITERION): string {
+  return `당신은 대학 입학사정관의 학생부 서류 검토를 돕는 보조입니다.
 사용자 메시지에 학과의 평가 기준과 학생부 서술형 항목이 들어 있습니다. 기준마다 학생부에서 그 기준의 근거가 되는 구절을 찾습니다.
 
 ## 입력
@@ -57,13 +94,14 @@ ${describeRecordFormForAnalysis()}
 ## 근거를 고르는 규칙
 1. quote 는 한 항목의 text 에서 글자 하나 바꾸지 않고 그대로 복사한 연속된 구절입니다. 한 문장을 넘지 않습니다. 요약하거나 고쳐 쓰거나 떨어진 부분을 이어 붙이지 않습니다.
 2. reason 은 그 구절이 왜 해당 기준의 근거인지 한국어 한 문장으로 설명합니다.
-3. 기준마다 가장 관련 깊은 근거를 최대 6개 고릅니다. 근거가 없으면 억지로 만들지 않습니다.
+3. ${countRule(maxPerCriterion)}
 4. 점수, 등급, 합격 가능성, 학생에 대한 우열 평가 표현을 쓰지 않습니다. 기록에 드러난 내용만 설명합니다.
 5. 활동의 개수나 분량을 근거로 삼지 않습니다. 내용에 드러난 과정, 역할, 생각을 근거로 삼습니다.
 
 ## 출력
 - criterionId 에는 기준의 id, sectionId 에는 quote 를 가져온 항목의 id 를 그대로 씁니다.
 - 출력은 {"evidences": [{"criterionId": "...", "sectionId": "...", "quote": "...", "reason": "..."}]} 형식의 JSON 만 냅니다.`;
+}
 
 /** structured outputs 로 강제하는 응답 모양 */
 const OUTPUT_SCHEMA = {
@@ -104,11 +142,15 @@ type RawEvidence = {
  * - 키(AI_API_KEY, 앞뒤 공백 제거)가 없으면 학생부 내용과 상관없이 맨 먼저 AiCallError(키 없음)를 던진다.
  * - 키가 있고 서술형 항목이나 기준이 하나도 없으면 AI 를 부르지 않고 빈 배열을 돌려준다.
  * - 호출이 실패하면(시간 초과·거절·잘린 응답·해석 실패 포함) AiCallError 를 던진다.
+ * - options 는 조건을 바꿔 재 볼 때만 넘긴다(ExtractOptions). 넘기지 않으면 지금까지와 같은 요청이 나간다.
  */
 export async function extractEvidence(
   sections: Section[],
   criteria: DepartmentCriteria,
+  options: ExtractOptions = {},
 ): Promise<Evidence[]> {
+  const effort = options.effort ?? EFFORT;
+  const maxPerCriterion = options.maxPerCriterion === undefined ? MAX_PER_CRITERION : options.maxPerCriterion;
   // 키 확인을 가장 먼저 한다. 키가 없는 서버는 어떤 학생부든 분석 성공으로 보이면 안 된다.
   const apiKey = readApiKey(LOG_TAG);
 
@@ -125,10 +167,11 @@ export async function extractEvidence(
   const response = await callClaudeJson({
     logTag: LOG_TAG,
     apiKey,
-    effort: EFFORT,
+    effort,
     maxTokens: MAX_TOKENS,
-    system: SYSTEM_PROMPT,
+    system: systemPrompt(maxPerCriterion),
     userMessage: buildUserMessage(narrativeSections, criteria),
+    ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
     schema: OUTPUT_SCHEMA,
     refusalMessage: REFUSAL_MESSAGE,
   });
@@ -173,7 +216,7 @@ export async function extractEvidence(
     `[${LOG_TAG}] 통과 ${evidences.length}개, 버림 ${droppedTotal}개 ` +
       `(없는 기준 ${dropped.unknownCriterion}, 없는 항목 ${dropped.unknownSection}, 원문에 없는 인용 ${dropped.quoteNotFound}), ` +
       `AI 호출 ${formatSeconds(response.seconds)} ` +
-      `(effort ${EFFORT}, 보낸 항목 ${narrativeSections.length}개, 입력 토큰 ${response.inputTokens}, 출력 토큰 ${response.outputTokens})`,
+      `(effort ${effort}, 보낸 항목 ${narrativeSections.length}개, 입력 토큰 ${response.inputTokens}, 출력 토큰 ${response.outputTokens})`,
   );
   return evidences;
 }
