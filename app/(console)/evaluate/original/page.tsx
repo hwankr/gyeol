@@ -9,7 +9,7 @@ import { useEvaluationData } from "@/hooks/useEvaluationData";
 import { useOriginalView } from "@/hooks/useOriginalView";
 import { ADMISSION } from "@/lib/admission";
 import { SAMPLE_ORIGINAL_NOTE } from "@/lib/applicants/original";
-import { EVALUATE_PATH } from "@/lib/consoleMenu";
+import { EVALUATE_PATH, HOME_CRUMB } from "@/lib/consoleMenu";
 import { findEvaluationApplicant, summaryPath } from "@/lib/evaluate/evaluation";
 import type { EvaluationApplicant } from "@/lib/evaluate/sampleEvaluations";
 import { sampleResult } from "@/lib/mock/sampleResult";
@@ -53,7 +53,7 @@ function Original({ applicant, section }: { applicant: EvaluationApplicant; sect
     <OriginalScreen
       {...view}
       crumbs={[
-        { label: "홈" },
+        HOME_CRUMB,
         { label: "평가하기", href: EVALUATE_PATH },
         { label: "평가 대기 목록", href: EVALUATE_PATH },
         { label: applicant.code, href: summaryHref },

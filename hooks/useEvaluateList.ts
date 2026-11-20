@@ -4,8 +4,9 @@ import { useConsoleSearch } from "@/hooks/useConsoleSearch";
 import { useEvaluationData } from "@/hooks/useEvaluationData";
 import { ADMISSION } from "@/lib/admission";
 import { SAMPLE_APPLICANT_COUNT } from "@/lib/applicants/sampleApplicants";
-import { EVALUATE_PATH } from "@/lib/consoleMenu";
+import { EVALUATE_PATH, HOME_CRUMB } from "@/lib/consoleMenu";
 import {
+  departmentProgressOf,
   effectiveRecord,
   evaluationStatus,
   matchesEvaluationSearch,
@@ -14,12 +15,7 @@ import {
   summaryPath,
   type EvaluationStatus,
 } from "@/lib/evaluate/evaluation";
-import {
-  ASSIGNED_COUNT,
-  DEPARTMENT_PROGRESS,
-  EVALUATION_DEADLINE_TEXT,
-  PEER_PROGRESS,
-} from "@/lib/evaluate/sampleEvaluations";
+import { EVALUATION_DEADLINE_TEXT, PEER_PROGRESS } from "@/lib/evaluate/sampleEvaluations";
 
 /** 목록 구분: 평가 대기 목록(배정된 전체, 남은 평가가 먼저) / 남은 평가 / 제출 완료 */
 export type EvaluateListTab = "queue" | "left" | "done";
@@ -138,11 +134,7 @@ export function useEvaluateList() {
     ...PEER_PROGRESS.map((peer) => ({ ...peer, ringName: peer.name })),
   ];
   // 모집 단위 전체: 예시 값(전체 312건, 내 것을 뺀 나머지의 제출 227건)에 내 제출 수를 더하고, 목록에 들어온 올린 지원자 수만큼 전체가 는다.
-  const department = {
-    name: `${ADMISSION.unit} 전체`,
-    done: DEPARTMENT_PROGRESS.othersDone + done.length,
-    total: DEPARTMENT_PROGRESS.total + Math.max(0, all.length - ASSIGNED_COUNT),
-  };
+  const department = { name: `${ADMISSION.unit} 전체`, ...departmentProgressOf(done.length, all.length) };
   const shown = who === null ? department : (people[who] ?? department);
   const shownPercent = percentText(shown.done, shown.total);
 
@@ -150,7 +142,7 @@ export function useEvaluateList() {
   const currentTab = TABS.find((item) => item.key === tab) ?? TABS[0];
 
   return {
-    crumbs: [{ label: "홈" }, { label: "평가하기", href: EVALUATE_PATH }, { label: currentTab.label }],
+    crumbs: [HOME_CRUMB, { label: "평가하기", href: EVALUATE_PATH }, { label: currentTab.label }],
     /** 제목 옆의 글: 전형 · 모집 단위 · 접수 건수 (예시 지원자 + 올린 지원자) */
     note: `${ADMISSION.trackFull} · ${ADMISSION.unit} · 접수 ${SAMPLE_APPLICANT_COUNT + uploadedCount}건`,
     /** 지금 평가 기준으로 분석하지 않아 목록에 넣지 못한 올린 지원자가 있을 때의 안내 (없으면 빈 글) */

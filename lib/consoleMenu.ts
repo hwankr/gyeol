@@ -7,6 +7,12 @@ export type ConsoleMenu = {
   href: string | null;
 };
 
+/** 홈 화면의 주소 (주 메뉴, 현재 위치 줄의 "홈", 로그인 화면의 "계속") */
+export const HOME_PATH = "/home";
+
+/** 현재 위치 줄의 첫 칸: 홈 화면으로 가는 "홈" */
+export const HOME_CRUMB = { label: "홈", href: HOME_PATH } as const;
+
 /** 지원자 관리 화면의 주소 (주 메뉴, 현재 위치 줄의 "지원자 관리") */
 export const APPLICANTS_PATH = "/applicants";
 
@@ -31,7 +37,7 @@ export const DECISION_COMPARE_PATH = "/decision/compare";
 export const DECISION_OPINIONS_PATH = "/decision/opinions";
 
 export const CONSOLE_MENUS: readonly ConsoleMenu[] = [
-  { key: "home", label: "홈", href: null },
+  { key: "home", label: "홈", href: HOME_PATH },
   { key: "prep", label: "전형 준비", href: "/prep" },
   { key: "applicants", label: "지원자 관리", href: APPLICANTS_PATH },
   { key: "evaluate", label: "평가하기", href: EVALUATE_PATH },
@@ -63,6 +69,12 @@ export const PREP_TABS: readonly PrepTab[] = [
 
 /** 전형 준비 화면의 첫 주소 (현재 위치 줄의 "전형 준비") */
 export const PREP_PATH = "/prep";
+
+/** 전형 준비 · 평가·배점 설정 탭의 주소 */
+export const PREP_WEIGHTS_PATH = "/prep/weights";
+
+/** 전형 준비 · 기준 변경 기록 탭의 주소 */
+export const PREP_HISTORY_PATH = "/prep/history";
 
 /** 선발 결정 화면의 탭 하나. href 가 null 이면 화면이 없는 탭이다(탭 줄에 이름만 있고 눌리지 않는다). */
 export type DecisionTab = {

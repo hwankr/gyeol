@@ -10,7 +10,7 @@ import {
   loadUploadedApplicants,
   subscribeUploadedApplicants,
 } from "@/lib/applicants/uploadedStorage";
-import { APPLICANTS_PATH, applicantOriginalPath } from "@/lib/consoleMenu";
+import { APPLICANTS_PATH, HOME_CRUMB, applicantOriginalPath } from "@/lib/consoleMenu";
 import { summaryPath } from "@/lib/evaluate/evaluation";
 import { assessmentFor } from "@/lib/evaluate/uploadedEvaluation";
 import { NOT_PDF_ERROR, checkRecordPdfFile, formatFileSize, takeInputFiles } from "@/lib/pdfPick";
@@ -375,7 +375,7 @@ export function useRecordUpload() {
   return {
     ready,
     bodyRef,
-    crumbs: [{ label: "홈" }, { label: "지원자 관리", href: APPLICANTS_PATH }, { label: "학생부 올리기" }],
+    crumbs: [HOME_CRUMB, { label: "지원자 관리", href: APPLICANTS_PATH }, { label: "학생부 올리기" }],
     /** 제목 옆의 글: 전형 · 모집 단위 */
     headNote: `${ADMISSION.trackFull} · ${ADMISSION.unit}`,
     backHref: APPLICANTS_PATH,

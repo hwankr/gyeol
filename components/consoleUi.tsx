@@ -21,7 +21,7 @@ type ConsoleCrumbsProps = {
 
 /**
  * 현재 위치 줄: "홈 / 전형 준비 / 기준 변경 기록". 항목 사이는 "/"(장식)다.
- * 갈 곳이 있는 항목은 보통 링크(next/link)이고, 갈 곳이 없는 항목(홈)은 href 없는 <a> 라서 초점을 받지 않고 눌러도 아무 일도 없다.
+ * 갈 곳이 있는 항목(홈, 전형 준비 등)은 보통 링크(next/link)이고, 갈 곳이 없는 항목은 href 없는 <a> 라서 초점을 받지 않고 눌러도 아무 일도 없다.
  */
 export function ConsoleCrumbs({ items, navRef }: ConsoleCrumbsProps) {
   const last = items.length - 1;

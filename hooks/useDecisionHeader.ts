@@ -1,7 +1,7 @@
 import { usePathname } from "next/navigation";
 import { useDecisionData } from "@/hooks/useDecisionData";
 import { ADMISSION } from "@/lib/admission";
-import { DECISION_PATH, DECISION_TABS, type DecisionTab } from "@/lib/consoleMenu";
+import { DECISION_PATH, DECISION_TABS, HOME_CRUMB, type DecisionTab } from "@/lib/consoleMenu";
 import { elementSpreadsOf, needsAdjustment } from "@/lib/decision/opinions";
 import { DECISION_EVALUATED_COUNT } from "@/lib/decision/sampleDecision";
 
@@ -23,7 +23,7 @@ export function useDecisionHeader() {
   if (picks.length > 0) badges.compare = { text: String(picks.length), label: `${picks.length}명 고름`, alert: false };
   if (wideCount > 0) badges.opinions = { text: `조정 ${wideCount}`, label: `조정 필요 ${wideCount}명`, alert: true };
   return {
-    crumbs: [{ label: "홈" }, { label: "선발 결정", href: DECISION_PATH }, { label: current.label }],
+    crumbs: [HOME_CRUMB, { label: "선발 결정", href: DECISION_PATH }, { label: current.label }],
     note: `${ADMISSION.trackFull} · ${ADMISSION.unit} · 모집 ${ADMISSION.quota}명 · 평가 완료 ${DECISION_EVALUATED_COUNT}명`,
     tabs: DECISION_TABS.map((tab) => ({
       key: tab.key,
