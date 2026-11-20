@@ -3,6 +3,7 @@ import { ADMISSION } from "@/lib/admission";
 import { DECISION_PATH } from "@/lib/consoleMenu";
 import {
   WIDE_SPREAD10,
+  NO_PICKS,
   comparePairOf,
   decisionMemberName,
   elementGapsOf,
@@ -56,10 +57,13 @@ function leadsText(gaps: readonly ElementGap[], side: Side): string {
  * 두 사람의 정보, 평가 요소별 점수(위원 평균)의 막대 그래프와 표, 어디서 갈렸는지 풀어 쓴 글.
  * 순위가 높은 사람이 왼쪽이다. 비교할 사람이 없으면(지원자가 둘보다 적으면) null 이다.
  * 고른 지원자를 브라우저에서 읽기 전(서버 렌더링·hydration 중)에는 "아직 모름"(undefined)이라 화면이 두 사람 자리를 비워 둔다.
+ * cutlineOnly 면(주소의 ?pair=cutline. 기록 확정 탭의 `두 지원자 비교`) 고른 지원자와 상관없이 합격선 바로 위·아래 두 사람이다.
+ * 고른 지원자는 바꾸지 않는다.
  */
-export function useDecisionCompare() {
-  const { elements, ranked, cutline, picks, picksReady } = useDecisionData();
+export function useDecisionCompare(cutlineOnly = false) {
+  const { elements, ranked, cutline, picks: storedPicks, picksReady } = useDecisionData();
   if (!picksReady) return undefined;
+  const picks = cutlineOnly ? NO_PICKS : storedPicks;
   const pair = comparePairOf(ranked, picks, ADMISSION.quota);
   if (pair === null) return null;
 
@@ -82,9 +86,11 @@ export function useDecisionCompare() {
       ? "인재상 적합 추천에서 고른 두 지원자입니다."
       : cutline === null
         ? "순위가 가장 높은 두 지원자입니다."
-        : picks.length === 0
-          ? "고른 지원자가 없어 합격선 바로 위·아래의 두 지원자를 보여 줍니다."
-          : `${picks[0]} 한 명만 골라 합격선 바로 위·아래의 두 지원자를 보여 줍니다. 한 명을 더 골라 주세요.`,
+        : cutlineOnly
+          ? "합격선 바로 위·아래의 두 지원자입니다."
+          : picks.length === 0
+            ? "고른 지원자가 없어 합격선 바로 위·아래의 두 지원자를 보여 줍니다."
+            : `${picks[0]} 한 명만 골라 합격선 바로 위·아래의 두 지원자를 보여 줍니다. 한 명을 더 골라 주세요.`,
     facts,
     recommendHref: DECISION_PATH,
     sides: [sideView(left, 0), sideView(right, 1)] as const,

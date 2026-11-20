@@ -3,7 +3,7 @@ import { NO_ADJUSTMENTS, parseDecisionAdjustments, serializeDecisionAdjustments,
 import { DECISION_APPLICANTS } from "./sampleDecision.ts";
 
 // 선발 결정 · 위원 의견 모아보기에서 확정한 조정(지원자의 조정한 위원 점수)을 브라우저 localStorage 에 JSON 으로 저장하고 불러온다.
-// 브라우저에서만 호출한다. 조정한 점수로 최종 평가와 순위를 다시 계산하므로 선발 결정의 머리와 세 탭이 같이 읽고, 새로고침해도 남는다.
+// 브라우저에서만 호출한다. 조정한 점수로 최종 평가와 순위를 다시 계산하므로 선발 결정의 머리와 네 탭이 같이 읽고, 새로고침해도 남는다.
 //
 // 읽기와 쓰기는 모두 try/catch 로 감싼다(고른 지원자의 저장 lib/decision/pickStorage.ts 와 같은 규칙).
 // - 읽음: 값이 없거나 JSON 이 아니거나 모양이 틀리면 "확정한 조정 없음"(lib/decision/adjustments.ts 의 확인). 저장소의 값은 지우지 않는다.
