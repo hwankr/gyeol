@@ -1,7 +1,7 @@
 // 선발 결정의 계산과 예시 자료 검사. 실행(저장소 루트에서): npx tsx scripts/check-decision.ts
 // lib/decision/decision.ts(최종 평가·순위·비교 기준·비교할 두 사람·요소별 차이·고른 지원자의 저장 값 확인)와
 // lib/decision/sampleDecision.ts(합격선 주변 예시 지원자 12명: 시안의 값과 맞는지, 평가하기의 지원자와 겹치지 않는지, 위원의 종합 의견),
-// lib/decision/opinions.ts(위원 의견 모아보기: 조정이 필요한 지원자, 가장 높게·낮게 준 위원, 요소별 위원 점수와 차이)를 확인한다.
+// lib/decision/opinions.ts(위원 의견 모아보기: 요소별 위원 점수와 차이, 크게 갈린 요소, 조정이 필요한 지원자)를 확인한다.
 // 인자는 받지 않는다. 출력: 사례마다 "통과"/"실패" 한 줄, 마지막에 개수. 하나라도 실패하면 종료 코드 1.
 // node scripts/check-decision.ts 로도 돌도록(Node 의 타입 제거 실행) 값 import 는 상대 경로에 .ts 확장자를 붙인다.
 import { ADMISSION } from "../lib/admission.ts";
@@ -27,14 +27,7 @@ import {
   weightedTenths,
   widestGapOf,
 } from "../lib/decision/decision.ts";
-import {
-  deviationText,
-  elementSpreadsOf,
-  extremesOf,
-  memberNamesText,
-  needsAdjustment,
-  widestSpreadOf,
-} from "../lib/decision/opinions.ts";
+import { WIDE_ELEMENT_SPREAD, elementSpreadsOf, needsAdjustment } from "../lib/decision/opinions.ts";
 import { DECISION_APPLICANTS, DECISION_FIRST_RANK } from "../lib/decision/sampleDecision.ts";
 import { EVALUATION_APPLICANTS } from "../lib/evaluate/sampleEvaluations.ts";
 import type { PrepElement } from "../lib/prep/criteria.ts";
@@ -254,59 +247,68 @@ check(
 );
 
 // ── 위원 의견 모아보기 ──
-check(
-  "조정 필요: 위원 간 차이가 큰 네 명 (위원 간 차이 큼과 같은 사람들)",
-  same(ranked.filter(needsAdjustment).map((row) => row.applicant.code), flagged("spread")),
-);
-check(
-  `조정 필요: 차이가 ${tenthsText(WIDE_SPREAD10)}점이면 해당하고 그보다 작으면 아니다`,
-  needsAdjustment({ spread10: WIDE_SPREAD10 }) && !needsAdjustment({ spread10: WIDE_SPREAD10 - 1 }),
-);
-check("가장 높게·낮게 준 위원: 871·822·779 는 위원 1 과 위원 3", same(extremesOf([871, 822, 779]), { high: [0], low: [2] }));
-check("가장 높게·낮게 준 위원: 같은 값이 여럿이면 모두", same(extremesOf([89, 80, 89]), { high: [0, 2], low: [1] }));
-check(
-  "가장 높게·낮게 준 위원: 값이 모두 같거나 없으면 비어 있다",
-  same(extremesOf([80, 80, 80]), { high: [], low: [] }) && same(extremesOf([]), { high: [], low: [] }),
-);
-check(
-  "위원 이름 묶음: 위원 1, 위원 1·3, 없으면 빈 글",
-  memberNamesText([0]) === "위원 1" && memberNamesText([0, 2]) === "위원 1·3" && memberNamesText([]) === "",
-);
 const a090 = byCode("A-0090");
 const spreads090 = a090 === undefined ? [] : elementSpreadsOf(a090, ELEMENTS);
 check(
-  "요소별 위원 점수: A-0090 은 86·81·76 / 83·79·75 / 96·90·87, 차이 10·8·9",
-  same(spreads090.map((item) => item.scores), [[86, 81, 76], [83, 79, 75], [96, 90, 87]]) && same(spreads090.map((item) => item.spread), [10, 8, 9]),
+  "요소별 위원 점수: A-0090 은 86·83·74 / 86·79·72 / 92·90·91, 차이 12·14·2",
+  same(spreads090.map((item) => item.scores), [[86, 83, 74], [86, 79, 72], [92, 90, 91]]) && same(spreads090.map((item) => item.spread), [12, 14, 2]),
 );
 check(
-  "요소별 위원 점수: 평균은 순위 계산의 요소 점수와 같고 AI 점수가 같이 있다",
-  same(spreads090.map((item) => item.mean10), a090?.element10) && same(spreads090.map((item) => item.ai), [81, 80, 89]),
+  "요소별 위원 점수: 지금 평가 기준의 요소 순서와 이름 그대로",
+  same(spreads090.map((item) => [item.id, item.name]), ELEMENTS.map((element) => [element.id, element.name])),
 );
 check(
-  "요소별 위원 점수: 요소마다 가장 높게·낮게 준 위원 (A-0090 은 모두 위원 1 과 위원 3)",
-  spreads090.length === 3 && spreads090.every((item) => same(item.extremes, { high: [0], low: [2] })),
+  `크게 갈린 요소: 차이가 ${WIDE_ELEMENT_SPREAD}점 이상 (A-0090 은 잠재역량·학업역량)`,
+  WIDE_ELEMENT_SPREAD === 10 && same(spreads090.map((item) => item.wide), [true, true, false]),
 );
-check("위원들이 가장 크게 갈린 요소: A-0090 은 잠재역량", widestSpreadOf(spreads090)?.name === "잠재역량");
-const a196 = byCode("A-0196");
+// 차이가 꼭 10점인 요소도 크게 갈린 것이다: A-0240 의 학업역량은 94·86·84 다.
+const a240 = byCode("A-0240");
+const spreads240 = a240 === undefined ? [] : elementSpreadsOf(a240, ELEMENTS);
 check(
-  "요소별 위원 점수: 같은 점수를 준 위원이 둘이면 둘 다 (A-0196 의 잠재역량은 위원 1·3 이 89)",
-  a196 !== undefined && same(elementSpreadsOf(a196, ELEMENTS)[0].extremes, { high: [0, 2], low: [1] }),
+  "크게 갈린 요소: 차이가 꼭 10점이면 해당한다 (A-0240 의 학업역량)",
+  same(spreads240.map((item) => item.spread), [12, 10, 2]) && same(spreads240.map((item) => item.wide), [true, true, false]),
+);
+const wideNames = (code: string) => {
+  const row = byCode(code);
+  return row === undefined ? [] : elementSpreadsOf(row, ELEMENTS).flatMap((item) => (item.wide ? [`${item.name} ${item.spread}`] : []));
+};
+check(
+  "크게 갈린 요소: A-0118 은 공동체역량 16점, A-0196 은 학업역량 14점",
+  same(wideNames("A-0118"), ["공동체역량 16"]) && same(wideNames("A-0196"), ["학업역량 14"]),
+);
+const adjustCodes = ranked.filter((row) => needsAdjustment(elementSpreadsOf(row, ELEMENTS))).map((row) => row.applicant.code);
+check(
+  "조정 필요: 크게 갈린 요소가 있는 네 명 (예시 자료에서는 위원 간 차이 큼과 같은 사람들)",
+  same(adjustCodes, ["A-0090", "A-0118", "A-0196", "A-0240"]) && same(adjustCodes, flagged("spread")),
+  adjustCodes.join(" "),
 );
 check(
-  "위원들이 가장 크게 갈린 요소: 차이가 같으면 앞의 요소, 모두 같으면 null",
-  a196 !== undefined &&
-    widestSpreadOf(elementSpreadsOf(a196, ELEMENTS).slice(1))?.name === "학업역량" &&
-    widestSpreadOf(spreads090.map((item) => ({ ...item, spread: 0 }))) === null &&
-    widestSpreadOf([]) === null,
+  "조정 필요: 나머지 여덟 명은 어느 요소에서도 4점 넘게 갈리지 않는다",
+  ranked
+    .filter((row) => !adjustCodes.includes(row.applicant.code))
+    .every((row) => elementSpreadsOf(row, ELEMENTS).every((item) => item.spread <= 4)),
+);
+check(
+  "조정 필요: 크게 갈린 요소가 하나라도 있으면 해당하고, 없거나 요소가 없으면 아니다",
+  needsAdjustment([{ wide: false }, { wide: true }]) && !needsAdjustment([{ wide: false }, { wide: false }]) && !needsAdjustment([]),
+);
+// 종합 점수가 비슷해도 요소에서 엇갈렸으면 조정이 필요하다(시안의 A-0132: 리더십 80·76·68, 전공 80·82·90, 종합 84·84·83).
+const crossed = rankDecisionApplicants(
+  [{ ...DECISION_APPLICANTS[0], members: [[80, 80, 85], [76, 82, 86], [68, 90, 84]] }],
+  withWeights([50, 50, 0]),
+  QUOTA,
+  DECISION_FIRST_RANK,
+)[0];
+check(
+  "조정 필요: 위원들이 서로 다른 요소에서 엇갈려 종합 점수의 차이는 작아도 해당한다",
+  crossed.spread10 < WIDE_SPREAD10 && needsAdjustment(elementSpreadsOf(crossed, ELEMENTS)),
+  tenthsText(crossed.spread10),
 );
 check(
   "요소별 위원 점수: 요소가 여섯이면 자리를 돌려 쓴다",
   same(elementSpreadsOf(sixRanked[0], sixElements).map((item) => item.scores[0]), [78, 83, 94, 78, 83, 94]),
 );
-check(
-  "평균에서 떨어진 정도: +4.7, −4.5, 같음",
-  deviationText(871, 824) === "평균 대비 +4.7" && deviationText(779, 824) === "평균 대비 −4.5" && deviationText(824, 824) === "평균과 같음",
-);
+check("요소별 위원 점수: 요소가 없으면 빈 목록", a090 !== undefined && elementSpreadsOf(a090, []).length === 0);
 
 if (failures.length > 0) {
   console.error(`\n선발 결정 검사 ${passed + failures.length}개 사례 중 ${failures.length}개 실패`);
