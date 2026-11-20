@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode, Ref } from "react";
+import type { ReactNode, Ref, SVGProps } from "react";
 
 // 새 화면(전형 준비, 지원자 관리, 평가하기)이 같이 쓰는 작은 조각과 클래스 묶음. 치수·색·글자는 디자인 값 그대로다.
 // 색: 글자 #111111, 흐린 글자 #505050·#767676, 선 #E4E4E4, 컨트롤 테두리 #CFCFCF, 표 머리 바탕 #F6F7FB,
@@ -153,6 +153,28 @@ export const BUTTON_PRIMARY_CLASS = `${BUTTON_BASE} border-[#000947] bg-[#000947
 
 /** 테두리만 있는 주 버튼(임시저장): 흰 바탕, 남색 테두리·글자 (굵기 600) */
 export const BUTTON_OUTLINE_CLASS = `${BUTTON_BASE} ${BUTTON_LIGHT_HOVER} border-[#000947] bg-white font-semibold text-[#000947] disabled:cursor-default disabled:opacity-[0.45]`;
+
+type ChartFillGradientProps = Pick<
+  SVGProps<SVGLinearGradientElement>,
+  "x1" | "y1" | "x2" | "y2" | "gradientUnits" | "gradientTransform"
+> & {
+  /** fill·stroke 에서 url(#id) 로 가리킬 이름. 한 화면에서 겹치지 않아야 한다. */
+  id: string;
+};
+
+/**
+ * SVG 차트의 채움 그라데이션. 막대(div)의 chart-fill-x·chart-fill-y 와 같은 값이다(app/globals.css): 0% 는 --chart-fill-from,
+ * 51% 부터는 --chart-fill-to. 두 색은 이 요소가 놓인 자리의 변수를 따르므로, 감싼 svg 에 chart-fill-soft 를 주면 옅은 색이 된다.
+ * 방향(x1·y1·x2·y2 등)은 쓰는 쪽이 정한다. <svg> 안의 <defs> 에 넣는다.
+ */
+export function ChartFillGradient({ id, ...direction }: ChartFillGradientProps) {
+  return (
+    <linearGradient id={id} {...direction}>
+      <stop offset="0" style={{ stopColor: "var(--chart-fill-from)" }} />
+      <stop offset="0.51" style={{ stopColor: "var(--chart-fill-to)" }} />
+    </linearGradient>
+  );
+}
 
 /**
  * 기다리는 중 표시: 돌아가는 고리(14px). 장식이라 화면 낭독기에는 숨긴다(옆의 상태 글이 읽힌다).

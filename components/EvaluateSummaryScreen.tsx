@@ -3,6 +3,7 @@ import type { ComponentProps, Ref } from "react";
 import {
   AccentTag,
   BUTTON_PRIMARY_CLASS,
+  ChartFillGradient,
   PANEL_CLASS,
   PANEL_HEAD_CLASS,
   PANEL_TITLE_CLASS,
@@ -576,7 +577,11 @@ function GrowthChart({ points, countMax, label }: { points: readonly GrowthPoint
   /** 가로 눈금선 다섯 줄 (100, 80, 60, 40, 20) */
   const gridLines = [0, 1, 2, 3, 4].map((step) => CHART.top + (step * CHART_HEIGHT) / 5);
   return (
-    <svg role="img" aria-label={label} viewBox="0 0 240 184" className="block h-auto w-full">
+    <svg role="img" aria-label={label} viewBox="0 0 240 184" className="chart-fill-soft block h-auto w-full">
+      <defs>
+        {/* 막대의 채움: 막대마다 아래에서 위로. 꺾은선과 값이 막대 위에 겹쳐도 읽히게 옅은 색(chart-fill-soft)이다. */}
+        <ChartFillGradient id="growth-bar-fill" x1="0" y1="1" x2="0" y2="0" />
+      </defs>
       <path
         fill="none"
         stroke="#E4E4E4"
@@ -590,7 +595,7 @@ function GrowthChart({ points, countMax, label }: { points: readonly GrowthPoint
           y={(CHART.bottom - dot.barHeight).toFixed(1)}
           width={CHART.barWidth}
           height={dot.barHeight.toFixed(1)}
-          fill="#BAC3FF"
+          fill="url(#growth-bar-fill)"
         />
       ))}
       <path fill="none" stroke="#767676" strokeWidth="1" d={`M${CHART.left} ${CHART.bottom}H${CHART.right}`} />
