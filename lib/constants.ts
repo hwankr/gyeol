@@ -28,3 +28,6 @@ export const UPLOADED_APPLICANTS_STORAGE_KEY = "gyeol.uploadedApplicants";
 
 /** 평가하기 · 내 평가({ version: 1, records: { "<코드>": 평가 } })를 저장하는 localStorage 키 */
 export const EVALUATIONS_STORAGE_KEY = "gyeol.evaluations";
+
+/** 선발 결정 · 비교하려고 고른 지원자({ version: 1, codes: ["<코드>", …] }, 2명까지)를 저장하는 localStorage 키 */
+export const DECISION_PICKS_STORAGE_KEY = "gyeol.decisionPicks";
