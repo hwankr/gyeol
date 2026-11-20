@@ -6,6 +6,9 @@ import type {
   ElementAssessment,
   Evidence,
   GradeGrowth,
+  Linkage,
+  LinkageCard,
+  LinkageLink,
   Section,
 } from "@/types/analysis";
 import { ASSESSMENT_LIMITS, GROWTH_GRADES } from "./evaluate/assessment.ts";
@@ -17,10 +20,11 @@ import { countByCriterion } from "./resultView.ts";
  * masks 가 없는 값은 블라인드 처리를 거치지 않은 예전 결과이므로 받아들이지 않는다
  * ("블라인드 처리됨" 화면에 가리지 않은 원문을 그리지 않게).
  * assessment(AI 제안)는 없어도 되고(전형 준비 기준이 아닌 분석, 예전 결과), 있으면 모양이 맞아야 한다.
+ * linkage(학년별 연계)도 없어도 되고(연계가 아직 없는 분석), 있으면 모양이 맞아야 한다(isLinkage).
  */
 export function isAnalysisResult(value: unknown): value is AnalysisResult {
   if (!isRecord(value)) return false;
-  const { criteria, sections, evidences, masks, assessment } = value;
+  const { criteria, sections, evidences, masks, assessment, linkage } = value;
   return (
     isDepartmentCriteria(criteria) &&
     Array.isArray(sections) &&
@@ -29,8 +33,136 @@ export function isAnalysisResult(value: unknown): value is AnalysisResult {
     evidences.every(isEvidence) &&
     Array.isArray(masks) &&
     masks.every(isMask) &&
-    (assessment === undefined || isAssessment(assessment))
+    (assessment === undefined || isAssessment(assessment)) &&
+    (linkage === undefined || isLinkage(linkage))
   );
+}
+
+/**
+ * 값이 학년별 연계 모양(필드 이름과 타입)을 갖췄는지 확인한다. /api/linkage 의 응답과 저장소에서 읽은 결과에 쓴다.
+ * 내용이 분석 결과와 맞는지(카드의 근거가 실제로 있는지 등)는 linkageProblems 가 본다.
+ */
+export function isLinkage(value: unknown): value is Linkage {
+  if (!isRecord(value)) return false;
+  return Array.isArray(value.cards) && value.cards.every(isLinkageCard) && Array.isArray(value.links) && value.links.every(isLinkageLink);
+}
+
+function isLinkageCard(value: unknown): value is LinkageCard {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.criterionId === "string" &&
+    typeof value.sectionId === "string" &&
+    Array.isArray(value.evidenceIds) &&
+    value.evidenceIds.every((id) => typeof id === "string") &&
+    typeof value.title === "string" &&
+    typeof value.theme === "string" &&
+    (value.depth === null || value.depth === 1 || value.depth === 2 || value.depth === 3)
+  );
+}
+
+function isLinkageLink(value: unknown): value is LinkageLink {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.criterionId === "string" &&
+    typeof value.fromCardId === "string" &&
+    typeof value.toCardId === "string" &&
+    (value.kind === "stated" || value.kind === "suggested") &&
+    (value.statedQuote === undefined || typeof value.statedQuote === "string") &&
+    (value.statedSectionId === undefined || typeof value.statedSectionId === "string") &&
+    typeof value.reason === "string"
+  );
+}
+
+/** 학년별 연계의 카드를 놓는 학년 */
+const LINKAGE_GRADES: readonly number[] = [1, 2, 3];
+
+/**
+ * 학년별 연계의 내용이 분석 결과와 맞는지 검사하고, 어긋난 점을 문장 목록으로 돌려준다(빈 배열이면 문제가 없다).
+ * validateResult 와 같이 문장에는 id 만 넣는다(제목·태그·구절·이유의 글은 넣지 않는다). 문장은 "연계 카드 <id>" 나 "연계 연결 <id>" 로 시작한다.
+ * - 카드: id 가 겹치지 않고, 기준과 항목이 실제로 있고, 항목의 학년이 1~3 이고, 제목이 있고, 근거가 1개 이상이며 모두 그 기준·그 항목의 것이고
+ *   다른 카드에 들어 있지 않고, 깊이가 null 이거나 1~3 의 정수다.
+ * - 연결: id 가 겹치지 않고, 두 카드가 실제로 있고 서로 다르며 연결의 기준과 같은 기준이고, 앞 카드의 학년이 뒤 카드보다 낮고, 이유가 있다.
+ *   기록에 적힌 연속(stated)이면 구절과 그 항목이 있고 그 항목이 두 카드의 항목 가운데 하나이며 구절이 그 원문에 글자 그대로 있다.
+ *   AI 가 제안한 연관(suggested)이면 구절과 그 항목이 없다.
+ */
+export function linkageProblems(result: Pick<AnalysisResult, "criteria" | "sections" | "evidences">, linkage: Linkage): string[] {
+  const problems: string[] = [];
+  const criterionIds = new Set(result.criteria.criteria.map((criterion) => criterion.id));
+  const sectionById = new Map(result.sections.map((section) => [section.id, section]));
+  const evidenceById = new Map(result.evidences.map((evidence) => [evidence.id, evidence]));
+
+  const cardById = new Map<string, LinkageCard>();
+  const usedEvidenceIds = new Set<string>();
+  for (const card of linkage.cards) {
+    if (cardById.has(card.id)) problems.push(`연계 카드 id 중복: ${card.id}`);
+    cardById.set(card.id, card);
+    const label = `연계 카드 ${card.id}`;
+    if (!criterionIds.has(card.criterionId)) problems.push(`${label}: 기준 목록에 없는 기준 id "${card.criterionId}"`);
+    const section = sectionById.get(card.sectionId);
+    if (section === undefined) {
+      problems.push(`${label}: 없는 항목 id "${card.sectionId}"`);
+    } else if (section.grade === null || !LINKAGE_GRADES.includes(section.grade)) {
+      problems.push(`${label}: 항목 ${card.sectionId} 의 학년이 1~3 이 아님`);
+    }
+    if (card.title.trim().length === 0) problems.push(`${label}: 제목이 비어 있음`);
+    if (card.depth !== null && !isIntegerIn(card.depth, 1, 3)) problems.push(`${label}: 깊이가 1~3 의 정수가 아님`);
+    if (card.evidenceIds.length === 0) problems.push(`${label}: 근거가 없음`);
+    for (const evidenceId of card.evidenceIds) {
+      const evidence = evidenceById.get(evidenceId);
+      if (evidence === undefined) {
+        problems.push(`${label}: 없는 근거 id "${evidenceId}"`);
+        continue;
+      }
+      if (evidence.criterionId !== card.criterionId || evidence.sectionId !== card.sectionId) {
+        problems.push(`${label}: 근거 ${evidenceId} 가 이 카드의 기준·항목의 것이 아님`);
+      }
+      if (usedEvidenceIds.has(evidenceId)) problems.push(`${label}: 근거 ${evidenceId} 가 다른 카드에도 있음`);
+      usedEvidenceIds.add(evidenceId);
+    }
+  }
+
+  const linkIds = new Set<string>();
+  for (const link of linkage.links) {
+    if (linkIds.has(link.id)) problems.push(`연계 연결 id 중복: ${link.id}`);
+    linkIds.add(link.id);
+    const label = `연계 연결 ${link.id}`;
+    const from = cardById.get(link.fromCardId);
+    const to = cardById.get(link.toCardId);
+    if (from === undefined || to === undefined) {
+      problems.push(`${label}: 없는 카드 id "${from === undefined ? link.fromCardId : link.toCardId}"`);
+      continue;
+    }
+    if (from === to) problems.push(`${label}: 앞뒤 카드가 같음`);
+    if (from.criterionId !== link.criterionId || to.criterionId !== link.criterionId) {
+      problems.push(`${label}: 두 카드의 기준이 연결의 기준과 다름`);
+    }
+    const fromGrade = sectionById.get(from.sectionId)?.grade ?? null;
+    const toGrade = sectionById.get(to.sectionId)?.grade ?? null;
+    if (fromGrade === null || toGrade === null || fromGrade >= toGrade) {
+      problems.push(`${label}: 앞 카드의 학년이 뒤 카드보다 낮지 않음`);
+    }
+    if (link.reason.trim().length === 0) problems.push(`${label}: 이유가 비어 있음`);
+    if (link.kind === "suggested") {
+      if (link.statedQuote !== undefined || link.statedSectionId !== undefined) {
+        problems.push(`${label}: AI 가 제안한 연관인데 구절이 있음`);
+      }
+      continue;
+    }
+    if (link.statedQuote === undefined || link.statedQuote.trim().length === 0 || link.statedSectionId === undefined) {
+      problems.push(`${label}: 기록에 적힌 연속인데 구절이나 그 항목이 없음`);
+      continue;
+    }
+    if (link.statedSectionId !== from.sectionId && link.statedSectionId !== to.sectionId) {
+      problems.push(`${label}: 구절의 항목이 두 카드의 항목이 아님`);
+      continue;
+    }
+    if (!(sectionById.get(link.statedSectionId)?.text.includes(link.statedQuote) ?? false)) {
+      problems.push(`${label}: 구절이 항목 ${link.statedSectionId} 원문에 글자 그대로 없음`);
+    }
+  }
+  return problems;
 }
 
 /**
@@ -136,6 +268,9 @@ export function validateResult(result: AnalysisResult): string[] {
       }
     }
   }
+
+  // 학년별 연계(있을 때): 카드·연결이 기준·항목·근거와 맞는지 (linkageProblems)
+  if (result.linkage !== undefined) problems.push(...linkageProblems(result, result.linkage));
 
   return problems;
 }

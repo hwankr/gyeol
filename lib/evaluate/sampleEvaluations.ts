@@ -1,5 +1,6 @@
 import type { AnalysisResult } from "@/types/analysis";
 import { sampleApplicantCode } from "../applicants/sampleApplicants.ts";
+import { sampleLinkageOf } from "./sampleLinkage.ts";
 
 // 평가하기 화면의 지원자 형식과 예시 자료.
 // 형식(EvaluationApplicant)은 예시 지원자와 올린 지원자(학생부 올리기 화면에서 분석한 학생부, ./uploadedEvaluation.ts)가 같이 쓴다.
@@ -80,6 +81,43 @@ export type ApplicantEvidence = {
   origin?: { evidenceId: string; sectionId: string };
 };
 
+/**
+ * 학년별 연계의 카드 하나: 한 평가 요소 자리의 근거 문장 가운데 같은 서류 원문에서 같은 활동을 가리키는 것들.
+ * 총평의 학년별 연계 상자가 학년 줄(grade)에 놓는다. 제목·주제 태그·깊이는 AI 제안이다(예시 지원자는 손으로 적은 예시 값).
+ */
+export type ApplicantLinkCard = {
+  id: string;
+  /** 이 카드의 근거가 든 서류 원문 (Passage.id) */
+  passageId: string;
+  grade: 1 | 2 | 3;
+  title: string;
+  /** 관심 주제 태그 (없으면 빈 글) */
+  theme: string;
+  /** 탐구 깊이: 1 수업 참여 수준, 2 주어진 과제 안의 탐구, 3 스스로 정한 심화. 정하지 않은 카드는 null */
+  depth: 1 | 2 | 3 | null;
+  /** 그 자리의 근거 문장 id (ApplicantEvidence.id), 원문 순서. 1개 이상 */
+  evidenceIds: readonly string[];
+};
+
+/** 학년별 연계의 연결 하나: 앞 학년 카드 → 뒤 학년 카드. 인과를 뜻하지 않는다. */
+export type ApplicantLink = {
+  id: string;
+  fromCardId: string;
+  toCardId: string;
+  /** 기록에 적힌 연속("stated") / AI 가 제안한 연관("suggested") */
+  kind: "stated" | "suggested";
+  /** 기록에 적힌 연속일 때만: 이어짐을 적은 원문 구절과 그 구절이 든 서류 원문 (Passage.id). 그 밖에는 null */
+  stated: { quote: string; passageId: string } | null;
+  /** 이어진다고 본 까닭 */
+  reason: string;
+};
+
+/** 평가 요소 자리 하나의 학년별 연계 */
+export type SlotLinkage = {
+  cards: readonly ApplicantLinkCard[];
+  links: readonly ApplicantLink[];
+};
+
 /** 학년 하나의 성장 요약: 이름표, 성장 지수(0~100), 활동 건수(0~5) */
 export type GrowthPoint = {
   grade: 1 | 2 | 3;
@@ -121,6 +159,11 @@ export type EvaluationApplicant = {
    * 올린 지원자는 근거 구절이 겹치면 조각이 구절보다 잘게 나뉘므로 구절을 따로 둔다.
    */
   evidences?: readonly (readonly ApplicantEvidence[])[];
+  /**
+   * 자리별 학년별 연계. 없으면 연계가 없는 지원자다: 연계 예시를 넣지 않은 예시 지원자(./sampleLinkage.ts 에 없는 지원자),
+   * 연계가 아직 없는 분석의 올린 지원자(총평의 "연계 만들기" 로 만든다).
+   */
+  linkage?: readonly SlotLinkage[];
   /** 원문보기로 여는 분석 결과(올린 지원자만). 없으면 미리 만든 샘플 결과를 연다. */
   original?: AnalysisResult;
   /**
@@ -585,14 +628,18 @@ function peersOf(n: number, position: number, ai: SampleAssessments): PeerOpinio
 export const EVALUATION_APPLICANTS: readonly EvaluationApplicant[] = APPLICANT_SOURCES.map((source, position) => {
   const code = sampleApplicantCode(source.n);
   const ai = assessmentsOf(source.n);
+  const passages = passagesOf(source, code);
+  // 학년별 연계 예시는 두 명(A-0085, A-0118)에게만 있다. 원문·근거는 그대로 두고 카드와 선만 손으로 적은 것이다(./sampleLinkage.ts).
+  const linkage = sampleLinkageOf(source.n, code, passages);
   return {
     code,
     summary: source.summary,
     ai,
     growth: growthOf(source.n),
-    passages: passagesOf(source, code),
+    passages,
     seed: seedOf(source.n, ai),
     peers: peersOf(source.n, position, ai),
+    ...(linkage === undefined ? {} : { linkage }),
   };
 });
 

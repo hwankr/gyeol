@@ -32,15 +32,20 @@ const READING_STATUS = "학생부 PDF 를 읽는 중…";
 /** 분석이 끝나 가린 쪽 그림을 만드는 동안의 상태 글 */
 const RENDERING_STATUS = "가린 쪽 그림을 만드는 중…";
 
+/** 분석이 끝나 근거 사이의 학년별 연계를 찾는 동안의 상태 글 (AI 를 한 번 더 부른다) */
+const LINKING_STATUS = "학년별 연계를 찾는 중… 30초쯤 걸립니다.";
+
 /**
  * 기다리는 동안의 상태 글. 단계는 lib/analyzeClient.ts 가 알려 준다: PDF 읽기 → (AI 가 읽어야 하는 쪽이 있으면) 쪽별 읽기 → 가리고 분석
- * → 가린 쪽 그림 만들기. 쪽별 읽기는 글자가 없는 쪽(스캔본)이나 파서가 양식을 알아보지 못한 학생부에서만 거치고, 쪽마다 AI 를 한 번 부른다.
+ * → (근거가 있으면) 학년별 연계 찾기 → 가린 쪽 그림 만들기. 쪽별 읽기는 글자가 없는 쪽(스캔본)이나 파서가 양식을 알아보지 못한 학생부에서만
+ * 거치고, 쪽마다 AI 를 한 번 부른다.
  */
 function stageText(progress: AnalysisProgress | null): string {
   if (progress === null || progress.stage === "reading") return READING_STATUS;
   if (progress.stage === "pages") {
     return `AI 가 학생부를 쪽별로 읽는 중… ${progress.done}/${progress.total}쪽 (몇 분 걸릴 수 있습니다)`;
   }
+  if (progress.stage === "linking") return LINKING_STATUS;
   if (progress.stage === "rendering") return RENDERING_STATUS;
   return ANALYZING_STATUS;
 }
@@ -82,6 +87,8 @@ type EntryDone = {
   assessed: boolean;
   /** 원문보기에서 실제 PDF 의 자리를 볼 수 있는지 (가린 쪽 그림을 남겼는지) */
   hasPages: boolean;
+  /** 학년별 연계를 분석 결과에 붙였는지 (근거가 없거나 연결 찾기가 실패했으면 false) */
+  linked: boolean;
 };
 
 /** 올려 둔 학생부 한 건 */
@@ -121,7 +128,10 @@ function doneNote(done: EntryDone): string {
   const body = done.assessed
     ? `근거 ${done.evidenceCount}건과 AI 제안을 만들었고, 평가 대기 목록에 나옵니다.`
     : `근거 ${done.evidenceCount}건을 찾았지만 AI 제안을 만들 기록이 없어 평가 대기 목록에는 나오지 않습니다.`;
-  return done.hasPages ? body : `${body} 가린 쪽 그림은 남기지 못했습니다.`;
+  // 연결 찾기만 실패한 학생부: 평가 대기 목록에 나오는 것이면 총평의 "연계 만들기" 로 다시 만들 수 있다.
+  const linkNote =
+    done.assessed && done.evidenceCount > 0 && !done.linked ? " 학년별 연계는 만들지 못했습니다. 평가하기의 총평에서 만들 수 있습니다." : "";
+  return `${body}${linkNote}${done.hasPages ? "" : " 가린 쪽 그림은 남기지 못했습니다."}`;
 }
 
 /**
@@ -300,7 +310,7 @@ export function useRecordUpload() {
       update(id, { status: "working", error: null });
       try {
         // 단계가 바뀌거나 쪽을 하나 읽을 때마다 상태 글을 바꾼다. 더 이상 유효하지 않은 분석의 알림은 버린다.
-        const { result, pages } = await requestAnalysis({ prepCriteria: prep, file }, controller.signal, (next) => {
+        const { result, pages, linked } = await requestAnalysis({ prepCriteria: prep, file }, controller.signal, (next) => {
           if (isCurrent()) setProgress(next);
         });
         if (!isCurrent()) return;
@@ -324,6 +334,7 @@ export function useRecordUpload() {
             evidenceCount: result.evidences.length,
             assessed: assessmentFor(result, prep.elements) !== null,
             hasPages,
+            linked,
           },
         });
       } catch (error) {

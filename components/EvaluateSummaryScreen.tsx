@@ -20,6 +20,8 @@ import {
   WORKBENCH_HEIGHT_CLASS,
   WORKBENCH_SCROLL_CLASS,
 } from "@/components/EvaluateParts";
+import { LinkagePanel } from "@/components/EvaluateLinkage";
+import type { LinkageView } from "@/hooks/useEvaluateLinkage";
 import type { GrowthPoint, PeerOpinion } from "@/lib/evaluate/sampleEvaluations";
 
 type DocumentView = Omit<
@@ -93,6 +95,8 @@ type EvaluateSummaryScreenProps = {
   /** 근거 문장 목록의 스크롤 영역(넓은 배치에서만 안에서 스크롤한다)과 고른 근거 문장 */
   evidenceListRef: Ref<HTMLDivElement>;
   focusedEvidenceRef: Ref<HTMLButtonElement>;
+  /** 학년별 연계 상자 (components/EvaluateLinkage.tsx) */
+  linkage: LinkageView;
   mine: MineView;
 };
 
@@ -108,7 +112,8 @@ const FIELD_BORDER_CLASS = "motion-colors border-[#CFCFCF] enabled:hover:border-
 
 /**
  * 평가하기 · 총평 화면(/evaluate/summary?code=…). 왼쪽 위는 학생 성장 요약과 서류 원문, 그 아래는 항목별 AI 점수와 근거
- * (평가 요소를 고르면 원문의 그 근거가 짙게 강조된다), 오른쪽은 내 평가 입력이다.
+ * (평가 요소를 고르면 원문의 그 근거가 짙게 강조된다)와 학년별 연계(components/EvaluateLinkage.tsx: 근거를 학년 줄의 카드로 놓고
+ * 학년을 넘어 이어지는 카드를 선으로 잇는다. 탭은 같은 평가 요소 선택이다), 오른쪽은 내 평가 입력이다.
  * 좁은 화면에서는 상자들이 아래로 내려가 한 줄에 하나씩 쌓인다.
  * 평가 요소를 고르면 그 요소의 근거가 옅게 나타나고 원문의 짙은 색이 옮겨 간다. 고르지 않은 줄은 마우스를 올리면 옅은 회색 바탕이 된다.
  * 원문의 근거 구절은 평가 요소마다 다른 형광펜 색이고(components/evidenceTone.ts) 평가 요소 이름 앞의 색 점이 그 색이다.
@@ -116,7 +121,7 @@ const FIELD_BORDER_CLASS = "motion-colors border-[#CFCFCF] enabled:hover:border-
  *
  * 넓은 배치(올린 지원자): 평가하면서 근거를 원본에서 바로 확인하도록 배치가 다르다. 왼쪽 위 상자에 서류 원문(실제 학생부 PDF)과
  * 항목별 점수와 근거가 나란히 놓이고, 둘 다 화면 높이 안에서 각자 스크롤한다(근거를 눌러 원본을 따라 읽는 동안 문서가 움직이지 않는다).
- * 학생 성장 요약은 그 아래 상자다. 폭이 모자라면 근거 단이 서류 원문 아래로 내려간다.
+ * 학생 성장 요약은 그 아래 상자이고 학년별 연계는 그다음 상자다. 폭이 모자라면 근거 단이 서류 원문 아래로 내려간다.
  * 서류 원문 머리 줄의 "크게 보기" 를 켜면 그 상자(서류 원문과 근거)가 화면 전체를 덮어 원본을 크게 읽는다("원래 크기" 나 Esc 로 돌아온다).
  */
 export function EvaluateSummaryScreen({
@@ -129,6 +134,7 @@ export function EvaluateSummaryScreen({
   basis,
   evidenceListRef,
   focusedEvidenceRef,
+  linkage,
   mine,
 }: EvaluateSummaryScreenProps) {
   return (
@@ -183,6 +189,7 @@ export function EvaluateSummaryScreen({
                 <GrowthList points={growth.points} className="min-w-0 flex-[999_1_240px]" />
               </div>
             </section>
+            <LinkagePanel view={linkage} />
           </div>
         ) : (
           <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-[16px]">
@@ -211,6 +218,7 @@ export function EvaluateSummaryScreen({
               className={PANEL_CLASS}
               headClassName="rounded-t-[7px]"
             />
+            <LinkagePanel view={linkage} />
           </div>
         )}
         <MineSection mine={mine} />
