@@ -1,6 +1,7 @@
 // 선발 결정의 계산과 예시 자료 검사. 실행(저장소 루트에서): npx tsx scripts/check-decision.ts
 // lib/decision/decision.ts(최종 평가·순위·비교 기준·비교할 두 사람·요소별 차이·고른 지원자의 저장 값 확인)와
-// lib/decision/sampleDecision.ts(합격선 주변 예시 지원자 12명: 시안의 값과 맞는지, 평가하기의 지원자와 겹치지 않는지, 위원의 종합 의견),
+// lib/decision/sampleDecision.ts(합격선 주변 예시 지원자 12명: 시안의 값과 맞는지, 평가하기의 지원자와는 A-0118 한 명만 겹치고 그 값이
+// 평가하기의 값과 맞는지, 위원의 종합 의견),
 // lib/decision/opinions.ts(위원 의견 모아보기: 요소별 위원 점수와 차이, 크게 갈린 요소, 조정이 필요한 지원자),
 // lib/decision/adjustments.ts(조정: 점수 입력 읽기, 고치는 중의 계산, 확정한 조정의 저장 값 확인과 지원자 자료에 덮어쓰기),
 // lib/decision/confirm.ts(기록 확정: 조정의 진행, 확인 항목의 글, 확정한 기록의 형식과 저장 값 확인)를 확인한다.
@@ -57,7 +58,7 @@ import {
 } from "../lib/decision/decision.ts";
 import { WIDE_ELEMENT_SPREAD, elementSpreadsOf, needsAdjustment } from "../lib/decision/opinions.ts";
 import { DECISION_APPLICANTS, DECISION_FIRST_RANK } from "../lib/decision/sampleDecision.ts";
-import { EVALUATION_APPLICANTS } from "../lib/evaluate/sampleEvaluations.ts";
+import { EVALUATION_APPLICANTS, PEER_PROGRESS } from "../lib/evaluate/sampleEvaluations.ts";
 import type { PrepElement } from "../lib/prep/criteria.ts";
 import { DEFAULT_PREP_CRITERIA } from "../lib/prep/defaultCriteria.ts";
 
@@ -105,9 +106,57 @@ check(
 // ── 예시 자료 ──
 check("예시 자료: 12명, 코드가 겹치지 않는다", CODES.length === 12 && new Set(CODES).size === 12);
 check(
-  "예시 자료: 평가하기에 배정된 24명과 겹치지 않는다",
-  EVALUATION_APPLICANTS.every((applicant) => !CODES.includes(applicant.code)),
+  "예시 자료: 평가하기에 배정된 24명과는 A-0118 한 명만 겹친다",
+  same(
+    EVALUATION_APPLICANTS.filter((applicant) => CODES.includes(applicant.code)).map((applicant) => applicant.code),
+    ["A-0118"],
+  ),
 );
+{
+  // 겹치는 한 명은 두 화면에서 같은 사람으로 읽혀야 한다: 위원 1 = 로그인한 사정관(평가하기의 내 평가), 위원 2·3 = 다른 위원 두 명
+  const decision = DECISION_APPLICANTS.find((applicant) => applicant.code === "A-0118");
+  const evaluation = EVALUATION_APPLICANTS.find((applicant) => applicant.code === "A-0118");
+  check(
+    "예시 자료: A-0118 의 요약·AI 점수가 평가하기와 같다",
+    decision !== undefined &&
+      evaluation !== undefined &&
+      decision.summary === evaluation.summary &&
+      same(decision.ai, evaluation.ai.map((slot) => slot.score)),
+  );
+  check(
+    "예시 자료: A-0118 의 위원 1 점수·의견이 평가하기의 내 평가(제출 완료)와 같다",
+    decision !== undefined &&
+      evaluation?.seed?.status === "submitted" &&
+      same(decision.members[0], evaluation.seed.scores) &&
+      decision.opinions[0] === evaluation.seed.opinion,
+  );
+  const seed = evaluation?.seed ?? null;
+  check(
+    "예시 자료: A-0118 의 내 평가는 AI 점수와 다른 자리마다 수정 사유가 있다",
+    evaluation !== undefined &&
+      seed !== null &&
+      ([0, 1, 2] as const).every((slot) => seed.scores[slot] === evaluation.ai[slot].score || (seed.reasons[slot] ?? "").trim() !== ""),
+  );
+  check(
+    "예시 자료: A-0118 의 위원 2·3 의견이 평가하기의 다른 위원 의견과 같다 (종합 점수는 기본 배점의 가중 평균을 반올림)",
+    decision !== undefined &&
+      evaluation !== undefined &&
+      evaluation.peers.length === 2 &&
+      evaluation.peers.every(
+        (peer, index) =>
+          peer.comment === decision.opinions[index + 1] &&
+          peer.total === Math.round(weightedTenths(decision.members[index + 1], ELEMENTS) / 10),
+      ),
+    JSON.stringify(evaluation?.peers.map((peer) => peer.total)),
+  );
+  check(
+    "예시 자료: 다른 위원의 제출 수가 진행 현황(24·17)과 같다 (A-0118 을 제출한 것으로 둔 뒤에도)",
+    PEER_PROGRESS.every(
+      (progress, index) =>
+        EVALUATION_APPLICANTS.filter((applicant) => applicant.peers[index]?.total !== null).length === progress.done,
+    ) && same(PEER_PROGRESS.map((progress) => progress.done), [24, 17]),
+  );
+}
 check(
   "예시 자료: 점수는 모두 0~100 정수",
   DECISION_APPLICANTS.every((applicant) =>
