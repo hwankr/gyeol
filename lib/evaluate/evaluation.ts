@@ -369,13 +369,37 @@ export function evidencesOf(
   if (applicant.evidences !== undefined) return applicant.evidences[slot] ?? [];
   const items: EvidenceItem[] = [];
   for (const passage of applicant.passages) {
+    let start = 0;
     passage.segments.forEach((segment, index) => {
+      const end = start + segment.text.length;
       if (segment.slots.includes(slot)) {
-        items.push({ id: `${passage.id}-${index}`, source: evidenceSource(passage), text: segment.text });
+        items.push({
+          id: `${passage.id}-${index}`,
+          source: evidenceSource(passage),
+          text: segment.text,
+          place: { passageId: passage.id, start, end },
+        });
       }
+      start = end;
     });
   }
   return items;
+}
+
+/**
+ * 원문 조각의 형광펜 색 순번(평가 요소 순번)과 지금 고른 요소의 근거인지. 근거가 아닌 조각은 null.
+ * 조각이 지금 고른 요소의 근거면 그 요소의 색이고, 아니면 그 조각을 근거로 쓴 요소 가운데 맨 앞 요소의 색이다
+ * (자리가 요소 순번과 같다: 예시 지원자는 앞의 네 요소, 올린 지원자는 모든 요소).
+ */
+export function segmentTone(
+  segment: PassageSegment,
+  selectedSlot: number,
+  selectedIndex: number,
+  slotLimit: number,
+): { tone: number; selected: boolean } | null {
+  const slots = evidenceSlotsOf(segment, slotLimit);
+  if (slots.length === 0) return null;
+  return slots.includes(selectedSlot) ? { tone: selectedIndex, selected: true } : { tone: slots[0], selected: false };
 }
 
 /** 그 서류 구분의 원문 */

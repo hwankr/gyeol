@@ -21,6 +21,8 @@ import {
   findEvaluationApplicant,
   parseEvaluations,
   queuePosition,
+  segmentTone,
+  slotOf,
 } from "../lib/evaluate/evaluation.ts";
 import { EVALUATION_APPLICANTS } from "../lib/evaluate/sampleEvaluations.ts";
 import {
@@ -32,6 +34,7 @@ import {
 import { PREP_CRITERIA_ID, prepAnalysisCriteria, rubricFingerprint } from "../lib/prep/analysisCriteria.ts";
 import { numberedGroups, type PrepCriteria, type PrepElement } from "../lib/prep/criteria.ts";
 import { DEFAULT_PREP_CRITERIA } from "../lib/prep/defaultCriteria.ts";
+import { buildPdfPages } from "../lib/recordPdfMarks.ts";
 import { isAnalysisResult, validateResult } from "../lib/validateResult.ts";
 
 let passed = 0;
@@ -458,6 +461,35 @@ function checkUploaded() {
     "연결: 근거 문장의 id 는 서로 다르다",
     new Set(ELEMENTS.flatMap((_, index) => evidencesOf(applicant, index, ELEMENTS.length).map((evidence) => evidence.id))).size === 6,
   );
+  {
+    // 서류 원문에서 근거의 자리로 가는 데 쓰는 값: 자리(place)의 범위가 그 원문에서 근거 구절과 같고, 분석 결과의 근거 id·항목 id(origin)가 맞다.
+    const all = ELEMENTS.flatMap((_, index) => evidencesOf(applicant, index, ELEMENTS.length));
+    check(
+      "연결: 근거 문장마다 서류 원문에서의 자리가 그 구절의 범위다",
+      all.length === 6 &&
+        all.every((evidence) => {
+          const passage = applicant.passages.find((item) => item.id === evidence.place?.passageId);
+          if (passage === undefined || evidence.place === undefined) return false;
+          const text = passage.segments.map((segment) => segment.text).join("");
+          return text.slice(evidence.place.start, evidence.place.end) === evidence.text;
+        }),
+      JSON.stringify(all.map((evidence) => evidence.place)),
+    );
+    check(
+      "연결: 근거 문장마다 분석 결과의 근거 id 와 항목 id 가 붙는다(실제 PDF 에서 자리를 찾는 열쇠)",
+      all.every((evidence) => {
+        const source = item.result.evidences.find((entry) => entry.id === evidence.origin?.evidenceId);
+        const passage = applicant.passages.find((entry) => entry.id === evidence.place?.passageId);
+        return (
+          source !== undefined &&
+          source.quote === evidence.text &&
+          source.sectionId === evidence.origin?.sectionId &&
+          passage?.origin?.sectionId === source.sectionId
+        );
+      }) && new Set(all.map((evidence) => evidence.origin?.evidenceId)).size === 6,
+      JSON.stringify(all.map((evidence) => evidence.origin)),
+    );
+  }
   check(
     "연결: 학년별 성장의 이름표·지수는 AI 제안, 건수는 그 학년의 근거 수",
     same(
@@ -595,6 +627,26 @@ function checkSample() {
     ),
   );
   check(
+    "예시: 근거 문장의 자리는 그 원문 조각의 범위다",
+    ELEMENTS.flatMap((_, index) => evidencesOf(sample, index, ELEMENTS.length)).every((evidence) => {
+      const passage = sample.passages.find((item) => item.id === evidence.place?.passageId);
+      if (passage === undefined || evidence.place === undefined) return false;
+      return passage.segments.map((segment) => segment.text).join("").slice(evidence.place.start, evidence.place.end) === evidence.text;
+    }),
+  );
+  check(
+    "형광펜: 지금 고른 요소의 근거면 그 요소의 색, 아니면 맨 앞 요소의 색이고 근거가 아니면 없다",
+    same(segmentTone({ text: "가", slots: [0, 3] }, 3, 3, 4), { tone: 3, selected: true }) &&
+      same(segmentTone({ text: "가", slots: [1, 3] }, 0, 0, 4), { tone: 1, selected: false }) &&
+      segmentTone({ text: "가", slots: [] }, 0, 0, 4) === null &&
+      // 요소가 셋뿐이면 넷째 자리는 근거가 아니다.
+      segmentTone({ text: "가", slots: [3] }, 0, 0, 3) === null,
+  );
+  check(
+    "형광펜: 요소가 여섯이면 다섯째 요소를 골랐을 때 첫 자리의 조각이 다섯째 요소의 색이다",
+    same(segmentTone({ text: "가", slots: [0] }, slotOf(sample, 4), 4, 4), { tone: 4, selected: true }),
+  );
+  check(
     "예시: 평가 순서의 첫 지원자는 앞이 없고 24명이다",
     same(queuePosition(EVALUATION_APPLICANTS, EVALUATION_APPLICANTS[0].code), {
       position: 1,
@@ -605,11 +657,68 @@ function checkSample() {
   );
 }
 
+/** 실제 PDF 쪽 위의 표시(형광펜) 만들기 (lib/recordPdfMarks.ts) */
+function checkPdfMarks() {
+  const pages = [
+    { page: 1, width: 595, height: 842, state: "shown" as const, url: "blob:1" },
+    { page: 2, width: 595, height: 842, state: "scan" as const, url: null },
+    { page: 3, width: 595, height: 842, state: "unverified" as const, url: null },
+  ];
+  const built = buildPdfPages(
+    pages,
+    [
+      { id: "e2", rects: [[2, 0.1, 0.2, 0.3, 0.02], [1, 0.1, 0.5, 0.3, 0.02], [1, 0.1, 0.52, 0.2, 0.02]], tone: 1, level: "focus", stamp: 7 },
+      { id: "e1", rects: [[1, 0.1, 0.1, 0.3, 0.02]], tone: 0, level: "strong" },
+      { id: "e3", rects: [[1, 0.1, 0.3, 0.3, 0.02]], tone: 2, level: "soft" },
+      { id: "section:s1", rects: [[1, 0.1, 0.1, 0.8, 0.5]], tone: null, level: "section" },
+      { id: "e4", rects: undefined, tone: 3, level: "soft" },
+    ],
+    "e2",
+  );
+  check(
+    "PDF 표시: 쪽마다 그 쪽의 표시만, 옅은 것부터(항목 < 다른 요소 < 지금 요소 < 고른 근거) 놓인다",
+    same(
+      built.map((page) => page.marks.map((mark) => `${mark.groupId}:${mark.level}:${mark.tone}`)),
+      [["section:s1:section:null", "e3:soft:2", "e1:strong:0", "e2:focus:1", "e2:focus:1"], ["e2:focus:1"], []],
+    ),
+    JSON.stringify(built.map((page) => page.marks.map((mark) => `${mark.groupId}:${mark.level}:${mark.tone}`))),
+  );
+  check(
+    "PDF 표시: 스크롤 대상은 대상 묶음의 표시 가운데 문서에서 맨 앞의 것 하나다",
+    same(
+      built.flatMap((page) => page.marks.filter((mark) => mark.isTarget).map((mark) => [page.page, mark.groupId, mark.y])),
+      [[1, "e2", 0.5]],
+    ),
+  );
+  check(
+    "PDF 표시: 표시의 key 는 서로 다르고, 고른 근거의 key 에는 고를 때마다 바뀌는 값이 든다",
+    new Set(built.flatMap((page) => page.marks.map((mark) => mark.key))).size === 6 &&
+      built[1].marks[0].key === "e2#0#7" &&
+      built[0].marks[1].key === "e3#0#0",
+  );
+  check(
+    "PDF 표시: 자리가 없는 묶음이 대상이면 대상이 없다",
+    buildPdfPages(pages, [{ id: "e4", rects: undefined, tone: 3, level: "focus" }], "e4").every((page) => page.marks.length === 0),
+  );
+  check(
+    "PDF 표시: 그림이 없는 쪽에는 그 까닭을 적는다",
+    same(
+      built.map((page) => [page.url, page.stateText]),
+      [
+        ["blob:1", ""],
+        [null, "스캔본 · 가린 그림 없음"],
+        [null, "가림 확인 안 됨 · 그림 없음"],
+      ],
+    ),
+  );
+}
+
 checkNormalize();
 checkFingerprint();
 checkSplit();
 checkUploaded();
 checkSample();
+checkPdfMarks();
 
 if (failures.length > 0) {
   console.error(`\n평가하기 검사 ${passed + failures.length}개 사례 중 ${failures.length}개 실패`);

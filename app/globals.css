@@ -51,12 +51,13 @@
       translate: 0 -3px;
     }
   }
+  /* 가장 짙은 순간의 색은 형광펜 색마다 다르다(--mark-flash. components/evidenceTone.ts). 정하지 않았으면 파랑이다. */
   @keyframes mark-in {
     0% {
       background-color: transparent;
     }
     35% {
-      background-color: #b4bdff;
+      background-color: var(--mark-flash, #b4bdff);
     }
   }
 }

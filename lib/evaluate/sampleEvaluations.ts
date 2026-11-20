@@ -61,12 +61,19 @@ export type SlotAssessment = {
   tags?: readonly string[];
 };
 
-/** 근거 문장 하나: 출처("2학년 · 세특 · 물리학II"), 문장, AI 가 적은 이유(올린 지원자만) */
+/**
+ * 근거 문장 하나: 출처("2학년 · 세특 · 물리학II"), 문장, AI 가 적은 이유(올린 지원자만).
+ * - place: 이 문장이 있는 서류 원문(Passage.id)과 그 원문 글에서의 범위 [start, end). 서류 원문에서 이 근거의 자리로 가는 데 쓴다.
+ *   원문에서 구절을 찾지 못한 근거(올린 지원자)에는 없다.
+ * - origin: 올린 지원자만. 분석 결과의 근거 id 와 그 근거가 든 학생부 항목의 id (실제 PDF 에서 자리를 찾는 열쇠. lib/recordPages.ts)
+ */
 export type ApplicantEvidence = {
   id: string;
   source: string;
   text: string;
   reason?: string;
+  place?: { passageId: string; start: number; end: number };
+  origin?: { evidenceId: string; sectionId: string };
 };
 
 /** 학년 하나의 성장 요약: 이름표, 성장 지수(0~100), 활동 건수(0~5) */

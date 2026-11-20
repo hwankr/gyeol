@@ -96,6 +96,7 @@ export function splitBySlots(
  *   서식의 묶음 이름(교과 성적의 "진로 선택 과목"·"체육·예술")이나 항목 이름을 과목 자리에 쓴다. 그 밖의 항목은 넣지 않는다.
  *   근거 구절은 원문에서 처음 나오는 자리에 표시한다(splitBySlots). 원문마다 학생부 항목의 id 와 쪽 번호를 붙인다(origin).
  * - 근거 문장: 요소마다 근거 구절과 AI 가 적은 이유를 원문 순서대로(항목 순서, 항목 안에서는 구절이 나오는 순서).
+ *   근거마다 서류 원문에서의 자리(place)와 분석 결과의 근거 id·항목 id(origin: 실제 PDF 에서 자리를 찾는 열쇠)를 붙인다.
  * - 학년별 성장: 이름표와 지수는 AI 제안, 건수는 그 학년 항목에서 나온 근거 구절의 수.
  * - 처음 평가 상태는 없고("대기") 다른 위원 의견도 없다. 원문보기는 이 분석 결과를 연다. 평가는 이 분석(남긴 때)에 묶는다(stamp).
  */
@@ -149,6 +150,10 @@ export function uploadedEvaluationApplicant(
         source: evidenceSource(passage),
         text: mark.evidence.quote,
         ...(reason === "" ? {} : { reason }),
+        ...(mark.start < 0
+          ? {}
+          : { place: { passageId: passage.id, start: mark.start, end: mark.start + mark.evidence.quote.length } }),
+        origin: { evidenceId: mark.evidence.id, sectionId: section.id },
       });
       if (grade !== null) countByGrade.set(grade, (countByGrade.get(grade) ?? 0) + 1);
     }
