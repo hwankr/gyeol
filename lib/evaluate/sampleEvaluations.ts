@@ -8,6 +8,9 @@ import { sampleApplicantCode } from "../applicants/sampleApplicants.ts";
 // 실제 지원자·학교·지명이 아니다. 모집 단위가 경영학과라 요약·원문·점수는 경영학과 지원자의 모습으로 지어낸 임시 값이다
 // (디자인 시안은 컴퓨터공학과 지원자의 예시였다). 위원별 진행 수(21·24·17 / 24, 전체 248 / 312)와 마감 문구, 처음 상태의 짜임
 // (21명 제출 완료, A-0133 평가 중, A-0187 임시 저장, A-0251 대기), A-0187 의 학년별 성장 요약은 디자인에 적힌 그대로다.
+// A-0118 은 선발 결정의 예시 지원자(lib/decision/sampleDecision.ts)와 겹치는 한 명이다(평가하기에서 그 지원자의 원문과 내 평가를
+// 다시 볼 수 있게). 한 줄 요약, AI 점수, 내 점수(= 선발 결정의 위원 1), 다른 위원 두 명(= 위원 2·3)의 의견은 선발 결정의 값과
+// 같게 적었다(scripts/check-decision.ts 가 확인한다).
 // 난수·현재 시각을 쓰지 않고 지원자 번호로 계산해 늘 같은 결과가 나온다. 예시 지원자의 값은 AI 가 만든 것이 아니다.
 
 /**
@@ -256,9 +259,9 @@ const APPLICANT_SOURCES: readonly ApplicantSource[] = [
     key: [2, "사회문제 탐구", ["매점의 요일별 판매량을 한 달 동안 기록해 품목별로 남는 양을 정리함.", 0], " ", ["행사 주간 전후의 값을 견주어 주문량을 조정하자고 제안하는 보고서를 씀.", 1]],
   },
   {
-    n: 117,
-    summary: "멘토링으로 후배의 경제 학습을 한 학기 동안 도운 학생",
-    key: [3, "경제", ["수요와 공급을 처음 배우는 후배를 위해 단계별 연습 문제를 만들어 한 학기 동안 함께 풂.", 2], " ", ["설명하면서 자신이 헷갈리던 탄력성 개념을 다시 정리해 실제 가격 사례에 적용해 봄.", 0]],
+    n: 118,
+    summary: "영어·사회 교과 성취가 높고 탐구 보고서가 충실한 학생",
+    key: [2, "영어Ⅰ", "사회·문화 시간에 배운 공정 무역 개념과 이어, ", ["공정 무역 인증 제품을 다룬 영어 기사 여러 편을 읽고 인증 기준과 소비자 가격의 관계를 탐구 보고서로 정리함.", 0], " ", ["기사마다 수치의 출처를 확인하고 서로 다른 값은 표로 나란히 놓아 어느 자료가 더 믿을 만한지 근거를 들어 밝힘.", 1]],
   },
   {
     n: 124,
@@ -310,6 +313,14 @@ const ACTIVITY_POOL: readonly PassageSource[] = [
   [1, "진로활동", ["진로 탐색 시간에 경영 분야의 진로를 조사하고 관련 책을 읽어 소감을 발표함.", 0], " ", ["발표 뒤 받은 질문을 정리해 다음 탐구 주제로 삼음.", 1]],
 ];
 
+/**
+ * 번호로 고르지 않고 정해 둔 창체 원문 (번호 → 묶음 순번). A-0118 은 번호로 고르면 동아리 부장 기록(공동체역량 근거 둘)이 되어
+ * 약점(공동체 활동 기록이 적음)과 어긋나므로 진로활동을 쓴다. 그래서 A-0118 의 공동체역량 근거는 행특의 한 문장뿐이다.
+ */
+const FIXED_ACTIVITY_PICKS: Readonly<Record<number, number>> = {
+  118: 5,
+};
+
 /** 행특 원문 묶음 (번호로 고른다). 학년은 3학년이다. */
 const BEHAVIOR_POOL: readonly PassageSource[] = [
   [3, "행동특성 및 종합의견", ["맡은 일을 끝까지 해내는 책임감이 강하고 약속한 기한을 어기는 일이 없음.", 2], " ", ["어려워하는 친구에게 먼저 다가가 설명해 주어 학급에서 믿음이 두터움.", 2]],
@@ -333,10 +344,24 @@ function achievementOf(n: number, gradeIndex: number, subjectIndex: number): str
   return value < 6 ? "A" : value < 9 ? "B" : "C";
 }
 
+/**
+ * 번호로 계산하지 않고 정해 둔 성취도 (번호 → 학년별, GRADE_SUBJECTS 와 같은 자리). A-0118 은 번호로 계산하면 영어Ⅰ 등 절반이 C 라
+ * 요약(영어·사회 교과 성취가 높음)과 어긋나므로 수학만 B 이고 나머지는 A 로 둔다.
+ */
+const FIXED_ACHIEVEMENTS: Readonly<Record<number, readonly (readonly string[])[]>> = {
+  118: [
+    ["A", "B", "A", "A", "A"],
+    ["A", "B", "A", "A", "A"],
+    ["A", "B", "A", "A", "A"],
+  ],
+};
+
 /** 교과 원문 세 건(학년마다 한 건). 2학년 줄은 학업역량 자리(기초학업역량)의 근거다. */
 function subjectPassages(code: string, n: number, withEvidence: boolean): Passage[] {
   return GRADE_SUBJECTS.map((subjects, gradeIndex) => {
-    const text = subjects.map((subject, index) => `${subject} ${achievementOf(n, gradeIndex, index)}`).join(" · ");
+    const text = subjects
+      .map((subject, index) => `${subject} ${FIXED_ACHIEVEMENTS[n]?.[gradeIndex][index] ?? achievementOf(n, gradeIndex, index)}`)
+      .join(" · ");
     const segment: PassageSegment = { text, slots: withEvidence && gradeIndex === 1 ? [1] : [] };
     return {
       id: `${code}-subject-${gradeIndex + 1}`,
@@ -359,7 +384,7 @@ function passagesOf(source: ApplicantSource, code: string): Passage[] {
   // A-0187 은 세특 두 건만 근거로 쓴다(근거 수: 잠재역량 2, 학업역량 3, 공동체역량 1).
   const detailOnly = n === 187;
   const second = SECOND_DETAIL_PASSAGES[n] ?? DETAIL_POOL[(n * 5) % DETAIL_POOL.length];
-  const activity = toPassage(`${code}-activity`, "창체", ACTIVITY_POOL[(n * 3) % ACTIVITY_POOL.length]);
+  const activity = toPassage(`${code}-activity`, "창체", ACTIVITY_POOL[FIXED_ACTIVITY_PICKS[n] ?? (n * 3) % ACTIVITY_POOL.length]);
   const behavior = toPassage(`${code}-behavior`, "행특", BEHAVIOR_POOL[(n * 7) % BEHAVIOR_POOL.length]);
   return [
     ...subjectPassages(code, n, !detailOnly),
@@ -375,6 +400,8 @@ const FIXED_AI_SCORES: Readonly<Record<number, readonly [number, number, number]
   15: [86, 85, 88],
   42: [88, 87, 86],
   67: [82, 79, 76],
+  // 선발 결정의 A-0118 과 같은 값
+  118: [83, 88, 72],
   133: [80, 84, 82],
   187: [88, 85, 78],
   251: [86, 80, 82],
@@ -460,8 +487,26 @@ const PENDING_SEEDS: Readonly<Record<number, EvaluationSeed | null>> = {
   251: null,
 };
 
+/**
+ * 번호로 계산하지 않고 정해 둔 제출 완료 상태. A-0118 은 선발 결정의 위원 1(로그인한 사정관)의 점수와 종합 의견 그대로다
+ * (기본 배점에서 내 종합 점수 80.1). 세 자리 모두 AI 점수(83·88·72)와 달라 자리마다 수정 사유가 있다.
+ */
+const SUBMITTED_SEEDS: Readonly<Record<number, EvaluationSeed>> = {
+  118: {
+    status: "submitted",
+    scores: [82, 89, 62],
+    reasons: {
+      0: "교과 밖의 전공 관련 활동이 적어 1점 낮춤",
+      1: "영어·사회 교과 성취와 보고서의 논리를 반영해 1점 올림",
+      2: "공동체 활동의 근거 문장이 한 건뿐이라 10점 낮춤",
+    },
+    opinion: "교과 성취는 높으나 공동체 활동 기록이 거의 없음. 혼자 하는 탐구에 치우쳐 있음.",
+  },
+};
+
 function seedOf(n: number, ai: SampleAssessments): EvaluationSeed | null {
   if (Object.hasOwn(PENDING_SEEDS, n)) return PENDING_SEEDS[n];
+  if (Object.hasOwn(SUBMITTED_SEEDS, n)) return SUBMITTED_SEEDS[n];
   const scores: [number, number, number] = [ai[0].score, ai[1].score, ai[2].score];
   const reasons: Partial<Record<Slot, string>> = {};
   const delta = SEED_WITHOUT_DELTA.includes(n) ? 0 : SEED_DELTAS[n % SEED_DELTAS.length];
@@ -495,12 +540,42 @@ function roughTotal(ai: SampleAssessments): number {
   return Math.round((ai[0].score + ai[1].score + ai[2].score) / SLOT_COUNT);
 }
 
-/** 다른 위원의 의견. 김서연 사정관은 모두 제출했고, 이준호 위촉위원은 평가 순서의 앞 17명만 제출했다. */
+/**
+ * 번호로 지어내지 않고 정해 둔 다른 위원의 의견 (김서연 사정관, 이준호 위촉위원 순서).
+ * A-0118 은 선발 결정의 위원 2·3 의 종합 의견 그대로이고, total 은 그 위원의 점수(85·92·78, 82·89·64)를 기본 배점(50·30·20)으로
+ * 가중 평균해 반올림한 값이다(85.7 → 86, 80.5 → 81).
+ */
+const FIXED_PEERS: Readonly<Record<number, readonly [PeerOpinion, PeerOpinion]>> = {
+  118: [
+    {
+      reviewer: PEER_REVIEWERS[0],
+      total: 86,
+      comment: "전공 관련 교과 성취가 매우 높고 탐구 보고서의 논리가 탄탄함. 활동이 적은 점은 학업으로 충분히 보완됨.",
+    },
+    { reviewer: PEER_REVIEWERS[1], total: 81, comment: "보고서의 완성도가 높음. 공동체 활동은 근거가 적어 낮게 평가함." },
+  ],
+};
+
+/**
+ * 이준호 위촉위원이 평가 순서의 앞 17명 가운데 아직 제출하지 않은 지원자.
+ * A-0118 은 평가 순서의 20번째라 앞 17명 규칙으로는 미제출이지만 선발 결정의 위원 3 점수가 있어야 하므로 제출한 것으로 두고
+ * (FIXED_PEERS), 그만큼 앞 17명의 마지막(17번째) A-0098 을 미제출로 돌린다. 그래서 제출 수는 그대로 SECOND_PEER_DONE(17)이다
+ * (scripts/check-decision.ts 가 확인한다).
+ */
+const SECOND_PEER_BEHIND = 98;
+
+/**
+ * 다른 위원의 의견. 김서연 사정관은 모두 제출했고, 이준호 위촉위원은 평가 순서의 앞 17명만 제출했다(A-0118 과 A-0098 만 자리를
+ * 바꾼다. 위 SECOND_PEER_BEHIND).
+ */
 function peersOf(n: number, position: number, ai: SampleAssessments): PeerOpinion[] {
+  const fixed = FIXED_PEERS[n];
+  if (fixed !== undefined) return [...fixed];
   const base = roughTotal(ai);
+  const secondDone = position < SECOND_PEER_DONE && n !== SECOND_PEER_BEHIND;
   return [
     { reviewer: PEER_REVIEWERS[0], total: base + ((n % 5) - 2), comment: PEER_COMMENTS[n % PEER_COMMENTS.length] },
-    position < SECOND_PEER_DONE
+    secondDone
       ? { reviewer: PEER_REVIEWERS[1], total: base + (((n * 3) % 5) - 2), comment: PEER_COMMENTS[(n * 3 + 1) % PEER_COMMENTS.length] }
       : { reviewer: PEER_REVIEWERS[1], total: null, comment: "아직 제출하지 않았습니다." },
   ];
