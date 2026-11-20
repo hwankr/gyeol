@@ -1,13 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import {
-  AccentTag,
-  BUTTON_SECONDARY_CLASS,
-  PANEL_CLASS,
-  PANEL_HEAD_CLASS,
-  PANEL_TITLE_CLASS,
-  StatusChip,
-} from "@/components/consoleUi";
+import { BUTTON_SECONDARY_CLASS, PANEL_CLASS, PANEL_HEAD_CLASS, PANEL_TITLE_CLASS } from "@/components/consoleUi";
 import type { DecisionCompareView } from "@/hooks/useDecisionCompare";
 
 /**
@@ -25,8 +18,19 @@ function SeriesSwatch({ side }: { side: 0 | 1 }) {
 /** 단의 머리 줄 (지원자 코드 줄, 그래프 제목 줄) */
 const HEAD_CLASS = `${PANEL_HEAD_CLASS} box-border flex min-h-[48px] flex-none flex-wrap items-center gap-x-[8px] gap-y-[2px] px-[16px] py-[8px]`;
 
-/** 단 안의 작은 제목 (12px, 흐린 글자) */
-const LABEL_CLASS = "text-[12px] leading-[16px] font-medium text-[#767676]";
+/**
+ * 이 탭의 글자색. 볼 것이 많은 화면이라 글자색을 둘로 줄였다: 눈이 먼저 가야 하는 것(지원자 코드, 최종 평가, 단의 제목, 풀이 글의 첫 줄)만
+ * 검은색(#111111)이고, 나머지 글(요약, 강점·약점, 위원별 점수, 표, 꼬리표)은 모두 한 가지 회색(#505050)이다. 파랑·주황·초록 글자와
+ * 색 바탕의 표시는 쓰지 않는다(색은 그래프의 막대와 지원자 코드 앞의 색 점에만 있다). 강조는 색 대신 굵기로만 한다.
+ */
+const INK_CLASS = "text-[#111111]";
+const GRAY_CLASS = "text-[#505050]";
+
+/** 단 안의 작은 제목 (12px) */
+const LABEL_CLASS = "text-[12px] leading-[16px] font-medium";
+
+/** 작은 꼬리표 (두 지원자의 사이, 표의 "가장 큰 차이"): 옅은 회색 바탕, 회색 글자 */
+const TAG_CLASS = `rounded-[4px] bg-[#F0F0F2] px-[6px] py-px text-[12px] leading-[16px] font-medium whitespace-nowrap ${GRAY_CLASS}`;
 
 /**
  * 선발 결정 · 지원자 비교 탭(/decision/compare). 합격선 근처에서 두 지원자의 평가가 어디서 갈렸는지 한눈에 보도록, 가운데에 평가 요소별
@@ -44,10 +48,7 @@ export function DecisionCompareTab({ note, facts, recommendHref, sides, headline
         <p className="text-[13px] leading-[18px] text-[#505050] tabular-nums">{note}</p>
         <ul aria-label="두 지원자의 사이" className="flex flex-wrap gap-[4px]">
           {facts.map((fact) => (
-            <li
-              key={fact}
-              className="rounded-[4px] bg-[#F0F0F2] px-[6px] py-px text-[12px] leading-[16px] font-semibold text-[#505050] tabular-nums"
-            >
+            <li key={fact} className={`${TAG_CLASS} tabular-nums`}>
               {fact}
             </li>
           ))}
@@ -76,14 +77,14 @@ export function DecisionCompareTab({ note, facts, recommendHref, sides, headline
                 ))}
               </ul>
             </div>
-            <div className="p-[16px]">
-              <p className="text-[14px] leading-[20px] font-semibold text-[#111111] tabular-nums">{headline}</p>
-              <ul className="mt-[6px] flex flex-col gap-[2px] text-[13px] leading-[18px] text-[#505050]">
+            <div className={`p-[20px] ${GRAY_CLASS}`}>
+              <p className={`text-[14px] leading-[20px] font-semibold tabular-nums ${INK_CLASS}`}>{headline}</p>
+              <ul className="mt-[8px] flex flex-col gap-[4px] text-[13px] leading-[18px]">
                 {leads.map((lead) => (
                   <li key={lead.code} className="flex items-baseline gap-[6px] tabular-nums">
                     <SeriesSwatch side={lead.side} />
                     <span>
-                      <strong className="font-semibold text-[#111111]">{lead.code}</strong> 우세: {lead.text}
+                      <strong className="font-semibold">{lead.code}</strong> 우세: {lead.text}
                     </span>
                   </li>
                 ))}
@@ -99,7 +100,7 @@ export function DecisionCompareTab({ note, facts, recommendHref, sides, headline
   );
 }
 
-/** 한 지원자의 단: 머리 줄(색 점, 코드, 순위, 구분)과 최종 평가, AI 한 줄 요약, 강점·약점, 위원별 종합 점수 */
+/** 한 지원자의 단: 머리 줄(색 점, 코드, "30위 · 합격권")과 최종 평가, AI 한 줄 요약, 강점·약점, 위원별 종합 점수 */
 function SidePanel({ side }: { side: DecisionCompareView["sides"][number] }) {
   const titleId = `compare-side-${side.side}`;
   return (
@@ -109,56 +110,57 @@ function SidePanel({ side }: { side: DecisionCompareView["sides"][number] }) {
         <h2 id={titleId} className="text-[18px] leading-[26px] font-bold tracking-[-0.01em] tabular-nums">
           {side.code}
         </h2>
-        <span className="text-[13px] leading-[18px] text-[#505050] tabular-nums">{side.rankText}</span>
-        <StatusChip tone={side.standing.admitted ? "green" : "amber"}>{side.standing.text}</StatusChip>
+        {/* 순위와 구분은 시안처럼 글로만 적는다("30위 · 합격권"). 색 표시를 쓰지 않는다. */}
+        <span className={`text-[13px] leading-[18px] tabular-nums ${GRAY_CLASS}`}>
+          {side.rankText} · {side.standing.text}
+        </span>
       </div>
-      <div className="p-[16px]">
+      <div className={`p-[20px] ${GRAY_CLASS}`}>
         <p className={LABEL_CLASS}>최종 평가</p>
         {/* 크게 적는 수는 글꼴의 기본 숫자 폭 그대로다(숫자 폭을 맞추면 벌어져 보인다). */}
-        <p className="mt-[2px] text-[28px] leading-[36px] font-bold tracking-[-0.01em]">
+        <p className={`mt-[2px] text-[28px] leading-[36px] font-bold tracking-[-0.01em] ${INK_CLASS}`}>
           {side.finalText}
           <span className="ml-[2px] text-[16px] font-semibold">점</span>
         </p>
-        <p className="mt-[12px]">
-          <AccentTag>AI 요약</AccentTag>
-        </p>
-        <p className="mt-[6px] text-[14px] leading-[22px] text-[#111111] [overflow-wrap:anywhere] break-keep">{side.summary}</p>
+        <p className={`${LABEL_CLASS} mt-[16px]`}>AI 한 줄 요약</p>
+        <p className="mt-[4px] text-[14px] leading-[22px] [overflow-wrap:anywhere] break-keep">{side.summary}</p>
         {/* 시안의 "+ 강점 / - 약점" 두 줄. 기호는 장식이고 화면 낭독기에는 "강점"·"약점" 으로 읽힌다. */}
-        <dl className="mt-[12px] flex flex-col gap-[4px] border-t border-t-[#E4E4E4] pt-[12px] text-[13px] leading-[18px]">
+        <dl className="mt-[16px] flex flex-col gap-[6px] border-t border-t-[#E4E4E4] pt-[16px] text-[13px] leading-[18px]">
           <div className="flex gap-[8px]">
-            <dt className="w-[10px] flex-none font-semibold text-[#111111]">
+            <dt className="w-[10px] flex-none font-semibold">
               <span aria-hidden="true">+</span>
               <span className="sr-only">강점</span>
             </dt>
-            <dd className="text-[#111111] [overflow-wrap:anywhere] break-keep">{side.strength}</dd>
+            <dd className="[overflow-wrap:anywhere] break-keep">{side.strength}</dd>
           </div>
           <div className="flex gap-[8px]">
-            <dt className="w-[10px] flex-none font-semibold text-[#505050]">
+            <dt className="w-[10px] flex-none font-semibold">
               <span aria-hidden="true">−</span>
               <span className="sr-only">약점</span>
             </dt>
-            <dd className="text-[#505050] [overflow-wrap:anywhere] break-keep">{side.weakness}</dd>
+            <dd className="[overflow-wrap:anywhere] break-keep">{side.weakness}</dd>
           </div>
         </dl>
-        <div className="mt-[12px] border-t border-t-[#E4E4E4] pt-[12px]">
+        <div className="mt-[16px] border-t border-t-[#E4E4E4] pt-[16px]">
           <p className={LABEL_CLASS}>위원별 종합 점수</p>
-          <ul className="mt-[6px] flex flex-col gap-[4px] text-[13px] leading-[18px]">
+          <ul className="mt-[8px] flex flex-col gap-[6px] text-[13px] leading-[18px]">
             {side.members.map((member) => (
               <li key={member.name} className="flex justify-between gap-[12px]">
-                <span className="text-[#505050]">{member.name}</span>
-                <span className="font-semibold text-[#111111] tabular-nums">{member.totalText}</span>
+                <span>{member.name}</span>
+                <span className="tabular-nums">{member.totalText}</span>
               </li>
             ))}
-            <li className="mt-[2px] flex justify-between gap-[12px] border-t border-t-[#E4E4E4] pt-[6px]">
-              <span className="text-[#505050]">위원 간 차이</span>
-              <span className={`font-semibold tabular-nums ${side.spreadWide ? "text-[#8A4B00]" : "text-[#111111]"}`}>
+            <li className="mt-[2px] flex justify-between gap-[12px] border-t border-t-[#E4E4E4] pt-[8px]">
+              <span>위원 간 차이</span>
+              {/* 차이가 크면 색 대신 굵은 글자와 "차이 큼" 으로 알린다. */}
+              <span className={`tabular-nums ${side.spreadWide ? "font-semibold" : ""}`}>
                 {side.spreadText}
                 {side.spreadWide && <span className="ml-[6px] text-[12px]">차이 큼</span>}
               </span>
             </li>
             <li className="flex justify-between gap-[12px]">
-              <span className="text-[#505050]">인재상 적합도 (AI)</span>
-              <span className="font-semibold text-[#111111] tabular-nums">{side.aiText}</span>
+              <span>인재상 적합도 (AI)</span>
+              <span className="tabular-nums">{side.aiText}</span>
             </li>
           </ul>
         </div>
@@ -184,7 +186,7 @@ function ScoreChart({ chart }: { chart: DecisionCompareView["chart"] }) {
             className={`absolute inset-x-0 border-t ${tick === 0 ? "border-t-[#767676]" : "border-t-[#E4E4E4]"}`}
             style={{ bottom: `${tick}%` }}
           >
-            <span className="absolute right-full mr-[6px] -translate-y-1/2 text-[11px] leading-[14px] text-[#767676] tabular-nums">
+            <span className="absolute right-full mr-[6px] -translate-y-1/2 text-[11px] leading-[14px] tabular-nums">
               {tick}
             </span>
           </div>
@@ -195,7 +197,7 @@ function ScoreChart({ chart }: { chart: DecisionCompareView["chart"] }) {
               {group.bars.map((bar) => (
                 <div key={bar.side} title={bar.title} className="relative h-full w-[24px]">
                   <span
-                    className="absolute left-1/2 -translate-x-1/2 animate-fade-in text-[12px] leading-[14px] font-semibold whitespace-nowrap text-[#111111] tabular-nums"
+                    className="absolute left-1/2 -translate-x-1/2 animate-fade-in text-[12px] leading-[14px] font-semibold whitespace-nowrap tabular-nums"
                     style={{ bottom: `calc(${bar.percent}% + 4px)` }}
                   >
                     {bar.valueText}
@@ -212,7 +214,7 @@ function ScoreChart({ chart }: { chart: DecisionCompareView["chart"] }) {
       </div>
       <div className="mt-[8px] grid" style={columns}>
         {chart.groups.map((group) => (
-          <p key={group.id} className="px-[4px] text-center text-[12px] leading-[16px] text-[#505050] [overflow-wrap:anywhere] break-keep">
+          <p key={group.id} className="px-[4px] text-center text-[12px] leading-[16px] [overflow-wrap:anywhere] break-keep">
             {group.name}
           </p>
         ))}
@@ -221,31 +223,31 @@ function ScoreChart({ chart }: { chart: DecisionCompareView["chart"] }) {
   );
 }
 
-const CELL_CLASS = "px-[8px] py-[8px] text-right tabular-nums";
+const CELL_CLASS = "px-[8px] py-[10px] text-right tabular-nums";
 
 /** 평가 요소별 점수의 표: 요소(배점), 두 지원자의 점수(위원 평균), 차이(앞선 지원자와 점수 차). 마지막 줄은 최종 평가다. */
 function ScoreTable({ table, sides }: { table: DecisionCompareView["table"]; sides: DecisionCompareView["sides"] }) {
   return (
     <div className="mt-[16px] overflow-x-auto">
-      <table className="w-full min-w-[360px] border-collapse text-[13px] leading-[18px] text-[#111111]">
+      <table className="w-full min-w-[360px] border-collapse text-[13px] leading-[18px]">
         <caption className="sr-only">평가 요소별 점수 (위원 평균)와 두 지원자의 차이</caption>
         <thead>
-          <tr className="text-[12px] leading-[16px] text-[#505050]">
-            <th scope="col" className="py-[8px] pr-[8px] text-left font-semibold">
+          <tr className="text-[12px] leading-[16px]">
+            <th scope="col" className="py-[10px] pr-[8px] text-left font-medium">
               평가 요소
             </th>
-            <th scope="col" className={`${CELL_CLASS} font-semibold`}>
+            <th scope="col" className={`${CELL_CLASS} font-medium`}>
               배점
             </th>
             {sides.map((side) => (
-              <th key={side.code} scope="col" className={`${CELL_CLASS} font-semibold`}>
+              <th key={side.code} scope="col" className={`${CELL_CLASS} font-medium`}>
                 <span className="inline-flex items-center gap-[5px]">
                   <SeriesSwatch side={side.side} />
                   {side.code}
                 </span>
               </th>
             ))}
-            <th scope="col" className="py-[8px] pl-[8px] text-right font-semibold">
+            <th scope="col" className="py-[10px] pl-[8px] text-right font-medium">
               차이
             </th>
           </tr>
@@ -253,30 +255,26 @@ function ScoreTable({ table, sides }: { table: DecisionCompareView["table"]; sid
         <tbody>
           {table.rows.map((row) => (
             <tr key={row.id} className="border-t border-t-[#E4E4E4]">
-              <th scope="row" className="py-[8px] pr-[8px] text-left font-medium [overflow-wrap:anywhere] break-keep">
+              <th scope="row" className="py-[10px] pr-[8px] text-left font-medium [overflow-wrap:anywhere] break-keep">
                 {row.name}
-                {row.widest && (
-                  <span className="ml-[6px] rounded-[4px] bg-[#EEF0FF] px-[6px] py-px text-[12px] leading-[16px] font-semibold whitespace-nowrap text-[#001AD0]">
-                    가장 큰 차이
-                  </span>
-                )}
+                {row.widest && <span className={`${TAG_CLASS} ml-[6px]`}>가장 큰 차이</span>}
               </th>
-              <td className={`${CELL_CLASS} text-[#505050]`}>{row.weightText}</td>
+              <td className={CELL_CLASS}>{row.weightText}</td>
               <td className={CELL_CLASS}>{row.leftText}</td>
               <td className={CELL_CLASS}>{row.rightText}</td>
-              <td className="py-[8px] pl-[8px] text-right whitespace-nowrap tabular-nums">{row.diffText}</td>
+              <td className="py-[10px] pl-[8px] text-right whitespace-nowrap tabular-nums">{row.diffText}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
-          <tr className="border-t border-t-[#767676] font-semibold">
-            <th scope="row" className="py-[8px] pr-[8px] text-left font-semibold">
+          <tr className="border-t border-t-[#CFCFCF] font-semibold">
+            <th scope="row" className="py-[10px] pr-[8px] text-left font-semibold">
               최종 평가
             </th>
-            <td className={`${CELL_CLASS} text-[#505050]`}>{table.total.weightText}</td>
+            <td className={CELL_CLASS}>{table.total.weightText}</td>
             <td className={CELL_CLASS}>{table.total.leftText}</td>
             <td className={CELL_CLASS}>{table.total.rightText}</td>
-            <td className="py-[8px] pl-[8px] text-right whitespace-nowrap tabular-nums">{table.total.diffText}</td>
+            <td className="py-[10px] pl-[8px] text-right whitespace-nowrap tabular-nums">{table.total.diffText}</td>
           </tr>
         </tfoot>
       </table>
