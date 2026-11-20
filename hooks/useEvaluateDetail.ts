@@ -5,6 +5,7 @@ import { EVALUATE_PATH, HOME_CRUMB } from "@/lib/consoleMenu";
 import {
   ANSWER_SCALE,
   answerAverage,
+  answersWith,
   assessmentOf,
   detailPath,
   questionCount,
@@ -50,7 +51,7 @@ export function useEvaluateDetail(applicant: EvaluationApplicant, itemId: string
   const summaryHref = summaryPath(applicant.code);
 
   function answer(key: string, value: number) {
-    write({ answers: { ...record?.answers, [element.id]: { ...answers, [key]: value } } });
+    write(answersWith(record, element, key, value));
   }
 
   /** 평가 완료: 응답 평균을 내 점수로 가져가고 총평으로 돌아간다. */
