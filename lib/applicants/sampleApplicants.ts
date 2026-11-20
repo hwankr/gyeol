@@ -2,7 +2,8 @@ import { ADMISSION } from "../admission.ts";
 import type { Applicant, ApplicantStatus, ReviewExpression } from "./applicants.ts";
 
 // 지원자 관리 화면의 예시 지원자 314명 (.orchestration/prep-applicants-pages/specs/T2-data.json 을 옮긴 것).
-// 실제 지원자·학교·지명이 아니다. A-0133 의 값은 디자인에 적힌 그대로이고, A-0187·A-0251 의 상세 값과 나머지 311명을 만드는 규칙은
+// 실제 지원자·학교·지명이 아니다. A-0133 의 값은 디자인에 적힌 그대로이고(가릴지 확인이 필요한 표현 두 건의 앞뒤 글과 과목만 모집 단위인
+// 경영학과 지원자에 맞게 고쳤다. 가릴 낱말은 그대로다), A-0187·A-0251 의 상세 값과 나머지 311명을 만드는 규칙은
 // 화면을 채우려고 지어낸 임시 값이다. 314명을 일일이 적지 않고 아래 규칙으로 계산해 만든다(난수·현재 시각을 쓰지 않아 늘 같은 결과).
 
 /** 예시 지원자 수 (A-0001 ~ A-0314) */
@@ -41,11 +42,11 @@ const DETAILED_APPLICANTS: readonly DetailedApplicant[] = [
         context: "창체 · 2학년 동아리 · 학교 고유 행사명일 수 있음",
         before: "교내 축제 ‘",
         target: "한울제",
-        after: "’에서 통학 버스 도착 알림 앱을 시연함.",
+        after: "’에서 모의 창업 부스를 운영하고 판매 결과를 발표함.",
       },
       {
         id: "x2",
-        context: "세특 · 2학년 정보 · 사전에 없는 지명",
+        context: "세특 · 2학년 경제 · 사전에 없는 지명",
         before: "지역 문제를 찾기 위해 ",
         target: "솔내구청",
         after: " 청소년 정책 공모전에 팀으로 참가함.",

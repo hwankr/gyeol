@@ -195,7 +195,7 @@ export function numberedGroups(element: PrepElement): NumberedGroup[] {
 
 /**
  * 배점을 저장할 때 남기는 기록 내용. 바뀐 요소만 요소 순서대로 적는다.
- * 예: "배점 변경: 학업성취도 30 → 35, 리더십 20 → 15". 바뀐 요소가 없으면 null.
+ * 예: "배점 변경: 잠재역량 50 → 45, 학업역량 30 → 35". 바뀐 요소가 없으면 null.
  */
 export function weightChangeSummary(before: PrepCriteria, after: PrepCriteria): string | null {
   const previous = new Map(before.elements.map((element) => [element.id, element.weight]));

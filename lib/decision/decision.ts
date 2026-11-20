@@ -12,7 +12,7 @@ export function decisionMemberName(index: number): string {
   return `위원 ${index + 1}`;
 }
 
-/** 요소 순번 → 그 지원자 자료의 자리. 요소가 자리(넷)보다 많으면 자리를 돌려 쓴다(평가하기의 예시 지원자와 같은 규칙) */
+/** 요소 순번 → 그 지원자 자료의 자리. 요소가 자리(셋)보다 많으면 자리를 돌려 쓴다(평가하기의 예시 지원자와 같은 규칙) */
 export function decisionSlotOf(applicant: Pick<DecisionApplicant, "ai">, elementIndex: number): number {
   return elementIndex % applicant.ai.length;
 }

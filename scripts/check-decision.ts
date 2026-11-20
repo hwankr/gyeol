@@ -60,16 +60,16 @@ const byCode = (code: string) => ranked.find((row) => row.applicant.code === cod
 const cutline = cutlineOf(ranked, QUOTA);
 
 // ── 가중 평균과 글 ──
-check("가중 평균: 기본 배점(30·20·25·25)에서 80·90·83·77 은 82.0", weightedTenths([80, 90, 83, 77], ELEMENTS) === 820);
-check("가중 평균: 위원 점수의 합을 위원 수로 나눈다", weightedTenths([240, 270, 249, 231], ELEMENTS, 3) === 820);
-check("가중 평균: 배점 합이 0 이면 0", weightedTenths([80, 90, 83, 77], withWeights([0, 0, 0, 0])) === 0);
+check("가중 평균: 기본 배점(50·30·20)에서 78·82·92 는 82.0", weightedTenths([78, 82, 92], ELEMENTS) === 820);
+check("가중 평균: 위원 점수의 합을 위원 수로 나눈다", weightedTenths([234, 246, 276], ELEMENTS, 3) === 820);
+check("가중 평균: 배점 합이 0 이면 0", weightedTenths([78, 82, 92], withWeights([0, 0, 0])) === 0);
 check("가중 평균: 요소가 없으면 0", weightedTenths([80], []) === 0);
 check("점수 글: 820 → 82.0, 818 → 81.8", tenthsText(820) === "82.0" && tenthsText(818) === "81.8");
 check("요소 점수 글: 800 → 80, 803 → 80.3", trimmedTenthsText(800) === "80" && trimmedTenthsText(803) === "80.3");
 check("위원 이름: 위원 1 부터", decisionMemberName(0) === "위원 1" && decisionMemberName(2) === "위원 3");
 check(
-  "자리: 요소가 넷보다 많으면 돌려 쓴다",
-  decisionSlotOf(DECISION_APPLICANTS[0], 3) === 3 && decisionSlotOf(DECISION_APPLICANTS[0], 4) === 0 && decisionSlotOf(DECISION_APPLICANTS[0], 5) === 1,
+  "자리: 요소가 셋보다 많으면 돌려 쓴다",
+  decisionSlotOf(DECISION_APPLICANTS[0], 2) === 2 && decisionSlotOf(DECISION_APPLICANTS[0], 3) === 0 && decisionSlotOf(DECISION_APPLICANTS[0], 4) === 1,
 );
 
 // ── 예시 자료 ──
@@ -86,7 +86,7 @@ check(
 );
 check(
   "예시 자료: 자리마다 위원 세 명의 평균이 정수다",
-  DECISION_APPLICANTS.every((applicant) => [0, 1, 2, 3].every((slot) => applicant.members.reduce((sum, member) => sum + member[slot], 0) % 3 === 0)),
+  DECISION_APPLICANTS.every((applicant) => [0, 1, 2].every((slot) => applicant.members.reduce((sum, member) => sum + member[slot], 0) % 3 === 0)),
 );
 check(
   "예시 자료: 25위부터이고 합격선(30위) 위로 여섯, 아래로 여섯 명",
@@ -120,32 +120,32 @@ check(
   a171 !== undefined && a171.rank === 31 && standingText(a171) === "예비 1" && tenthsText(a171.final10) === "81.8",
 );
 check(
-  "요소 점수: A-0147 은 80·90·83·77, A-0171 은 88·72·80·84 (위원 평균)",
-  same(a147?.element10, [800, 900, 830, 770]) && same(a171?.element10, [880, 720, 800, 840]),
+  "요소 점수: A-0147 은 78·82·92, A-0171 은 82·88·72 (위원 평균)",
+  same(a147?.element10, [780, 820, 920]) && same(a171?.element10, [820, 880, 720]),
 );
 check(
-  "위원별 종합 점수와 위원 간 차이: A-0147 은 82.7·82.6·80.8, 차이 1.9",
-  same(a147?.memberTotal10, [827, 826, 808]) && a147?.spread10 === 19,
+  "위원별 종합 점수와 위원 간 차이: A-0147 은 82.7·82.5·80.8, 차이 1.9",
+  same(a147?.memberTotal10, [827, 825, 808]) && a147?.spread10 === 19,
 );
 check("인재상 적합도: A-0147 은 82 (AI 점수의 가중 평균을 반올림)", a147?.aiTotal === 82);
 check("구분: 예비 순번은 합격선 아래부터 1", same(ranked.slice(6).map(standingText), ["예비 1", "예비 2", "예비 3", "예비 4", "예비 5", "예비 6"]));
 check(
   "순위: 점수가 같으면 코드 순서",
   same(
-    rankDecisionApplicants([DECISION_APPLICANTS[6], DECISION_APPLICANTS[5]], withWeights([0, 0, 0, 0]), 1, 1).map((row) => row.applicant.code),
+    rankDecisionApplicants([DECISION_APPLICANTS[6], DECISION_APPLICANTS[5]], withWeights([0, 0, 0]), 1, 1).map((row) => row.applicant.code),
     ["A-0147", "A-0171"],
   ),
 );
-// 배점을 바꾸면 최종 평가와 순위가 같이 바뀐다: 리더십만 보면 A-0090(91) 이 맨 위다.
-const leadershipOnly = rankDecisionApplicants(DECISION_APPLICANTS, withWeights([0, 100, 0, 0]), QUOTA, DECISION_FIRST_RANK);
+// 배점을 바꾸면 최종 평가와 순위가 같이 바뀐다: 공동체역량만 보면 A-0147(92) 이 맨 위다.
+const communityOnly = rankDecisionApplicants(DECISION_APPLICANTS, withWeights([0, 0, 100]), QUOTA, DECISION_FIRST_RANK);
 check(
-  "배점을 바꾸면 순위가 다시 매겨진다 (리더십 100)",
-  leadershipOnly[0].applicant.code === "A-0090" && tenthsText(leadershipOnly[0].final10) === "91.0" && leadershipOnly[0].rank === DECISION_FIRST_RANK,
+  "배점을 바꾸면 순위가 다시 매겨진다 (공동체역량 100)",
+  communityOnly[0].applicant.code === "A-0147" && tenthsText(communityOnly[0].final10) === "92.0" && communityOnly[0].rank === DECISION_FIRST_RANK,
 );
-// 요소가 여섯이면 자리를 돌려 쓴다: 다섯째·여섯째 요소는 첫째·둘째 자리의 점수다.
-const sixElements: PrepElement[] = [...ELEMENTS, { ...ELEMENTS[0], id: "e5" }, { ...ELEMENTS[1], id: "e6" }];
+// 요소가 여섯이면 자리를 돌려 쓴다: 넷째·다섯째·여섯째 요소는 첫째·둘째·셋째 자리의 점수다.
+const sixElements: PrepElement[] = [...ELEMENTS, { ...ELEMENTS[0], id: "e4" }, { ...ELEMENTS[1], id: "e5" }, { ...ELEMENTS[2], id: "e6" }];
 const sixRanked = rankDecisionApplicants([DECISION_APPLICANTS[5]], sixElements, QUOTA, DECISION_FIRST_RANK);
-check("요소가 여섯이면 자리를 돌려 쓴다", same(sixRanked[0].element10, [800, 900, 830, 770, 800, 900]));
+check("요소가 여섯이면 자리를 돌려 쓴다", same(sixRanked[0].element10, [780, 820, 920, 780, 820, 920]));
 check("지원자가 없으면 빈 목록", rankDecisionApplicants([], ELEMENTS, QUOTA, DECISION_FIRST_RANK).length === 0);
 
 // ── 합격선과 비교 기준 ──
@@ -216,13 +216,13 @@ check("비교: 지원자가 둘보다 적으면 null", comparePairOf(ranked.slic
 // ── 요소별 차이 ──
 const gaps = defaultPair === null ? [] : elementGapsOf(defaultPair, ELEMENTS);
 check(
-  "요소별 차이: A-0147 − A-0171 은 −8 · +18 · +3 · −7",
+  "요소별 차이: A-0147 − A-0171 은 −4 · −6 · +20",
   same(
     gaps.map((gap) => gap.diff10),
-    [-80, 180, 30, -70],
-  ) && same(gaps.map((gap) => gap.name), ["학업성취도", "리더십", "Y형 인재", "전공적합성"]),
+    [-40, -60, 200],
+  ) && same(gaps.map((gap) => gap.name), ["잠재역량", "학업역량", "공동체역량"]),
 );
-check("가장 크게 갈린 요소: 리더십", widestGapOf(gaps)?.name === "리더십");
+check("가장 크게 갈린 요소: 공동체역량", widestGapOf(gaps)?.name === "공동체역량");
 check(
   "가장 크게 갈린 요소: 차이가 같으면 앞의 요소, 모두 같으면 null",
   widestGapOf([

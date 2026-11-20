@@ -5,11 +5,15 @@
 /** 서비스 이름 */
 export const SERVICE_NAME = "GYEOL";
 
-/** 전형 준비 · 평가·배점 설정의 평가 기준(PrepCriteria)을 저장하는 localStorage 키 */
-export const PREP_CRITERIA_STORAGE_KEY = "gyeol.prepCriteria";
+/**
+ * 전형 준비 · 평가·배점 설정의 평가 기준(PrepCriteria)을 저장하는 localStorage 키.
+ * 끝의 ".v2" 는 모집 단위를 컴퓨터공학과에서 경영학과로 바꾸면서 붙였다. 예전 키("gyeol.prepCriteria", "gyeol.prepHistory")에 저장한
+ * 컴퓨터공학과의 평가 기준과 그 변경 기록이 경영학과의 것으로 읽히지 않게 한다(예전 값은 지우지 않고 읽지 않는다).
+ */
+export const PREP_CRITERIA_STORAGE_KEY = "gyeol.prepCriteria.v2";
 
-/** 전형 준비 · 기준 변경 기록(PrepHistoryEntry[])을 저장하는 localStorage 키 */
-export const PREP_HISTORY_STORAGE_KEY = "gyeol.prepHistory";
+/** 전형 준비 · 기준 변경 기록(PrepHistoryEntry[])을 저장하는 localStorage 키 (평가 기준의 키와 같이 바꿨다) */
+export const PREP_HISTORY_STORAGE_KEY = "gyeol.prepHistory.v2";
 
 /**
  * 전형 준비 · 공통 기준 협의의 위원 의견({ version: 1, opinions: { "<위원 번호>": "<의견>" } })을 저장하는 localStorage 키.
