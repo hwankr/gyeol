@@ -154,6 +154,8 @@ type ApplicantSource = {
 };
 
 // 제출을 마친 21명(번호가 작은 순서)과 아직 남은 3명(A-0133, A-0187, A-0251). 평가 순서는 코드 순서다.
+// 지원자 관리 화면에 보이는 내 담당 지원자(lib/applicants/sampleApplicants.ts 의 MY_NUMBERS)와 같은 사람들이어야 한다
+// (scripts/check-applicants.ts 가 확인한다).
 const APPLICANT_SOURCES: readonly ApplicantSource[] = [
   {
     n: 4,

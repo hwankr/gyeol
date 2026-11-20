@@ -34,13 +34,11 @@ type ApplicantsScreenProps = {
   deadline: { label: string; dateText: string; remaining: DeadlineRemaining | null };
   /** 접수 인원·모집 인원·경쟁률 ("10.5:1") */
   applications: { total: number; quota: number; rate: string };
-  /** 서류 검토 진행 현황. percent 는 "96.5" (막대의 채움 너비도 이 값) */
-  review: { percent: string; done: number; waiting: number };
-  /** 걸러 보기 버튼 다섯 (수는 전체 지원자 기준) */
+  /** 서류 검토 진행 현황 (내 담당 지원자 기준). percent 는 "83.3" (막대의 채움 너비도 이 값), assigned 는 내 담당 수 */
+  review: { percent: string; assigned: number; done: number; waiting: number };
+  /** 걸러 보기 버튼 다섯 (수는 내 담당 지원자 기준, 검색과 상관없음) */
   filters: { filter: ApplicantFilter; count: number; pressed: boolean }[];
-  /** 내 배정 보기가 켜졌는지 */
-  mineOnly: boolean;
-  /** 보이는 줄 (코드 순서) */
+  /** 보이는 줄 (내 담당 지원자, 코드 순서) */
   rows: {
     code: string;
     documentSummary: string;
@@ -49,7 +47,6 @@ type ApplicantsScreenProps = {
     maskText: string;
     /** 저장한 결정으로 정하지 않은 표현이 있으면 그 수 ("확인 2곳", 가린 곳 수 뒤에 빨강으로 붙인다). 없으면 null. */
     maskCheckText: string | null;
-    assignee: string;
     status: ApplicantStatus;
     selected: boolean;
   }[];
@@ -86,7 +83,6 @@ type ApplicantsScreenProps = {
   crumbNavRef: RefObject<HTMLElement | null>;
   contentRef: RefObject<HTMLDivElement | null>;
   onSelectFilter: (filter: ApplicantFilter) => void;
-  onToggleMine: () => void;
   onSelectApplicant: (code: string) => void;
   onDecide: (expressionId: string, decision: MaskDecision) => void;
   onSave: () => void;
@@ -105,15 +101,17 @@ const STATUS_TONE: Record<ApplicantStatus, ChipTone> = {
  * 화면 끝에서 잘릴 수 있다. 이 화면의 누를 수 있는 것에는 scroll-margin 8px 을 주어(scroll-m-[8px]) 초점 표시까지 보이게 스크롤되게 한다.
  * 모양에는 영향이 없다.
  *
- * 지원자 관리 화면: 현재 위치 줄, 제목 줄, 요약 상자(접수 마감·접수 인원·서류 검토 진행 현황), 걸러 보기·내 배정 보기,
+ * 지원자 관리 화면: 현재 위치 줄, 제목 줄, 요약 상자(접수 마감·접수 인원·서류 검토 진행 현황), 걸러 보기,
  * 지원자 표와 오른쪽 상세 영역("확인 필요 사항")이 든 상자. 치수·색·글자는 디자인 값 그대로다.
  * 껍데기의 본문(<main>)이 세로로 쌓는 flex 상자라, 본문을 감싼 상자와 그 안의 마지막 상자(표·상세)가 남는 높이를 채운다.
+ * 로그인한 사정관이 담당하는 지원자만 나온다. 그래서 디자인의 "내 배정 보기" 스위치와 표의 "배정" 칸은 없고(모든 줄이 내 담당이다),
+ * 걸러 보기 수와 서류 검토 진행 현황은 내 담당 기준이다(진행 현황에 "내 담당 N건" 을 같이 적는다). 접수 인원·경쟁률은 모집 단위 전체다.
  * 디자인에 없어 더한 것: 걸러 보기 줄 오른쪽 끝의 "학생부 올리기" 링크(학생부를 올려 분석하는 화면으로 간다).
  * "원문보기" 는 원문보기 화면으로 가는 링크다(디자인의 버튼 모양 그대로).
  * 현재 위치의 "지원자 관리" 는 보통 링크(next/link)라 화면의 JavaScript 가 준비되기 전에도 동작한다. 그 아래 본문(제목 줄, 요약 상자,
  * 걸러 보기 줄, 표, 상세 영역)은 준비되기 전(서버 HTML·hydration)에는 inert 라 초점을 받지 않고 눌리지 않는다(모양은 같다).
  * 준비 전에 들어간 초점이나 누름이 준비되면서 바뀌는 화면(저장한 결정 반영, 상세 스크롤)과 어긋나지 않게 하려는 것이다.
- * 움직임(디자인 시안에 없어 정한 것): 진행 막대가 왼쪽에서 채워지고, 스위치의 동그라미가 미끄러지고, 고르지 않은 줄·버튼은 마우스를 올리면
+ * 움직임(디자인 시안에 없어 정한 것): 진행 막대가 왼쪽에서 채워지고, 고르지 않은 줄·버튼은 마우스를 올리면
  * 옅은 회색 바탕이 되고, 지원자를 바꾸면 상세 내용이 옅게 나타난다. 자리·크기는 바로 바뀐다(초점을 보이게 하는 스크롤 계산이 자리를 잰다).
  */
 export function ApplicantsScreen({
@@ -127,7 +125,6 @@ export function ApplicantsScreen({
   applications,
   review,
   filters,
-  mineOnly,
   rows,
   detail,
   notices,
@@ -138,7 +135,6 @@ export function ApplicantsScreen({
   crumbNavRef,
   contentRef,
   onSelectFilter,
-  onToggleMine,
   onSelectApplicant,
   onDecide,
   onSave,
@@ -215,7 +211,12 @@ export function ApplicantsScreen({
             <div aria-hidden="true" className="mt-[8px] h-[6px] overflow-hidden rounded-[3px] bg-[#E4E6EE]">
               <div className={`h-[6px] bg-[#001AD0] ${BAR_FILL_MOTION_CLASS}`} style={{ width: `${review.percent}%` }} />
             </div>
+            {/* 이 칸의 수는 내 담당 지원자 기준이다(옆 칸의 접수 인원은 모집 단위 전체). 무엇을 센 것인지 알 수 있게 내 담당 수를 먼저 적는다. */}
             <dl className="mt-[8px] flex flex-wrap gap-x-[16px] gap-y-0 text-[13px] leading-[18px] text-[#505050]">
+              <div className="flex gap-[6px]">
+                <dt>내 담당</dt>
+                <dd className={`tabular-nums ${CARD_STRONG_CLASS}`}>{review.assigned}건</dd>
+              </div>
               <div className="flex gap-[6px]">
                 <dt>검토 완료</dt>
                 <dd className={`tabular-nums ${CARD_STRONG_CLASS}`}>{review.done}건</dd>
@@ -245,36 +246,10 @@ export function ApplicantsScreen({
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[8px]">
-            <span id="mine-label" className="text-[13px] leading-[18px] font-medium text-[#505050]">
-              내 배정 보기
-            </span>
-            {/*
-              켜고 끄는 스위치: 켜지면 파란 바탕에 동그라미가 오른쪽, 꺼지면 회색 바탕에 동그라미가 왼쪽이다.
-              동그라미는 왼쪽 끝에 놓고 켜지면 16px 옮긴다(36 − 안쪽 여백 2·2 − 동그라미 16). 옮기는 동안 미끄러지고 바탕색이 따라 바뀐다.
-            */}
-            <button
-              type="button"
-              role="switch"
-              aria-checked={mineOnly}
-              aria-labelledby="mine-label"
-              onClick={onToggleMine}
-              className={`motion-colors box-border flex h-[20px] w-[36px] cursor-pointer scroll-m-[8px] items-center rounded-[10px] border-0 p-[2px] ${
-                mineOnly ? "bg-[#001AD0] hover-on:bg-[#0016B0]" : "bg-[#767676] hover-on:bg-[#606060]"
-              }`}
-            >
-              <span
-                aria-hidden="true"
-                className={`h-[16px] w-[16px] rounded-[50%] bg-white transition-[translate] duration-200 ease-soft ${
-                  mineOnly ? "translate-x-[16px]" : "translate-x-0"
-                }`}
-              />
-            </button>
-            {/* 디자인에는 없는 링크: 학생부 PDF 를 올려 분석하는 화면으로 간다(올린 학생부는 이 표와 평가하기에 지원자로 나온다). */}
-            <Link href={uploadPath} className={`${BUTTON_SECONDARY_CLASS} ml-[8px] h-[32px] scroll-m-[8px] px-[12px]`}>
-              학생부 올리기
-            </Link>
-          </div>
+          {/* 디자인에는 없는 링크: 학생부 PDF 를 올려 분석하는 화면으로 간다(올린 학생부는 이 표와 평가하기에 지원자로 나온다). */}
+          <Link href={uploadPath} className={`${BUTTON_SECONDARY_CLASS} h-[32px] scroll-m-[8px] px-[12px]`}>
+            학생부 올리기
+          </Link>
         </div>
 
         {/*
@@ -283,16 +258,15 @@ export function ApplicantsScreen({
           hooks/useApplicants.ts 의 revealVertically).
         */}
         <div className={`mt-[12px] flex flex-[1_1_auto] flex-wrap items-stretch ${PANEL_CLASS}`}>
-          {/* 표는 폭이 620px 아래로 줄지 않고, 칸이 그보다 좁으면 이 칸 안에서 가로로 스크롤된다. */}
+          {/* 표는 폭이 544px 아래로 줄지 않고, 칸이 그보다 좁으면 이 칸 안에서 가로로 스크롤된다. */}
           <div className="min-w-0 flex-[999_1_420px] overflow-x-auto">
-            <div className="min-w-[620px]">
+            <div className="min-w-[544px]">
               <div
                 className={`rounded-tl-[7px] px-[20px] text-[12px] leading-[16px] font-semibold text-[#505050] ${HEAD_HEIGHT_CLASS} ${ROW_GRID_CLASS} ${PANEL_HEAD_CLASS}`}
               >
                 <span>지원자 코드</span>
                 <span>서류 정리</span>
                 <span>개인정보 가림</span>
-                <span>배정</span>
                 <span>상태</span>
               </div>
               {rows.length === 0 ? (
@@ -332,7 +306,6 @@ export function ApplicantsScreen({
                             <span className="font-medium text-[#BA1A1A]"> · {row.maskCheckText}</span>
                           )}
                         </span>
-                        <span>{row.assignee}</span>
                         <span>
                           <StatusChip tone={STATUS_TONE[row.status]}>{row.status}</StatusChip>
                         </span>
@@ -484,8 +457,11 @@ const CARD_STRONG_CLASS = "font-semibold text-[#111111]";
  * 선까지 넣어 41px 로 적지 않는 것은, 화면 배율이 정수가 아니면 선의 굵기가 1px 이 아니게 그려져 합이 디자인과 달라지기 때문이다.
  */
 const HEAD_HEIGHT_CLASS = "box-content h-[40px]";
-/** 표의 머리 줄과 줄 버튼이 같이 쓰는 칸 나눔: 지원자 코드 92px, 서류 정리 1.25, 개인정보 가림 1, 배정 64px, 상태 100px */
-const ROW_GRID_CLASS = "grid grid-cols-[92px_minmax(0,1.25fr)_minmax(0,1fr)_64px_100px] items-center gap-x-[12px] gap-y-0";
+/**
+ * 표의 머리 줄과 줄 버튼이 같이 쓰는 칸 나눔: 지원자 코드 92px, 서류 정리 1.25, 개인정보 가림 1, 상태 100px.
+ * 디자인의 "배정" 칸(64px)은 없다(모든 줄이 내 담당이다). 그 칸과 칸 사이 12px 만큼 표의 최소 폭도 620px 에서 544px 로 줄였다.
+ */
+const ROW_GRID_CLASS = "grid grid-cols-[92px_minmax(0,1.25fr)_minmax(0,1fr)_100px] items-center gap-x-[12px] gap-y-0";
 /** 상세 영역 머리의 버튼(원문보기, 저장하기)에 더하는 높이·안쪽 여백. 색·테두리는 components/consoleUi.tsx 의 버튼 클래스다. */
 const DETAIL_BUTTON_CLASS = "h-[32px] cursor-pointer scroll-m-[8px] px-[12px] leading-[normal] whitespace-nowrap";
 /** 상세 영역의 묶음 하나 (서류 확인, 개인정보 가림 확인): 위에 선 */

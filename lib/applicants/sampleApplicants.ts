@@ -20,7 +20,7 @@ const INITIAL_STATUSES: Readonly<Record<Exclude<ApplicantStatus, "완료">, read
   대기: ["A-0310", "A-0314"],
 };
 
-/** 상세 값이 정해진 세 명. 배정은 모두 로그인한 사정관이다. */
+/** 상세 값이 정해진 세 명. 배정은 모두 로그인한 사정관이다(아래 MY_NUMBERS). */
 type DetailedApplicant = Omit<Applicant, "assignee" | "initialStatus">;
 
 const DETAILED_APPLICANTS: readonly DetailedApplicant[] = [
@@ -116,11 +116,23 @@ function initialStatusOf(code: string): ApplicantStatus {
   return "완료";
 }
 
-/** 배정: 번호를 3으로 나눈 나머지가 1 이면 로그인한 사정관(홍길동), 2 이면 "사정관 B", 0 이면 "사정관 C". 상세 값이 있는 세 명은 모두 로그인한 사정관. */
-function assigneeOf(n: number, detailed: boolean): string {
-  if (detailed) return ADMISSION.reviewerName;
-  const rest = n % 3;
-  return rest === 1 ? ADMISSION.reviewerName : rest === 2 ? "사정관 B" : "사정관 C";
+/**
+ * 로그인한 사정관이 담당하는 예시 지원자의 번호 (24명). 지원자 관리 화면에는 이 지원자들과 올린 지원자만 보인다.
+ * 평가하기에 배정된 지원자(lib/evaluate/sampleEvaluations.ts 의 APPLICANT_SOURCES)와 같은 사람들이어야 한다. 한쪽만 바꾸면
+ * 지원자 관리에는 있는데 평가하기에는 없는 지원자가 생긴다(scripts/check-applicants.ts 가 확인한다).
+ * 상세 값이 정해진 세 명(133·187·251)도 여기에 들어 있다.
+ */
+const MY_NUMBERS: readonly number[] = [
+  4, 9, 15, 21, 26, 33, 38, 42, 47, 53, 58, 67, 72, 79, 85, 91, 98, 104, 110, 117, 124, 133, 187, 251,
+];
+
+/**
+ * 배정: 로그인한 사정관이 담당하는 번호면 그 사정관(홍길동), 아니면 번호가 짝수일 때 "사정관 B", 홀수일 때 "사정관 C".
+ * 다른 사정관이 담당하는 지원자는 지원자 관리 화면에 보이지 않고 접수 인원에만 들어간다.
+ */
+function assigneeOf(n: number): string {
+  if (MY_NUMBERS.includes(n)) return ADMISSION.reviewerName;
+  return n % 2 === 0 ? "사정관 B" : "사정관 C";
 }
 
 /**
@@ -159,7 +171,7 @@ export function createSampleApplicants(): Applicant[] {
     const detailed = detailedByCode.get(code);
     applicants.push({
       ...(detailed ?? generatedApplicant(n)),
-      assignee: assigneeOf(n, detailed !== undefined),
+      assignee: assigneeOf(n),
       initialStatus: initialStatusOf(code),
     });
   }
