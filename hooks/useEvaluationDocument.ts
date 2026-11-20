@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RecordViewMode } from "@/components/RecordPdf";
 import { usePdfViewport } from "@/hooks/usePdfViewport";
 import { useRecordPagesState } from "@/hooks/useRecordPages";
@@ -82,7 +82,62 @@ export function useEvaluationDocument({
   /** 보기마다 마지막으로 스크롤까지 처리한 선택 요청 번호 */
   const handledRef = useRef<Record<RecordViewMode, number>>({ text: 0, pdf: 0 });
   const viewport = usePdfViewport(mode === "pdf", pickMark);
-  const { scrollToTarget } = viewport;
+  const { scrollToTarget, holdPlace, restorePlace } = viewport;
+
+  /**
+   * 크게 보기: 서류 원문과 그 옆 단이 화면 전체를 덮는다(넓은 배치에서만 버튼이 있다). 원본을 읽는 자리가 좁을 때 쓴다.
+   * 켜고 끌 때 단의 크기가 달라져도 PDF 에서 보던 자리가 그대로 남게, 바꾸기 직전에 그 자리를 붙잡아 두고(holdPlace) 바뀐 직후에 되돌린다.
+   */
+  const [expanded, setExpanded] = useState(false);
+  /**
+   * 크게 보기를 켜기 직전의 문서 스크롤 자리. 덮는 동안 작업 단이 흐름에서 빠져 뒤의 문서가 짧아지면 브라우저가 스크롤을 당겨 놓으므로,
+   * 켜기 전에(화면이 바뀌기 전에) 적어 두었다가 끈 직후에 되돌린다.
+   */
+  const pageScrollRef = useRef<number | null>(null);
+  /** 서류 원문 단(<section>). 크게 볼 때 이 단이 든 작업 단(data-workbench 를 단 바깥 상자)을 찾는 데 쓴다. */
+  const panelRef = useRef<HTMLElement>(null);
+
+  function toggleExpanded() {
+    holdPlace();
+    if (!expanded) pageScrollRef.current = window.scrollY;
+    setExpanded(!expanded);
+  }
+
+  // 크게 보는 동안 뒤에 가려진 문서가 스크롤되지 않게 막고, 작업 단 밖의 것(가려진 사이드바·상단 바·내 평가 입력 등)을 쓰지 못하게 한다
+  // (초점이 보이지 않는 곳으로 빠지거나 가려진 입력란에 글이 들어가지 않게). 끄면(또는 다른 화면으로 가면) 모두 되돌린다.
+  // 끈 직후에는 문서가 제 길이로 돌아온 뒤라(이 effect 는 화면을 바꾼 다음에 돈다) 켜기 전의 스크롤 자리로 되돌릴 수 있다.
+  // 문서의 스크롤바가 생기고 사라지면 단의 폭이 달라지므로, 그것까지 끝난 뒤에(같은 effect 안에서, 그리기 전에) PDF 에서 보던 자리를 되돌린다.
+  useLayoutEffect(() => {
+    if (!expanded) {
+      if (pageScrollRef.current !== null) {
+        window.scrollTo({ top: pageScrollRef.current, behavior: "instant" });
+        pageScrollRef.current = null;
+      }
+      restorePlace();
+      return;
+    }
+    const root = document.documentElement;
+    const overflow = root.style.overflow;
+    root.style.overflow = "hidden";
+    const disabled = disableOutside(panelRef.current?.closest<HTMLElement>("[data-workbench]") ?? null);
+    restorePlace();
+    return () => {
+      root.style.overflow = overflow;
+      for (const element of disabled) element.inert = false;
+    };
+  }, [expanded, restorePlace]);
+
+  // 크게 보는 동안 Esc 로 끌 수 있다. 다른 것이 이미 받은 Esc(preventDefault)나 한글 조합을 끝내는 Esc 는 넘긴다.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
+      holdPlace();
+      setExpanded(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [expanded, holdPlace]);
 
   /** 지금 평가 요소의 근거 문장 (원문 순서) */
   const evidences = useMemo(
@@ -208,6 +263,10 @@ export function useEvaluationDocument({
     view: {
       /** 넓은 배치인지: 올린 지원자는 원본을 크게 보도록 이 단이 넓고 화면 높이를 채운다(쪽 그림을 불러오는 동안에도 같은 배치다) */
       wide: pagesKey !== null,
+      /** 크게 보기를 켰는지와 켜고 끄기 (넓은 배치의 머리 줄 버튼. 화면은 켜졌을 때 작업 단을 화면 전체로 편다) */
+      expanded,
+      onToggleExpanded: toggleExpanded,
+      panelRef,
       areas: documentAreasOf(applicant).map((item) => ({ area: item, on: item === area, onPick: () => setArea(item) })),
       /**
        * 고른 서류 구분의 원문과 조각마다의 형광펜. 조각이 여러 요소의 근거면(올린 지원자의 겹친 구절) 지금 요소가 그 가운데 있을 때
@@ -279,6 +338,25 @@ export function useEvaluationDocument({
       },
     },
   };
+}
+
+/**
+ * 화면 전체를 덮은 작업 단(bench) 밖의 것을 쓰지 못하게 한다(inert: 초점을 받지 않고 눌리지 않으며 보조 기술에도 읽히지 않는다).
+ * 작업 단에서 위로 올라가며 조상마다 그 형제들을 끈다. <body> 바로 아래의 것(앱 밖의 것)은 그대로 둔다.
+ * 이미 꺼져 있던 것은 건드리지 않는다. 끈 요소들을 돌려준다(되돌릴 때 쓴다). 작업 단을 찾지 못했으면 아무것도 끄지 않는다.
+ */
+function disableOutside(bench: HTMLElement | null): HTMLElement[] {
+  const disabled: HTMLElement[] = [];
+  let node = bench;
+  while (node !== null && node.parentElement !== null && node.parentElement !== document.body) {
+    for (const sibling of node.parentElement.children) {
+      if (sibling === node || !(sibling instanceof HTMLElement) || sibling.inert) continue;
+      sibling.inert = true;
+      disabled.push(sibling);
+    }
+    node = node.parentElement;
+  }
+  return disabled;
 }
 
 /**

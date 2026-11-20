@@ -15,6 +15,8 @@ import {
   EvaluateHead,
   MarkButtons,
   ToneSwatch,
+  WORKBENCH_EXPANDED_CLASS,
+  WORKBENCH_EXPANDED_HEIGHT_CLASS,
   WORKBENCH_HEIGHT_CLASS,
   WORKBENCH_SCROLL_CLASS,
 } from "@/components/EvaluateParts";
@@ -115,6 +117,7 @@ const FIELD_BORDER_CLASS = "motion-colors border-[#CFCFCF] enabled:hover:border-
  * 넓은 배치(올린 지원자): 평가하면서 근거를 원본에서 바로 확인하도록 배치가 다르다. 왼쪽 위 상자에 서류 원문(실제 학생부 PDF)과
  * 항목별 점수와 근거가 나란히 놓이고, 둘 다 화면 높이 안에서 각자 스크롤한다(근거를 눌러 원본을 따라 읽는 동안 문서가 움직이지 않는다).
  * 학생 성장 요약은 그 아래 상자다. 폭이 모자라면 근거 단이 서류 원문 아래로 내려간다.
+ * 서류 원문 머리 줄의 "크게 보기" 를 켜면 그 상자(서류 원문과 근거)가 화면 전체를 덮어 원본을 크게 읽는다("원래 크기" 나 Esc 로 돌아온다).
  */
 export function EvaluateSummaryScreen({
   crumbs,
@@ -136,26 +139,39 @@ export function EvaluateSummaryScreen({
         {wide ? (
           <div className="flex min-w-0 flex-[999_1_560px] flex-col gap-[16px]">
             {/*
-              남는 폭은 서류 원문과 근거 단이 3:1 로 나눠 갖는다(원본이 넓게, 쪽은 880px 까지).
+              원본을 넓게 보도록 근거 단은 320px 까지만 넓어지고 남는 폭은 모두 서류 원문이 갖는다(쪽은 880px 까지).
               상자 안쪽 폭이 700px(두 단의 기준 폭 400 + 300) 보다 좁으면 근거 단이 서류 원문 아래로 내려간다. 그때는 근거 단의 왼쪽 선 대신
-              위쪽 선을 긋고, 서류 원문 아래에 고른 근거의 출처·이유를 적는다(@container/bench 로 그 폭을 안다).
+              위쪽 선을 긋고(폭 제한도 푼다), 서류 원문 아래에 고른 근거의 출처·이유를 적는다(@container/bench 로 그 폭을 안다).
+              크게 보기를 켜면 이 상자가 화면 전체를 덮는다(테두리·둥근 모서리 없이). 두 단은 화면 높이를 채운다. 좁은 창에서도 원본이 넓어지게
+              근거 단은 상자 폭의 26%(260px 이상 380px 이하)만 갖고 나머지는 모두 서류 원문이 갖는다. 700px 보다 좁으면 그대로 위아래로 쌓인다.
             */}
-            <div className={`${PANEL_CLASS} @container/bench flex flex-wrap items-stretch`}>
+            <div
+              data-workbench
+              className={`@container/bench flex flex-wrap items-stretch ${document.expanded ? WORKBENCH_EXPANDED_CLASS : PANEL_CLASS}`}
+            >
               <DocumentPanel
                 {...document}
                 titleId="doc-title"
                 showLegend={false}
                 showEvidenceNote="stacked"
-                className={`box-border min-w-0 flex-[3_1_400px] ${WORKBENCH_HEIGHT_CLASS}`}
-                headClassName="rounded-tl-[7px] @max-[700px]/bench:rounded-tr-[7px]"
+                className={`box-border min-w-0 ${
+                  document.expanded
+                    ? `flex-[1_1_0%] @max-[700px]/bench:flex-[1_1_100%] ${WORKBENCH_EXPANDED_HEIGHT_CLASS}`
+                    : `flex-[3_1_400px] ${WORKBENCH_HEIGHT_CLASS}`
+                }`}
+                headClassName={document.expanded ? "" : "rounded-tl-[7px] @max-[700px]/bench:rounded-tr-[7px]"}
               />
               <BasisSection
                 basis={basis}
                 evidenceListRef={evidenceListRef}
                 focusedEvidenceRef={focusedEvidenceRef}
                 stacked
-                className={`box-border flex min-w-0 flex-[1_1_300px] flex-col border-l border-l-[#E4E4E4] @max-[700px]/bench:border-t @max-[700px]/bench:border-l-0 @max-[700px]/bench:border-t-[#E4E4E4] ${WORKBENCH_HEIGHT_CLASS}`}
-                headClassName="rounded-tr-[7px] @max-[700px]/bench:rounded-tr-none"
+                className={`box-border flex min-w-0 flex-col border-l border-l-[#E4E4E4] @max-[700px]/bench:max-w-none @max-[700px]/bench:border-t @max-[700px]/bench:border-l-0 @max-[700px]/bench:border-t-[#E4E4E4] ${
+                  document.expanded
+                    ? `flex-[0_0_clamp(260px,26cqw,380px)] @max-[700px]/bench:flex-[1_1_100%] ${WORKBENCH_EXPANDED_HEIGHT_CLASS}`
+                    : `max-w-[320px] flex-[1_1_300px] ${WORKBENCH_HEIGHT_CLASS}`
+                }`}
+                headClassName={document.expanded ? "" : "rounded-tr-[7px] @max-[700px]/bench:rounded-tr-none"}
               />
             </div>
             <section aria-labelledby="growth-title" className={PANEL_CLASS}>

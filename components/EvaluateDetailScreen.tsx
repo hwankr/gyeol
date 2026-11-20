@@ -14,6 +14,8 @@ import {
   EvaluateHead,
   MarkButtons,
   ToneSwatch,
+  WORKBENCH_EXPANDED_CLASS,
+  WORKBENCH_EXPANDED_HEIGHT_CLASS,
   WORKBENCH_HEIGHT_CLASS,
   WORKBENCH_SCROLL_CLASS,
 } from "@/components/EvaluateParts";
@@ -77,23 +79,28 @@ type EvaluateDetailScreenProps = {
  * 평가 요소 이름 앞의 색 점은 그 요소의 형광펜 색이다(서류 원문의 근거 구절이 그 색으로 칠해진다).
  * 넓은 배치(올린 지원자): 평가하면서 원본을 계속 보도록 서류 원문 단이 넓고(실제 학생부 PDF), 세 단이 화면 높이 안에 놓여 세부 평가 항목만
  * 그 단 안에서 스크롤한다(응답 현황과 평가 완료 버튼은 단의 아래에 남는다). 평가 요소를 바꿔도 원본을 보던 자리는 그대로다.
+ * 서류 원문 머리 줄의 "크게 보기" 를 켜면 세 단이 화면 전체를 덮어, 원본을 크게 읽으면서 그대로 응답한다("원래 크기" 나 Esc 로 돌아온다).
  */
 export function EvaluateDetailScreen({ crumbs, headNote, bar, wide, document, items, rubric }: EvaluateDetailScreenProps) {
+  /** 넓은 배치에서 서류 원문과 세부 평가 항목 단의 높이: 크게 보기를 켜면 화면 높이 그대로 */
+  const benchHeightClass = document.expanded ? WORKBENCH_EXPANDED_HEIGHT_CLASS : WORKBENCH_HEIGHT_CLASS;
   return (
     <>
       <EvaluateHead crumbs={crumbs} note={headNote} />
       <ApplicantBar {...bar} />
-      <div className={`${PANEL_CLASS} mt-[16px] flex flex-[1_1_auto] flex-wrap items-stretch`}>
+      {/* 크게 보기(넓은 배치의 서류 원문 머리 줄)를 켜면 세 단이 든 이 상자가 화면 전체를 덮는다(테두리·둥근 모서리 없이, 단은 화면 높이를 채운다). */}
+      <div
+        data-workbench
+        className={`flex flex-wrap items-stretch ${document.expanded ? WORKBENCH_EXPANDED_CLASS : `${PANEL_CLASS} mt-[16px] flex-[1_1_auto]`}`}
+      >
         {/* 넓은 배치에서는 남는 폭을 서류 원문과 세부 평가 항목이 3:1 로 나눠 갖는다(원본이 넓게, 쪽은 880px 까지). */}
         <DocumentPanel
           {...document}
           titleId="doc-title"
           showLegend={false}
           showEvidenceNote="always"
-          className={
-            wide ? `box-border min-w-0 flex-[3_1_440px] ${WORKBENCH_HEIGHT_CLASS}` : "box-border max-w-[360px] min-w-0 flex-[1_1_300px]"
-          }
-          headClassName="rounded-tl-[7px]"
+          className={wide ? `box-border min-w-0 flex-[3_1_440px] ${benchHeightClass}` : "box-border max-w-[360px] min-w-0 flex-[1_1_300px]"}
+          headClassName={document.expanded ? "" : "rounded-tl-[7px]"}
         />
         {/*
           디자인은 이 단이 늘지 않지만(flex-grow 0) 여기서는 1 로 둔다. 세 단이 한 줄일 때는 남는 폭을 오른쪽 단(999)이 거의 다 가져가
@@ -136,11 +143,13 @@ export function EvaluateDetailScreen({ crumbs, headNote, bar, wide, document, it
         <section
           aria-labelledby="items-title"
           className={`box-border flex min-w-0 flex-col border-l border-l-[#E4E4E4] ${
-            wide ? `flex-[1_1_380px] ${WORKBENCH_HEIGHT_CLASS}` : "flex-[999_1_380px]"
+            wide ? `flex-[1_1_380px] ${benchHeightClass}` : "flex-[999_1_380px]"
           }`}
         >
           <div
-            className={`${PANEL_HEAD_CLASS} box-border flex min-h-[40px] flex-none flex-wrap items-center gap-x-[8px] gap-y-[4px] rounded-tr-[7px] px-[16px] py-[4px]`}
+            className={`${PANEL_HEAD_CLASS} box-border flex min-h-[40px] flex-none flex-wrap items-center gap-x-[8px] gap-y-[4px] px-[16px] py-[4px] ${
+              document.expanded ? "" : "rounded-tr-[7px]"
+            }`}
           >
             <h2 id="items-title" className={PANEL_TITLE_CLASS}>
               세부 평가 항목
