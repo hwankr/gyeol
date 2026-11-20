@@ -1062,6 +1062,8 @@ scripts/
   measure-agreement.ts    사정관의 표시 시트와 AI 결과의 일치율 보기 (npm run measure:agreement, AI 호출 없음)
   make-sample.ts          샘플 결과 만들기 (npm run make:sample, Claude API 호출)
   blind-sample.ts         샘플 결과에 블라인드 처리를 적용하는 한 번 실행 스크립트 (AI 호출 없음, 이미 처리된 파일은 바꾸지 않음)
+demo/
+  recorder/               발표 시연 영상 녹화 스크립트. 앱과 따로 설치한다(이 폴더에서 npm install: playwright-core, ffmpeg-static). 앱을 3210 포트에 띄워 두고 1920×1080 틀에 넣어 커서·확대·강조·자막을 얹어 장면별로 찍은 뒤(scenes.mjs) 이어 붙인다(build.mjs). 순서는 scenes.mjs 머리 주석. 학생부 올리기 장면은 Claude API 를 부른다. 찍은 영상·프레임·브라우저 저장소(out/, profiles/)는 저장소에 넣지 않는다
 types/analysis.ts         데이터 형식 (Section, Criterion, DepartmentCriteria, Evidence, Assessment(AI 제안), AnalysisResult(블라인드 처리 내역 masks, 전형 준비 기준이면 assessment 포함))
 ```
 
