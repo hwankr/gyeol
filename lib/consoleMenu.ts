@@ -1,4 +1,4 @@
-// 새 화면 껍데기(사이드바)의 주 메뉴와 전형 준비 화면의 탭. 아이콘은 화면 컴포넌트(components/ConsoleShell.tsx)가 그린다.
+// 새 화면 껍데기(사이드바)의 주 메뉴와 전형 준비·선발 결정 화면의 탭. 아이콘은 화면 컴포넌트(components/ConsoleShell.tsx)가 그린다.
 
 /** 주 메뉴 하나. href 가 null 이면 갈 곳이 없는 메뉴다(화면이 없음). */
 export type ConsoleMenu = {
@@ -21,12 +21,18 @@ export function applicantOriginalPath(code: string): string {
 /** 평가하기 화면의 첫 주소: 평가 대기 목록 (주 메뉴, 현재 위치 줄의 "평가하기") */
 export const EVALUATE_PATH = "/evaluate";
 
+/** 선발 결정 화면의 첫 주소: 인재상 적합 추천 탭 (주 메뉴, 현재 위치 줄의 "선발 결정") */
+export const DECISION_PATH = "/decision";
+
+/** 선발 결정 · 지원자 비교 탭의 주소 */
+export const DECISION_COMPARE_PATH = "/decision/compare";
+
 export const CONSOLE_MENUS: readonly ConsoleMenu[] = [
   { key: "home", label: "홈", href: null },
   { key: "prep", label: "전형 준비", href: "/prep" },
   { key: "applicants", label: "지원자 관리", href: APPLICANTS_PATH },
   { key: "evaluate", label: "평가하기", href: EVALUATE_PATH },
-  { key: "decision", label: "선발 결정", href: null },
+  { key: "decision", label: "선발 결정", href: DECISION_PATH },
   { key: "settings", label: "이력·설정", href: null },
 ];
 
@@ -54,3 +60,18 @@ export const PREP_TABS: readonly PrepTab[] = [
 
 /** 전형 준비 화면의 첫 주소 (현재 위치 줄의 "전형 준비") */
 export const PREP_PATH = "/prep";
+
+/** 선발 결정 화면의 탭 하나. href 가 null 이면 화면이 없는 탭이다(탭 줄에 이름만 있고 눌리지 않는다). */
+export type DecisionTab = {
+  key: "recommend" | "compare" | "opinions" | "confirm";
+  href: string | null;
+  /** 탭 이름이자 현재 위치 줄의 마지막 이름 */
+  label: string;
+};
+
+export const DECISION_TABS: readonly DecisionTab[] = [
+  { key: "recommend", href: DECISION_PATH, label: "인재상 적합 추천" },
+  { key: "compare", href: DECISION_COMPARE_PATH, label: "지원자 비교" },
+  { key: "opinions", href: null, label: "위원 의견 모아보기" },
+  { key: "confirm", href: null, label: "최종 확정" },
+];
