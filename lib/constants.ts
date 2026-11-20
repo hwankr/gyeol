@@ -41,3 +41,9 @@ export const DECISION_PICKS_STORAGE_KEY = "gyeol.decisionPicks";
  * localStorage 키. 조정한 뒤의 위원 점수를 지원자마다 통째로 저장한다(원래 점수는 예시 자료에 있다).
  */
 export const DECISION_ADJUSTMENTS_STORAGE_KEY = "gyeol.decisionAdjustments";
+
+/**
+ * 선발 결정 · 기록 확정에서 확정한 기록({ version: 1, at, actor, quota, rows: [{ code, rank, final10 }] })을 저장하는 localStorage 키.
+ * 확정한 때의 순위와 최종 평가(10배 한 정수)를 그대로 둔다. 확정을 취소하면 키를 지운다.
+ */
+export const DECISION_CONFIRM_STORAGE_KEY = "gyeol.decisionConfirm";

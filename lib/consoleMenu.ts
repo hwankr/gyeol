@@ -1,5 +1,4 @@
 // 새 화면 껍데기(사이드바)의 주 메뉴와 전형 준비·선발 결정 화면의 탭. 아이콘은 화면 컴포넌트(components/ConsoleShell.tsx)가 그린다.
-
 /** 주 메뉴 하나. href 가 null 이면 갈 곳이 없는 메뉴다(화면이 없음). */
 export type ConsoleMenu = {
   key: "home" | "prep" | "applicants" | "evaluate" | "decision" | "settings";
@@ -35,6 +34,16 @@ export const DECISION_COMPARE_PATH = "/decision/compare";
 
 /** 선발 결정 · 위원 의견 모아보기 탭의 주소 */
 export const DECISION_OPINIONS_PATH = "/decision/opinions";
+
+/** 선발 결정 · 기록 확정 탭의 주소 */
+export const DECISION_CONFIRM_PATH = "/decision/confirm";
+
+/** 지원자 비교 탭의 주소에 붙이는 값: 고른 지원자와 상관없이 합격선 바로 위·아래 두 사람을 보여 달라는 뜻이다 (?pair=cutline) */
+export const DECISION_PAIR_PARAM = "pair";
+export const DECISION_PAIR_CUTLINE = "cutline";
+
+/** 선발 결정 · 지원자 비교 탭에서 합격선 바로 위·아래 두 사람을 보는 주소 (기록 확정 탭의 `두 지원자 비교`) */
+export const DECISION_CUTLINE_COMPARE_PATH = `${DECISION_COMPARE_PATH}?${DECISION_PAIR_PARAM}=${DECISION_PAIR_CUTLINE}`;
 
 export const CONSOLE_MENUS: readonly ConsoleMenu[] = [
   { key: "home", label: "홈", href: HOME_PATH },
@@ -76,10 +85,10 @@ export const PREP_WEIGHTS_PATH = "/prep/weights";
 /** 전형 준비 · 기준 변경 기록 탭의 주소 */
 export const PREP_HISTORY_PATH = "/prep/history";
 
-/** 선발 결정 화면의 탭 하나. href 가 null 이면 화면이 없는 탭이다(탭 줄에 이름만 있고 눌리지 않는다). */
+/** 선발 결정 화면의 탭 하나 */
 export type DecisionTab = {
   key: "recommend" | "compare" | "opinions" | "confirm";
-  href: string | null;
+  href: string;
   /** 탭 이름이자 현재 위치 줄의 마지막 이름 */
   label: string;
 };
@@ -88,5 +97,5 @@ export const DECISION_TABS: readonly DecisionTab[] = [
   { key: "recommend", href: DECISION_PATH, label: "인재상 적합 추천" },
   { key: "compare", href: DECISION_COMPARE_PATH, label: "지원자 비교" },
   { key: "opinions", href: DECISION_OPINIONS_PATH, label: "위원 의견 모아보기" },
-  { key: "confirm", href: null, label: "최종 확정" },
+  { key: "confirm", href: DECISION_CONFIRM_PATH, label: "기록 확정" },
 ];

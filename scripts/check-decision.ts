@@ -2,7 +2,8 @@
 // lib/decision/decision.ts(최종 평가·순위·비교 기준·비교할 두 사람·요소별 차이·고른 지원자의 저장 값 확인)와
 // lib/decision/sampleDecision.ts(합격선 주변 예시 지원자 12명: 시안의 값과 맞는지, 평가하기의 지원자와 겹치지 않는지, 위원의 종합 의견),
 // lib/decision/opinions.ts(위원 의견 모아보기: 요소별 위원 점수와 차이, 크게 갈린 요소, 조정이 필요한 지원자),
-// lib/decision/adjustments.ts(조정: 점수 입력 읽기, 고치는 중의 계산, 확정한 조정의 저장 값 확인과 지원자 자료에 덮어쓰기)를 확인한다.
+// lib/decision/adjustments.ts(조정: 점수 입력 읽기, 고치는 중의 계산, 확정한 조정의 저장 값 확인과 지원자 자료에 덮어쓰기),
+// lib/decision/confirm.ts(기록 확정: 조정의 진행, 확인 항목의 글, 확정한 기록의 형식과 저장 값 확인)를 확인한다.
 // 인자는 받지 않는다. 출력: 사례마다 "통과"/"실패" 한 줄, 마지막에 개수. 하나라도 실패하면 종료 코드 1.
 // node scripts/check-decision.ts 로도 돌도록(Node 의 타입 제거 실행) 값 import 는 상대 경로에 .ts 확장자를 붙인다.
 import { ADMISSION } from "../lib/admission.ts";
@@ -20,6 +21,18 @@ import {
   withAdjustment,
   withoutAdjustment,
 } from "../lib/decision/adjustments.ts";
+import {
+  adjustCheckParts,
+  adjustProgressOf,
+  confirmRowsKey,
+  confirmRowsOf,
+  confirmStandingOf,
+  cutlineCheckParts,
+  evaluationCheckParts,
+  parseDecisionConfirmation,
+  sameConfirmRows,
+  serializeDecisionConfirmation,
+} from "../lib/decision/confirm.ts";
 import {
   CLOSE_MARGIN10,
   MAX_PICKS,
@@ -463,6 +476,94 @@ check(
     adjustEffectText(adjusted090, a090) === "최종 평가 83.6 → 82.4점 · 26위 → 28위" &&
     adjustEffectText(a090, a090) === "최종 평가 82.4점 그대로 · 28위 그대로" &&
     adjustEffectText({ final10: 824, rank: 28 }, { final10: 826, rank: 28 }) === "최종 평가 82.4 → 82.6점 · 28위 그대로",
+);
+
+// 기록 확정
+const partsText = (parts: readonly { text: string }[]) => parts.map((part) => part.text).join(" · ");
+check(
+  "조정의 진행: 처음에는 넷이 모두 남아 있다",
+  same(adjustProgressOf(ranked, ELEMENTS, NO_ADJUSTMENTS), { total: 4, done: 0, left: 4 }),
+);
+check(
+  "조정의 진행: 하나를 확정하면 1건 완료, 3건 남음 (조정이 필요했던 지원자는 그대로 넷)",
+  same(adjustProgressOf(adjustedRanked, ELEMENTS, oneAdjustment), { total: 4, done: 1, left: 3 }),
+);
+check(
+  "조정의 진행: 확정한 조정이 있어도 크게 갈린 요소가 남았으면 남은 쪽에 센다",
+  same(adjustProgressOf(ranked, ELEMENTS, [{ code: "A-0090", members: source090.members }]), { total: 4, done: 0, left: 4 }),
+);
+check(
+  "확인 항목의 글: 서류평가",
+  partsText(evaluationCheckParts(312, 3)) === "총 312명 · 위원 3인 제출 완료",
+);
+check(
+  "확인 항목의 글: 위원 간 점수 조정 (모두 완료, 남음, 조정할 것이 없음)",
+  partsText(adjustCheckParts({ total: 4, done: 4, left: 0 })) === "4건 조정 필요 · 4건 모두 완료" &&
+    partsText(adjustCheckParts({ total: 4, done: 1, left: 3 })) === "4건 조정 필요 · 1건 완료, 3건 남음" &&
+    partsText(adjustCheckParts({ total: 0, done: 0, left: 0 })) === "조정이 필요한 지원자 없음",
+);
+check(
+  "확인 항목의 글: 합격선 확인 (시안의 82.0점 · 0.2점 차이, 동점, 합격선의 두 사람이 없을 때)",
+  partsText(cutlineCheckParts(cutline)) === "30위 82.0점 · 예비 1번과 0.2점 차이" &&
+    (cutline === null || partsText(cutlineCheckParts({ ...cutline, gap10: 0 })) === "30위 82.0점 · 예비 1번과 동점") &&
+    partsText(cutlineCheckParts(null)) === "합격선 주변의 지원자가 없음",
+);
+const confirmRows = confirmRowsOf(ranked);
+check(
+  "확정할 명단: 순위 순서의 지원자·순위·최종 평가 (12명, 25위부터, 30위 A-0147 820 · 31위 A-0171 818)",
+  confirmRows.length === 12 &&
+    confirmRows[0].rank === DECISION_FIRST_RANK &&
+    same(confirmRows[5], { code: "A-0147", rank: 30, final10: 820 }) &&
+    same(confirmRows[6], { code: "A-0171", rank: 31, final10: 818 }),
+);
+check(
+  "명단 견주기: 같은 순위는 같고, 조정으로 점수와 순위가 달라지면 다르다",
+  sameConfirmRows(confirmRows, confirmRowsOf(ranked)) &&
+    confirmRowsKey(confirmRows) === confirmRowsKey(confirmRowsOf(ranked)) &&
+    !sameConfirmRows(confirmRows, confirmRowsOf(adjustedRanked)) &&
+    confirmRowsKey(confirmRows) !== confirmRowsKey(confirmRowsOf(adjustedRanked)) &&
+    !sameConfirmRows(confirmRows, confirmRows.slice(1)),
+);
+check(
+  "기록의 구분: 모집 인원 안이면 합격권, 그 아래는 예비 순번",
+  same(confirmStandingOf({ rank: 30 }, 30), { text: "합격권", admitted: true }) &&
+    same(confirmStandingOf({ rank: 31 }, 30), { text: "예비 1", admitted: false }) &&
+    same(confirmStandingOf({ rank: 36 }, 30), { text: "예비 6", admitted: false }),
+);
+const confirmation = { at: "2026-11-21T05:05:00.000Z", actor: "홍길동 사정관", quota: QUOTA, rows: confirmRows };
+check(
+  "확정한 기록의 저장 값: 쓴 것을 다시 읽으면 같다",
+  same(parseDecisionConfirmation(JSON.parse(serializeDecisionConfirmation(confirmation)), CODES), confirmation),
+);
+check(
+  "확정한 기록의 저장 값: 모양이 틀리면 확정한 기록 없음",
+  [
+    undefined,
+    null,
+    "x",
+    [],
+    {},
+    { ...confirmation, version: 2 },
+    { version: 1, ...confirmation, at: "어제" },
+    { version: 1, ...confirmation, actor: " " },
+    { version: 1, ...confirmation, quota: 0 },
+    { version: 1, ...confirmation, quota: 30.5 },
+    { version: 1, ...confirmation, rows: [] },
+    { version: 1, ...confirmation, rows: "A-0147" },
+  ].every((value) => parseDecisionConfirmation(value, CODES) === null),
+);
+check(
+  "확정한 기록의 저장 값: 줄 하나라도 틀리면(목록에 없는 코드, 되풀이, 순위가 앞 줄보다 크지 않음, 범위 밖의 점수) 통째로 버린다",
+  [
+    [{ code: "A-9999", rank: 25, final10: 837 }],
+    [confirmRows[0], confirmRows[0]],
+    [confirmRows[0], { ...confirmRows[1], rank: confirmRows[0].rank }],
+    [confirmRows[1], confirmRows[0]],
+    [{ ...confirmRows[0], final10: 1001 }],
+    [{ ...confirmRows[0], final10: 83.7 }],
+    [{ ...confirmRows[0], rank: 0 }],
+    [confirmRows[0], 3],
+  ].every((rows) => parseDecisionConfirmation({ version: 1, ...confirmation, rows }, CODES) === null),
 );
 
 if (failures.length > 0) {
