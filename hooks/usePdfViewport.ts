@@ -92,6 +92,8 @@ export function usePdfViewport(shown: boolean, onPickMark?: (groupId: string) =>
   const wheelRef = useRef(0);
   /** 마우스로 끌어 움직이는 중일 때: 누른 포인터, 마지막으로 본 자리, 누른 자리, 끌었는지 */
   const panRef = useRef<{ pointerId: number; x: number; y: number; startX: number; startY: number; moved: boolean } | null>(null);
+  /** 스크롤 영역의 크기가 바뀌기 직전에 붙잡아 둔 자리(왼쪽 위 끝에 보이던 곳). holdPlace 가 적고 restorePlace 가 쓴다. */
+  const placeRef = useRef<PdfAnchor | null>(null);
 
   // 배율이 바뀌어 쪽의 크기가 달라진 직후(그리기 전에), 바꾸기 전에 붙잡아 둔 자리로 스크롤을 맞춘다.
   useLayoutEffect(() => {
@@ -202,6 +204,25 @@ export function usePdfViewport(shown: boolean, onPickMark?: (groupId: string) =>
     return true;
   }, []);
 
+  /**
+   * 스크롤 영역의 크기가 바뀌기 직전에 부른다(평가하기의 크게 보기): 지금 왼쪽 위 끝에 보이는 자리를 붙잡아 둔다.
+   * 쪽의 폭이 단의 폭을 따라 달라지므로, 그대로 두면 같은 스크롤 값이 다른 자리를 가리킨다. ref 만 읽으므로 늘 같은 함수다.
+   * 맨 위에 있을 때는 붙잡지 않는다(그대로 맨 위에 남는다. 쪽 위의 여백을 자리로 붙잡으면 쪽 크기가 바뀔 때 몇 px 어긋난다).
+   */
+  const holdPlace = useCallback(() => {
+    const container = scrollRef.current;
+    placeRef.current = container === null || container.scrollTop <= 0 ? null : pdfAnchorAt(container, 0, 0);
+  }, []);
+
+  /** 크기가 바뀐 직후(그리기 전에) 부른다: 붙잡아 둔 자리가 다시 왼쪽 위 끝에 오게 스크롤한다. 붙잡아 둔 자리가 없으면 아무것도 하지 않는다. */
+  const restorePlace = useCallback(() => {
+    const anchor = placeRef.current;
+    const container = scrollRef.current;
+    placeRef.current = null;
+    if (anchor === null || container === null) return;
+    scrollPdfToAnchor(container, anchor);
+  }, []);
+
   const zoom: PdfZoom = {
     scale: PDF_ZOOM_STEPS[zoomIndex],
     percent: Math.round(PDF_ZOOM_STEPS[zoomIndex] * 100),
@@ -223,6 +244,8 @@ export function usePdfViewport(shown: boolean, onPickMark?: (groupId: string) =>
     zoom,
     pan,
     scrollToTarget,
+    holdPlace,
+    restorePlace,
   };
 }
 

@@ -170,6 +170,16 @@ function StepLink({ href, label, linkRef }: { href: string | null; label: string
  */
 export const WORKBENCH_HEIGHT_CLASS = "h-[max(480px,calc(100vh-280px))]";
 
+/**
+ * 크게 보기(서류 원문 머리 줄의 버튼)를 켰을 때 작업 단의 바깥 상자에 테두리 상자 대신 주는 클래스: 화면 전체를 덮는다(상단 바·사이드바 위).
+ * 원본을 읽는 자리가 화면 높이·폭을 다 쓰도록 한 것이다. 폭이 모자라 단이 아래로 쌓이면 이 상자가 세로로 스크롤한다.
+ * 그 안의 단은 WORKBENCH_HEIGHT_CLASS 대신 WORKBENCH_EXPANDED_HEIGHT_CLASS(상자 높이 그대로)를 받는다.
+ * 바깥 상자에는 data-workbench 를 단다: 덮는 동안 그 밖의 화면을 쓰지 못하게 하는 데 쓴다(hooks/useEvaluationDocument.ts).
+ */
+export const WORKBENCH_EXPANDED_CLASS = "fixed inset-0 z-[50] overflow-y-auto bg-white";
+
+export const WORKBENCH_EXPANDED_HEIGHT_CLASS = "h-full";
+
 /** 단 안에서 스크롤하는 영역의 가는 스크롤바 (원문보기 화면과 같은 모양) */
 export const WORKBENCH_SCROLL_CLASS =
   "min-h-0 flex-[1_1_auto] scroll-m-[8px] overflow-y-auto [scrollbar-color:#CFCFCF_transparent] [scrollbar-width:thin]";
@@ -196,6 +206,11 @@ type DocumentPanelProps = {
   showEvidenceNote: "always" | "stacked" | "never";
   /** 넓은 배치인지 (올린 지원자): 단이 주어진 높이를 채우고 원문이 그 안에서 스크롤한다 */
   wide: boolean;
+  /** 크게 보기를 켰는지와 켜고 끄기 (넓은 배치에서만 머리 줄에 버튼이 있다. 켜면 화면이 작업 단을 화면 전체로 편다) */
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  /** 이 단의 <section>. 크게 볼 때 이 단이 든 작업 단(data-workbench 를 단 바깥 상자)을 찾는 데 쓴다(hooks/useEvaluationDocument.ts) */
+  panelRef: Ref<HTMLElement>;
   areas: { area: DocumentArea; on: boolean; onPick: () => void }[];
   passages: {
     id: string;
@@ -257,6 +272,8 @@ type DocumentPanelProps = {
  * - 글 보기는 서류 구분(교과·세특·창체·행특)과 그 구분의 가려진 학생부 문장이다.
  * 가림 누락 신고는 누르면 신고한 것으로 표시되고 다시 누르면 거둔다.
  * 넓은 배치에서는 단이 주어진 높이를 채우고(className 이 높이를 준다) 원문만 그 안에서 스크롤한다.
+ * 넓은 배치의 머리 줄 끝에는 "크게 보기" 가 있다: 누르면 작업 단이 화면 전체를 덮어 원본을 크게 읽고("원래 크기" 나 Esc 로 돌아온다),
+ * 보던 자리·보기·배율은 그대로다. 덮는 것은 화면(바깥 상자)이 하고 이 단은 버튼만 그린다.
  */
 export function DocumentPanel({
   className,
@@ -265,6 +282,9 @@ export function DocumentPanel({
   showLegend,
   showEvidenceNote,
   wide,
+  expanded,
+  onToggleExpanded,
+  panelRef,
   areas,
   passages,
   legend,
@@ -347,7 +367,7 @@ export function DocumentPanel({
     </div>
   );
   return (
-    <section aria-labelledby={titleId} className={`${className} ${wide ? "flex flex-col" : ""}`}>
+    <section ref={panelRef} aria-labelledby={titleId} className={`${className} ${wide ? "flex flex-col" : ""}`}>
       <div
         className={`${PANEL_HEAD_CLASS} ${headClassName} box-border flex min-h-[40px] flex-none flex-wrap items-center justify-between gap-x-[8px] gap-y-[4px] px-[16px] py-[4px]`}
       >
@@ -379,6 +399,17 @@ export function DocumentPanel({
             </svg>
             {maskReported ? "가림 누락 신고함" : "가림 누락 신고"}
           </button>
+          {/* 크게 보기: 작업 단을 화면 전체로 편다. 켜져 있으면 글자가 "원래 크기" 로 바뀐다(같은 버튼이라 초점이 그대로 남는다). */}
+          {wide && (
+            <button
+              type="button"
+              onClick={onToggleExpanded}
+              className={`${BUTTON_SECONDARY_CLASS} h-[26px] scroll-m-[8px] gap-[4px] pr-[8px] pl-[6px] leading-[normal]`}
+            >
+              <ExpandIcon collapse={expanded} />
+              {expanded ? "원래 크기" : "크게 보기"}
+            </button>
+          )}
         </div>
       </div>
       {pdf.mode === "pdf" ? (
@@ -464,6 +495,24 @@ export function DocumentPanel({
         )}
       </div>
     </section>
+  );
+}
+
+/** 크게 보기 버튼의 그림: 바깥으로 벌어지는 두 화살표(펴기), 켜져 있으면 안으로 모이는 두 화살표(접기). 선은 글자색을 따른다. */
+function ExpandIcon({ collapse }: { collapse: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-[14px] w-[14px]"
+    >
+      <path d={collapse ? "M13 6.5H9.5V3M9.5 6.5l4-4M3 9.5h3.5V13M6.5 9.5l-4 4" : "M9.5 3H13v3.5M13 3 9 7M6.5 13H3V9.5M3 13l4-4"} />
+    </svg>
   );
 }
 
